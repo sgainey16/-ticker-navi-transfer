@@ -1,0 +1,208 @@
+{
+  "app_name": "MASL — Powered by Ticker",
+  "personality": "7 Dark-First Utility",
+  "personality_one_liner": "A high-contrast, tactical command center that brings the energetic, data-dense aesthetic of a premium TV sports broadcast to mobile.",
+  "color": {
+    "surface": "#121212",
+    "onSurface": "#F5F5F5",
+    "surfaceSecondary": "#1E1E1E",
+    "onSurfaceSecondary": "#E0E0E0",
+    "surfaceTertiary": "#2C2C2C",
+    "onSurfaceTertiary": "#BDBDBD",
+    "surfaceInverse": "#F5F5F5",
+    "onSurfaceInverse": "#121212",
+    "brand": "#FA2A2A",
+    "brandPrimary": "#FA2A2A",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D81B1B",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#4A1515",
+    "onBrandTertiary": "#FFCDCD",
+    "success": "#00C853",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFAB00",
+    "onWarning": "#000000",
+    "error": "#FA2A2A",
+    "onError": "#FFFFFF",
+    "border": "#2C2C2C",
+    "borderStrong": "#424242",
+    "divider": "#2C2C2C"
+  },
+  "typography": {
+    "displayFontFamily": "Archivo Narrow",
+    "textFontFamily": "Manrope",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Handle spacing correctly dont have extra spaces where its not required, handle padding and margin corectly and subtle for buttons and components",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use glass overlay on the Home hero cold-open segment card to simulate a premium broadcast lower-third.",
+      "Use glass on the bottom tab bar when content scrolls behind it."
+    ],
+    "dont's": [
+      "Do not use glass on dense data tables (Standings, Box Scores).",
+      "Do not use glass on standard stat panels or list rows."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "Main broadcast hub displaying the hero cold-open, live ticker, latest recaps, and standings summary.",
+      "states": {
+        "loading": "Skeleton loaders for stat panels and a central spinner for the hero segment.",
+        "empty": "Illustration of an arena board with text 'No live games' and a CTA to view Standings.",
+        "error": "Readable error message 'Unable to load broadcast feed' with a Retry button."
+      },
+      "layout": "Top: Hero cold-open segment card (full-bleed arena image, gradient scrim, `brandPrimary` LIVE badge). Below: Horizontal edge-to-edge Ticker strip (auto-scrolling condensed text). Below: Stacked modules for recaps and standings snapshot."
+    },
+    {
+      "name": "Cold Open",
+      "purpose": "Immersive dialogue player where AI hosts Rayo & Casey present storylines in a TV-studio lower-third style.",
+      "states": {
+        "loading": "Spinner centered on a dark tinted arena background.",
+        "empty": "Not applicable as this is narrative-driven.",
+        "error": "Error message with Retry button."
+      },
+      "layout": "Full-screen. Dark glassmorphism panels. Animated dialogue boxes appear sequentially over the arena background. Rayo uses warm accents; Casey uses cool/neutral styling. Sticky 'WATCH LIVE' primary CTA at the bottom."
+    },
+    {
+      "name": "Standings & Stats",
+      "purpose": "High-density data view for the league table and player leaderboards.",
+      "states": {
+        "loading": "Skeleton rows for the data table.",
+        "empty": "No data available state.",
+        "error": "Failed to load standings data with Retry button."
+      },
+      "layout": "Top: Segmented controls (Teams / Players). Strict column grid for tables using `Archivo Narrow` for metrics. Rows separated by `divider`. Sticky filter row at the top."
+    },
+    {
+      "name": "Team Details",
+      "purpose": "Deep-dive into specific club rosters, records, and form.",
+      "states": {
+        "loading": "Skeleton loader for header and stat cards.",
+        "empty": "No team data found.",
+        "error": "Failed to load team details."
+      },
+      "layout": "Top: Cover banner (tinted background) with team fallback initials avatar. Content: Stacked metric cards (`surfaceSecondary` with `sm` radius) showing goals, form, and record."
+    },
+    {
+      "name": "Talk",
+      "purpose": "Interactive AI chat with the two hosts answering arena-soccer questions in character.",
+      "states": {
+        "loading": "Chat bubbles showing typing indicators.",
+        "empty": "Welcome message introducing Rayo and Casey.",
+        "error": "Message send failure with tap-to-retry."
+      },
+      "layout": "Standard chat interface. Distinct avatar presence. Rayo's bubbles use energetic warm styling; Casey's use structured, data-driven blocks. Sticky text input inside KeyboardAvoidingView at the bottom."
+    },
+    {
+      "name": "Game Details",
+      "purpose": "Match timeline, box score, and the 6-a-side boarded arena tactics graphic.",
+      "states": {
+        "loading": "Skeleton loaders for the scoreboard and tactics pitch.",
+        "empty": "Game hasn't started yet.",
+        "error": "Failed to load match details."
+      },
+      "layout": "Hero section with large score (`Archivo Narrow`). Below: Tactics board graphic (boarded 6-a-side arena layout with rounded corners). Below: Stacked stat comparison bars."
+    }
+  ],
+  "images": {
+    "arena_hero": {
+      "url": "https://images.pexels.com/photos/10183989/pexels-photo-10183989.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Empty boarded soccer arena setting the stage for the broadcast."
+    },
+    "rayo_avatar": {
+      "url": "https://images.unsplash.com/flagged/photo-1596479042555-9265a7fa7983",
+      "alt": "Energetic male host Mateo 'Rayo' Reyes."
+    },
+    "casey_avatar": {
+      "url": "https://images.unsplash.com/photo-1750319157047-8d6523f9c53a",
+      "alt": "Calm, analytical female host Casey Whitfield."
+    },
+    "team_baltimore": {
+      "url": "fallback_initials",
+      "alt": "Baltimore Blast logo png"
+    },
+    "team_san_diego": {
+      "url": "fallback_initials",
+      "alt": "San Diego Sockers logo png"
+    },
+    "team_milwaukee": {
+      "url": "fallback_initials",
+      "alt": "Milwaukee Wave logo png"
+    },
+    "team_empire": {
+      "url": "fallback_initials",
+      "alt": "Empire Strykers logo png"
+    },
+    "team_kansas_city": {
+      "url": "fallback_initials",
+      "alt": "Kansas City Comets logo png"
+    },
+    "team_utica": {
+      "url": "fallback_initials",
+      "alt": "Utica City FC logo png"
+    },
+    "team_st_louis": {
+      "url": "fallback_initials",
+      "alt": "St Louis Ambush logo png"
+    },
+    "team_tacoma": {
+      "url": "fallback_initials",
+      "alt": "Tacoma Stars logo png"
+    }
+  },
+  "haptics": {
+    "tab_press": "selection",
+    "primary_cta_press": "impactLight",
+    "chat_send": "impactMedium",
+    "segmented_control_change": "selection"
+  },
+  "instructions_to_main_agent": [
+    "Implement '7 Dark-First Utility' personality. Use `Archivo Narrow` for all numbers, scores, ticker items, and display headings to simulate a TV broadcast graphic. Use `Manrope` for readable body text.",
+    "For the Ticker strip: Ensure it is edge-to-edge and uses a high-contrast format (e.g., `onSurface` text with `brandPrimary` highlights for live scores).",
+    "The 'Cold Open' and 'Talk' screens must visually distinguish the two hosts. Rayo: Warm/energetic styling (e.g., `brandTertiary` background or `brandPrimary` border). Casey: Cool/analytical styling (e.g., `surfaceTertiary` with `borderStrong`).",
+    "Branded-entity rule: Since the `image_selector_tool` failed to fetch real PNG logos for the MASL teams, MUST use the fallback Tier 3 (initials in a `surfaceTertiary` circle, e.g., 'BAL', 'SD', 'MIL') for team logos. Do NOT use vector icons for teams.",
+    "Apply the mandatory gradient-to-dark scrim pattern (vertical, transparent to >=70% surfaceInverse) over the `arena_hero` image on the Home screen to ensure the 'WATCH LIVE' CTA and white text are perfectly readable.",
+    "The Tactics Board graphic must strictly reflect boarded 6-a-side arena soccer (smaller pitch, rounded corners, boards visible, no standard outdoor sidelines).",
+    "Ensure touch targets are at least 44x44pt and all screens account for the safe area, avoiding content under the notch/status bar.",
+    "Never use indigo, purple, or any blue hues. Stick strictly to the defined Dark-First Utility palette with the 'Broadcast Red' brand accent."
+  ]
+}
