@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 
 import { colors } from "@/src/theme";
 import { setTabHandler } from "@/src/lib/tabnav";
+import { BroadcastProvider, useBroadcast } from "@/src/lib/broadcast";
 import { TopTabBar } from "@/src/components/TopTabBar";
 import HomeScreen from "@/src/screens/HomeScreen";
 import RecapScreen from "@/src/screens/RecapScreen";
@@ -25,19 +26,30 @@ const TABS = [
 ];
 
 export default function TickerApp() {
+  return (
+    <BroadcastProvider>
+      <TabsHost />
+    </BroadcastProvider>
+  );
+}
+
+function TabsHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const broadcast = useBroadcast();
   const [active, setActive] = useState("home");
   const [visited, setVisited] = useState<Set<string>>(new Set(["home"]));
 
   const select = (key: string) => {
     setActive(key);
     setVisited((v) => (v.has(key) ? v : new Set(v).add(key)));
+    broadcast.onPage(key);
   };
 
   useEffect(() => {
     setTabHandler(select);
     return () => setTabHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const tabs = useMemo(() => TABS.map(({ key, label }) => ({ key, label })), []);

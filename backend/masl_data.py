@@ -391,7 +391,7 @@ COLD_OPEN = {
     "matchup": {"home": "milwaukee", "away": "utica", "home_score": 17, "away_score": 2},
     "beats": [
         {"id": 1, "host": "rayo", "kicker": "OPEN HOT",
-         "text": "Diecisiete a dos. SEVENTEEN to two. I've been around this sport my whole life and I have NEVER seen the boards light up like Milwaukee did on Utica. That's arena soccer, baby!"},
+         "text": "Seventeen to two! I've been around this sport my whole life, and I have NEVER seen the boards light up like Milwaukee did on Utica. That's arena soccer, baby — don't blink!"},
         {"id": 2, "host": "casey", "kicker": "THE STAT",
          "text": "Let's slow it down for a second. Seventeen goals on thirty-four shots on goal — a fifty percent conversion night. And a four-for-five power play. The tape says otherwise on 'fluke' — that was a clinic in transition."},
         {"id": 3, "host": "rayo", "kicker": "THE TREND",
@@ -404,6 +404,64 @@ COLD_OPEN = {
          "text": "WATCH LIVE ON VICTORY+"},
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# PER-PAGE BANTER SEGMENTS
+# When the panel is "on air", each tab has its own short banter segment. As the
+# viewer changes pages the segment changes, while they keep browsing the page.
+# Same beat shape as COLD_OPEN: {id, host, kicker, text}. Arena-soccer language only.
+# ---------------------------------------------------------------------------
+
+SEGMENTS = {
+    # HOME = the full cold open (ends on the Victory+ hook).
+    "home": COLD_OPEN["beats"],
+
+    "recap": [
+        {"id": 1, "host": "rayo", "kicker": "ROLL THE TAPE",
+         "text": "Roll it back! Almost every one of these came in transition — one touch off the boards and it's in the back of the net. Fastest game on turf, baby!"},
+        {"id": 2, "host": "casey", "kicker": "THE FINISHING",
+         "text": "Look at the conversion. Thirty-plus shots on goal a night across this slate, and the top sides are burying better than one in three. That's not luck — that's a pattern."},
+        {"id": 3, "host": "rayo", "kicker": "THE BOARDS",
+         "text": "And the boards are a weapon, mano. A good side plays the ricochet before the defender even turns. ¡Rayo!"},
+    ],
+
+    "tonight": [
+        {"id": 1, "host": "rayo", "kicker": "THE SLATE",
+         "text": "Tonight's slate is stacked. Four quarters, six-a-side, and nobody's playing it safe. I can already feel the building shaking."},
+        {"id": 2, "host": "casey", "kicker": "SPECIAL TEAMS",
+         "text": "Watch the power-play battle. The clubs converting on the man-advantage are the ones climbing the table. Special teams decide these nights."},
+        {"id": 3, "host": "rayo", "kicker": "THE RACE",
+         "text": "San Diego, Baltimore, Milwaukee — everybody's chasing that Ron Newman Cup. Don't blink."},
+    ],
+
+    "reels": [
+        {"id": 1, "host": "rayo", "kicker": "HIGHLIGHTS",
+         "text": "Highlights are coming, mi gente! Every ricochet off the boards, every diving keeper save, every ¡Rayo! moment — all in one reel."},
+        {"id": 2, "host": "casey", "kicker": "FRAME BY FRAME",
+         "text": "We'll break each clip down frame by frame — the read, the touch, the finish. The tape always tells the story."},
+    ],
+
+    "scores": [
+        {"id": 1, "host": "casey", "kicker": "READ THE TABLE",
+         "text": "Let's slow it down and read the table. San Diego holds the West, Baltimore the East, but the points gap through the middle is razor-thin."},
+        {"id": 2, "host": "rayo", "kicker": "EVERY POINT",
+         "text": "Every win is gold right now, baby. One three-point night and you jump three spots in the standings. That's arena soccer!"},
+        {"id": 3, "host": "casey", "kicker": "THE TIEBREAKER",
+         "text": "Goal differential is the tiebreaker to watch. Milwaukee's plus-column exploded after that seventeen-goal night."},
+    ],
+
+    "stats": [
+        {"id": 1, "host": "rayo", "kicker": "FIFTY-TWO",
+         "text": "Fifty-two goals for Rian Marques! I've never seen a target forward cook a league like this — I felt every one of them."},
+        {"id": 2, "host": "casey", "kicker": "EFFICIENCY",
+         "text": "And it's efficient. His finishing rate off the boards is the best in the league — he turns half-chances into goals."},
+        {"id": 3, "host": "rayo", "kicker": "LOADED",
+         "text": "Assist men, keepers, the whole leaderboard is loaded. Golden era on turf, don't blink."},
+    ],
+}
+
+
 
 
 # ---------------------------------------------------------------------------

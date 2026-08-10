@@ -183,6 +183,14 @@ async def get_cold_open():
     return co
 
 
+@api_router.get("/segments/{page}")
+async def get_segment(page: str):
+    beats = data.SEGMENTS.get(page)
+    if beats is None:
+        raise HTTPException(status_code=404, detail="Unknown segment")
+    return {"page": page, "beats": beats}
+
+
 # ---------------------------------------------------------------------------
 # TALK — Rayo & Casey chat
 # ---------------------------------------------------------------------------

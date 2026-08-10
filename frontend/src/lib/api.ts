@@ -62,6 +62,7 @@ export const api = {
   games: () => get<{ games: Game[] }>("/games"),
   game: (id: string) => get<{ game: Game; home: Team; away: Team }>(`/games/${id}`),
   coldOpen: () => get<any>("/coldopen"),
+  segment: (page: string) => get<{ page: string; beats: ColdOpenBeat[] }>(`/segments/${page}`),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),

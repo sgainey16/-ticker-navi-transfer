@@ -9,6 +9,7 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, Team } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
+import { useBroadcast } from "@/src/lib/broadcast";
 import { TeamLogo } from "@/src/components/TeamLogo";
 
 const HERO = require("../../assets/images/broadcast-desk.png");
@@ -21,6 +22,7 @@ const STORYLINES = [
 
 export default function Tonight() {
   const router = useRouter();
+  const broadcast = useBroadcast();
   const home = useApi(() => api.home());
   const games = useApi(() => api.games());
   const teams = useApi(() => api.teams());
@@ -50,7 +52,7 @@ export default function Tonight() {
             <Text style={styles.h1}>TONIGHT'S GAMES</Text>
           </View>
 
-          <Pressable style={styles.hero} onPress={() => router.push("/coldopen")}>
+          <Pressable style={styles.hero} onPress={() => broadcast.start("tonight")}>
             <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
             <LinearGradient colors={["rgba(5,7,12,0.15)", "rgba(5,7,12,0.9)"]} style={StyleSheet.absoluteFill} />
             <Text style={styles.heroTag}>THE TICKER · COLD OPEN</Text>

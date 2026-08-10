@@ -78,6 +78,7 @@ export default function ColdOpen() {
     }
     const timer = setTimeout(goNext, myStep === 0 ? 900 : 2600);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, beats.length, audioOn, voices.rayo, voices.casey]);
 
   useEffect(() => {

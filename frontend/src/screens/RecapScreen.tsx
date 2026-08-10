@@ -10,12 +10,14 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, Game, Team } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
+import { useBroadcast } from "@/src/lib/broadcast";
 import { TeamLogo } from "@/src/components/TeamLogo";
 
 const HERO = require("../../assets/images/broadcast-desk.png");
 
 export default function Recap() {
   const router = useRouter();
+  const broadcast = useBroadcast();
   const games = useApi(() => api.games());
   const teams = useApi(() => api.teams());
 
@@ -48,7 +50,7 @@ export default function Recap() {
           </View>
 
           {/* ON AIR HERO */}
-          <Pressable style={styles.hero} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/coldopen"); }} testID="run-the-tape">
+          <Pressable style={styles.hero} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); broadcast.start("recap"); }} testID="run-the-tape">
             <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
             <LinearGradient colors={["rgba(5,7,12,0.1)", "rgba(5,7,12,0.85)"]} style={StyleSheet.absoluteFill} />
             <View style={styles.onAir}>

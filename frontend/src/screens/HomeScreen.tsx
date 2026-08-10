@@ -11,6 +11,7 @@ import { api, Team } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { TabScreen, SectionTitle, Loader, ErrorState, LiveBadge, Pill } from "@/src/components/ui";
 import { goToTab } from "@/src/lib/tabnav";
+import { useBroadcast } from "@/src/lib/broadcast";
 import { TickerLogo } from "@/src/components/TickerLogo";
 import { TickerStrip } from "@/src/components/TickerStrip";
 import { ScoreRow } from "@/src/components/ScoreRow";
@@ -20,6 +21,7 @@ const HERO = require("../../assets/images/broadcast-desk.png");
 
 export default function Home() {
   const router = useRouter();
+  const broadcast = useBroadcast();
   const home = useApi(() => api.home());
   const teams = useApi(() => api.teams());
 
@@ -54,7 +56,7 @@ export default function Home() {
           {/* HERO COLD OPEN */}
           <Pressable
             testID="cold-open-hero"
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/coldopen"); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); broadcast.start("home"); }}
             style={styles.hero}
           >
             <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
