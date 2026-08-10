@@ -123,6 +123,7 @@ export function BroadcastProvider({ children }: { children: React.ReactNode }) {
   const beat = beats[step];
   const isSystem = beat?.host === "system";
   const s = beat && beat.host !== "system" ? hostStyle[beat.host] : null;
+  const accent = isSystem ? colors.green : s?.accent || colors.green;
 
   return (
     <BroadcastCtx.Provider value={{ start, onPage, stop, active }}>
@@ -131,32 +132,15 @@ export function BroadcastProvider({ children }: { children: React.ReactNode }) {
         <Animated.View
           entering={FadeInDown.duration(300)}
           exiting={FadeOutUp.duration(200)}
-          style={[styles.bar, { top: insets.top + 52 + 8, borderLeftColor: isSystem ? colors.green : s?.accent }]}
+          style={[styles.bar, { top: insets.top + 52 + 8, borderColor: accent }]}
           testID="onair-bar"
         >
-          <TickerMark size={22} />
-          <View style={styles.mid}>
-            {isSystem ? (
-              <Text style={styles.watch}>WATCH LIVE ON VICTORY+</Text>
-            ) : (
-              <>
-                <View style={styles.topLine}>
-                  <Text style={[styles.host, { color: s?.accent }]}>{beat.host === "rayo" ? "RAYO" : "CASEY"}</Text>
-                  {speaking ? (
-                    <View style={styles.onAir}>
-                      <View style={[styles.dot, { backgroundColor: s?.accent }]} />
-                      <Text style={[styles.onAirText, { color: s?.accent }]}>ON AIR</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.kicker}>{beat.kicker || "ON AIR"}</Text>
-                  )}
-                </View>
-                <Text style={styles.line} numberOfLines={2}>
-                  {beat.text}
-                </Text>
-              </>
-            )}
+          <TickerMark size={20} />
+          <View style={styles.status}>
+            <View style={[styles.dot, { backgroundColor: speaking ? accent : "rgba(255,255,255,0.25)" }]} />
+            <Text style={[styles.onAirText, { color: speaking ? accent : colors.textFaint }]}>ON AIR</Text>
           </View>
+          <View style={styles.spacer} />
           <Pressable testID="onair-mute" hitSlop={8} style={styles.ctrl} onPress={() => setAudioOn((v) => { if (v) stopAudio(); return !v; })}>
             <Ionicons name={audioOn ? "volume-high" : "volume-mute"} size={18} color={audioOn ? colors.white : colors.textDim} />
           </Pressable>
@@ -172,32 +156,25 @@ export function BroadcastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   bar: {
     position: "absolute",
-    left: spacing.sm,
-    right: spacing.sm,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: "rgba(11,14,21,0.97)",
-    borderRadius: radius.md,
+    backgroundColor: "rgba(11,14,21,0.94)",
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderLeftWidth: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingLeft: spacing.md,
+    paddingRight: 6,
+    paddingVertical: 6,
     shadowColor: "#000",
     shadowOpacity: 0.5,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 10,
   },
-  mid: { flex: 1 },
-  topLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  host: { fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 1 },
-  onAir: { flexDirection: "row", alignItems: "center", gap: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  onAirText: { fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  kicker: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "600", letterSpacing: 1 },
-  line: { color: colors.white, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, marginTop: 2 },
-  watch: { color: colors.green, fontFamily: fonts.display, fontSize: 16, fontWeight: "800", letterSpacing: 1 },
-  ctrl: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  status: { flexDirection: "row", alignItems: "center", gap: 6 },
+  spacer: { width: spacing.sm },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  onAirText: { fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 1.5 },
+  ctrl: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
 });

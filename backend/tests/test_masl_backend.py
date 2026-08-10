@@ -147,6 +147,72 @@ class TestAvailability:
         assert all("status" in x and "player" in x for x in rep)
 
 
+# -------------------- Segments (per-page banter) --------------------
+class TestSegments:
+    EXPECTED = {"recap": 5, "tonight": 5, "home": 6, "reels": 4, "scores": 5, "stats": 5}
+
+    @pytest.mark.parametrize("page,count", list(EXPECTED.items()))
+    def test_segment_shape_and_no_hockey(self, api_client, base_url, page, count):
+        r = api_client.get(f"{base_url}/api/segments/{page}")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["page"] == page
+        beats = d["beats"]
+        assert isinstance(beats, list) and len(beats) == count, f"{page}: got {len(beats)} beats, want {count}"
+        for b in beats:
+            for k in ("id", "host", "kicker", "text"):
+                assert k in b, f"{page} missing field {k}"
+        blob = " ".join(b["text"] for b in beats)
+        hits = _hockey_hits(blob)
+        assert not hits, f"HOCKEY LEAK in /api/segments/{page}: {hits}"
+
+    def test_segment_404(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/segments/bogus")
+        assert r.status_code == 404
+
+
+# -------------------- Games with video ids --------------------
+class TestGameVideos:
+    EXPECTED_VIDEOS = {
+        "mil-uti-17-2": "opW7LVDvTkQ",
+        "sd-emp-marques": "wrvbAD76QdE",
+        "bal-kc-comets": "-tNpJHj-DWY",
+        "mil-stl-ot": "X2vnyC1SrSE",
+        "rnc-final-g3": "tlF8VAlXFyY",
+    }
+
+    def test_games_all_have_video_and_label(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/games")
+        assert r.status_code == 200
+        games = {g["id"]: g for g in r.json()["games"]}
+        assert len(games) == 5, f"Expected 5 games, got {len(games)}"
+        for gid, vid in self.EXPECTED_VIDEOS.items():
+            assert gid in games, f"Missing game {gid}"
+            assert games[gid]["video_id"] == vid, f"{gid} video mismatch: {games[gid].get('video_id')}"
+            assert games[gid].get("label"), f"{gid} missing label"
+
+    @pytest.mark.parametrize("gid,vid", list(EXPECTED_VIDEOS.items()))
+    def test_game_detail_has_video_and_teams(self, api_client, base_url, gid, vid):
+        r = api_client.get(f"{base_url}/api/games/{gid}")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["game"]["video_id"] == vid
+        assert d["game"]["status"]
+        assert d["game"]["label"]
+        assert d["home"] and d["home"].get("id")
+        assert d["away"] and d["away"].get("id")
+
+
+# -------------------- Home featured --------------------
+class TestHomeFeatured:
+    def test_featured_and_recap_count(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/home")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["featured_game"] == "mil-uti-17-2"
+        assert len(d["recaps"]) == 5
+
+
 # -------------------- Talk (LLM) --------------------
 class TestTalk:
     def test_empty_message(self, api_client, base_url):

@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { colors, fonts, spacing, radius, hostStyle } from "@/src/theme";
 import { api } from "@/src/lib/api";
@@ -13,6 +14,7 @@ import { BackBar } from "@/app/team/[id]";
 
 export default function GameDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const q = useApi(() => api.game(id), [id]);
 
   if (q.loading) return <Screen><BackBar /><Loader /></Screen>;
@@ -36,6 +38,13 @@ export default function GameDetail() {
           </View>
           <TeamCol team={home} score={game.home_score} win={game.home_score > game.away_score} />
         </View>
+
+        {game.video_id ? (
+          <Pressable style={styles.watchBtn} onPress={() => router.push(`/highlights/${game.id}`)} testID="watch-highlights">
+            <Ionicons name="play-circle" size={20} color={colors.bg} />
+            <Text style={styles.watchText}>WATCH HIGHLIGHTS</Text>
+          </Pressable>
+        ) : null}
 
         {/* QUARTER LINE SCORE */}
         <View style={styles.lineScore}>
@@ -163,6 +172,8 @@ const styles = StyleSheet.create({
   final: { color: colors.red, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   vs: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
   date: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 11 },
+  watchBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.green, borderRadius: radius.pill, paddingVertical: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xs },
+  watchText: { color: colors.bg, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 1 },
 
   lineScore: { marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   lsHead: { flexDirection: "row", alignItems: "center", paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },

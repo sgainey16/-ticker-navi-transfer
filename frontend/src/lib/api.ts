@@ -35,11 +35,11 @@ export type GameStatSide = {
 };
 
 export type Game = {
-  id: string; date: string; status: string; home_id: string; away_id: string;
+  id: string; date: string; status: string; label?: string; home_id: string; away_id: string;
   home_score: number; away_score: number; quarters: number[][];
   stats: { home: GameStatSide; away: GameStatSide };
   timeline: { q: number; time: string; team: string; player: string; note: string }[];
-  commentary: { rayo: string; casey: string }; featured?: boolean;
+  commentary: { rayo: string; casey: string }; featured?: boolean; video_id?: string | null;
 };
 
 export type StandingRow = {

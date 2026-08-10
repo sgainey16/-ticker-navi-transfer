@@ -66,16 +66,21 @@ export default function Recap() {
               const home = teamMap[g.home_id];
               const away = teamMap[g.away_id];
               return (
-                <Pressable key={g.id} style={styles.gameCard} onPress={() => router.push(`/game/${g.id}`)} testID={`recap-game-${g.id}`}>
+                <Pressable key={g.id} style={styles.gameCard} onPress={() => router.push(`/highlights/${g.id}`)} testID={`recap-game-${g.id}`}>
                   <View style={styles.gcTop}>
                     <TeamLogo abbr={away?.abbr || ""} primary={away?.primary || colors.green} secondary={away?.secondary} size={36} />
                     <Text style={styles.gcAt}>@</Text>
                     <TeamLogo abbr={home?.abbr || ""} primary={home?.primary || colors.green} secondary={home?.secondary} size={36} />
                   </View>
                   <Text style={styles.gcScore}>{g.away_score} - {g.home_score}</Text>
-                  <Text style={styles.gcLabel}>GAME {i + 1}</Text>
+                  <Text style={styles.gcLabel} numberOfLines={1}>{g.label || `GAME ${i + 1}`}</Text>
                   <View style={styles.gcThumb}>
-                    <LinearGradient colors={[away?.primary + "44" || "#222", home?.primary + "44" || "#222"]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                    {g.video_id ? (
+                      <Image source={{ uri: `https://i.ytimg.com/vi/${g.video_id}/hqdefault.jpg` }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    ) : (
+                      <LinearGradient colors={[(away?.primary || "#222") + "44", (home?.primary || "#222") + "44"]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                    )}
+                    <View style={styles.gcThumbShade} />
                     <View style={styles.playCircle}><Ionicons name="play" size={16} color={colors.white} /></View>
                     <Text style={styles.gcThumbText}>HIGHLIGHTS</Text>
                   </View>
@@ -91,7 +96,7 @@ export default function Recap() {
               {highlights.map((h, i) => {
                 const t = teamMap[h.team];
                 return (
-                  <Pressable key={i} style={styles.hlRow} onPress={() => router.push(`/game/${h.game}`)} testID={`highlight-${i}`}>
+                  <Pressable key={i} style={styles.hlRow} onPress={() => router.push(`/highlights/${h.game}`)} testID={`highlight-${i}`}>
                     <View style={styles.hlThumb}>
                       <TeamLogo abbr={t?.abbr || ""} primary={t?.primary || colors.green} secondary={t?.secondary} size={30} />
                       <View style={styles.hlPlay}><Ionicons name="play" size={10} color={colors.white} /></View>
@@ -131,6 +136,7 @@ const styles = StyleSheet.create({
   gcScore: { color: colors.white, fontFamily: fonts.display, fontSize: 22, fontWeight: "800", textAlign: "center" },
   gcLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 1, textAlign: "center" },
   gcThumb: { height: 70, borderRadius: radius.sm, overflow: "hidden", marginTop: 6, alignItems: "center", justifyContent: "center" },
+  gcThumbShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(5,7,12,0.35)" },
   playCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
   gcThumbText: { position: "absolute", bottom: 6, left: 8, color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
 

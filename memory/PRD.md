@@ -22,6 +22,11 @@ Build a lean, working prototype applying The Ticker broadcast format to the Majo
 ## Knowledge layer (P0 — done)
 Arena-soccer rules/terminology + 2025-26 season context injected into the host system prompt; hard rule forbidding hockey terms. Both hosts answer in strict JSON (Rayo + Casey). Verified clean terminology in testing.
 
+## Implemented (2026-06) — latest updates
+- **Persistent on-air panel** (`src/lib/broadcast.tsx`): tapping a hero starts a slim top ON-AIR bar (audio-only pill: pulsing ON AIR + mute + close, no transcript per user). Panel keeps playing while browsing. **Per-page banter segments** — switching tabs swaps the segment (`GET /api/segments/{page}` for recap/tonight/home/reels/scores/stats). Home segment = the Cold Open ending on WATCH LIVE ON VICTORY+. Banter expanded to 5-6 lines/page, English-led openers (no fake-Spanish counting). [done]
+- **Real game highlights**: games REDONE to match real 2025-26 MASL games that have official MASLtv videos; each game has `video_id`+`label`. Slate: Utica@Milwaukee 17-2 (RECORD NIGHT, opW7LVDvTkQ), San Diego 7-6 Empire (wrvbAD76QdE), KC 8-5 @ Baltimore (-tNpJHj-DWY), St.Louis 7-6 Milwaukee OT (X2vnyC1SrSE), Ron Newman Cup Final G3 San Diego 10-3 Milwaukee (tlF8VAlXFyY). RECAP cards show real YouTube thumbnails → tap opens highlights player (`app/highlights/[id].tsx`) with score header + booth commentary. Native uses react-native-webview inline; web shows a "WATCH ON YOUTUBE" fallback (WebView unsupported on web). game detail has WATCH HIGHLIGHTS button. [done]
+- Verified: testing agent run 2 — backend 32/32, frontend flows (bar persistence, recap→highlights, watch-highlights), zero hockey terms. [done]
+
 ## Implemented (2026-06)
 - Curated 2025-26 dataset: 8 clubs, rosters, leaders (Rian Marques 52 G), standings (E/W), 5 game recaps incl. Milwaukee 17-2 Utica, availability report, ticker, cold-open script. [done]
 - Real MASL club logos pulled per team (initials-crest fallback). [done]

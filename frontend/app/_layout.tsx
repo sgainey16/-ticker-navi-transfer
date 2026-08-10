@@ -44,6 +44,7 @@ export default function RootLayout() {
             <Stack.Screen name="coldopen" options={{ presentation: "fullScreenModal", animation: "fade" }} />
             <Stack.Screen name="talk" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
             <Stack.Screen name="voices" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+            <Stack.Screen name="highlights/[id]" options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }} />
           </Stack>
         </KeyboardProvider>
       </SafeAreaProvider>
