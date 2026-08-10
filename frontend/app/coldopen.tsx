@@ -115,7 +115,7 @@ export default function ColdOpen() {
       {!hasVoices ? (
         <Pressable testID="cast-hint" style={styles.hint} onPress={() => router.push("/voices")}>
           <Ionicons name="sparkles" size={13} color={colors.green} />
-          <Text style={styles.hintText}>Tap to cast Rayo & Casey's voices</Text>
+          <Text style={styles.hintText}>Tap to cast Rayo & Casey’s voices</Text>
         </Pressable>
       ) : null}
 
@@ -128,14 +128,23 @@ export default function ColdOpen() {
           <Pressable style={styles.stage} onPress={advance} testID="cold-open-stage">
             <ScrollView ref={scrollRef} contentContainerStyle={styles.stageContent} showsVerticalScrollIndicator={false}>
               <View style={styles.matchup}>
-                <Text style={styles.matchLabel}>COLD OPEN · THE WAVE'S RECORD NIGHT</Text>
+                <Text style={styles.matchLabel}>COLD OPEN · THE WAVE’S RECORD NIGHT</Text>
                 <Text style={styles.matchScore}>
                   {co.data.away?.abbr} {co.data.matchup.away_score}  —  {co.data.matchup.home_score} {co.data.home?.abbr}
                 </Text>
               </View>
-              {revealed.map((b, i) => (
-                <BeatView key={b.id} beat={b} isLast={i === revealed.length - 1} speaking={speaking && i === revealed.length - 1} />
-              ))}
+              {revealed.map((b, i) => {
+                const vid = b.host === "rayo" ? voices.rayo : b.host === "casey" ? voices.casey : undefined;
+                return (
+                  <BeatView
+                    key={b.id}
+                    beat={b}
+                    isLast={i === revealed.length - 1}
+                    speaking={speaking && i === revealed.length - 1}
+                    voiced={audioOn && !!vid}
+                  />
+                );
+              })}
             </ScrollView>
           </Pressable>
 
@@ -164,7 +173,7 @@ export default function ColdOpen() {
   );
 }
 
-function BeatView({ beat, isLast, speaking }: { beat: ColdOpenBeat; isLast: boolean; speaking: boolean }) {
+function BeatView({ beat, isLast, speaking, voiced }: { beat: ColdOpenBeat; isLast: boolean; speaking: boolean; voiced: boolean }) {
   if (beat.host === "system") {
     return (
       <Animated.View entering={FadeInDown.duration(500)} style={styles.reveal}>
@@ -189,9 +198,17 @@ function BeatView({ beat, isLast, speaking }: { beat: ColdOpenBeat; isLast: bool
           <Text style={styles.kicker}>{beat.kicker}</Text>
         ) : null}
       </View>
-      <View style={[styles.lowerThird, { borderLeftColor: s.accent }]}>
-        <Text style={styles.beatText}>{beat.text}</Text>
-      </View>
+      {voiced ? (
+        <View style={[styles.lowerThirdVoiced, { borderLeftColor: s.accent }]}>
+          <Text style={styles.beatName}>{beat.host === "rayo" ? "Mateo “Rayo” Reyes" : "Casey Whitfield"}</Text>
+          <Text style={[styles.beatHandle, { color: s.accent }]}>{s.handle}</Text>
+          <Ionicons name="volume-medium" size={16} color={s.accent} style={{ position: "absolute", right: 14, top: 16 }} />
+        </View>
+      ) : (
+        <View style={[styles.lowerThird, { borderLeftColor: s.accent }]}>
+          <Text style={styles.beatText}>{beat.text}</Text>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -219,6 +236,9 @@ const styles = StyleSheet.create({
   speakDot: { width: 7, height: 7, borderRadius: 4 },
   speaking: { fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   lowerThird: { backgroundColor: "rgba(16,20,28,0.82)", borderRadius: radius.md, borderLeftWidth: 3, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  lowerThirdVoiced: { backgroundColor: "rgba(16,20,28,0.82)", borderRadius: radius.md, borderLeftWidth: 3, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  beatName: { color: colors.white, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", letterSpacing: 0.3 },
+  beatHandle: { fontFamily: fonts.accent, fontSize: 12, fontWeight: "600", letterSpacing: 0.5, marginTop: 2 },
   beatText: { color: colors.white, fontFamily: fonts.body, fontSize: 17, lineHeight: 26 },
 
   reveal: { alignItems: "center", paddingVertical: spacing.xl, gap: spacing.md },

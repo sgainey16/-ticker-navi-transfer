@@ -41,7 +41,7 @@ export default function Voices() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>CAST THE BOOTH</Text>
-          <Text style={styles.headerSub}>Audition & pick each host's voice</Text>
+          <Text style={styles.headerSub}>Audition & pick each host’s voice</Text>
         </View>
         <View style={{ width: 34 }} />
       </View>
@@ -76,7 +76,7 @@ function HostCaster({ host, img, initialGv }: { host: "rayo" | "casey"; img: any
     try {
       const res = await api.designVoices(host);
       setPreviews(res.previews);
-    } catch (e: any) {
+    } catch {
       setError("Couldn't generate voices. Try again.");
     } finally {
       setLoading(false);

@@ -10,12 +10,14 @@ import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius, hostStyle } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
+import { playDataUri, stopAudio } from "@/src/lib/audio";
+import { VKEY_ID } from "@/app/voices";
 
 const RAYO = require("../assets/images/rayo.jpg");
 const CASEY = require("../assets/images/casey.jpg");
 const SESSION_KEY = "masl_talk_session";
 
-type Msg = { role: "user" | "rayo" | "casey"; text: string };
+type Msg = { id: number; role: "user" | "rayo" | "casey"; text: string };
 
 const SUGGESTIONS = [
   "How did Milwaukee beat Utica 17-2?",
@@ -32,6 +34,45 @@ export default function Talk() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const idRef = useRef(0);
+  const nextId = () => idRef.current++;
+  const [voices, setVoices] = useState<{ rayo?: string; casey?: string }>({});
+  const [audioOn, setAudioOn] = useState(true);
+  const [playing, setPlaying] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const r = await storage.getItem<string>(VKEY_ID.rayo, "");
+      const c = await storage.getItem<string>(VKEY_ID.casey, "");
+      let server: { rayo: string | null; casey: string | null } = { rayo: null, casey: null };
+      try {
+        server = await api.voicesSelected();
+      } catch {}
+      setVoices({ rayo: r || server.rayo || undefined, casey: c || server.casey || undefined });
+    })();
+    return () => stopAudio();
+  }, []);
+
+  const speak = async (m: Msg) => {
+    const vid = m.role === "rayo" ? voices.rayo : m.role === "casey" ? voices.casey : undefined;
+    if (!vid) return;
+    setPlaying(m.id);
+    try {
+      const res = await api.tts(m.text, vid);
+      await playDataUri(res.audio);
+    } catch {}
+    setPlaying((cur) => (cur === m.id ? null : cur));
+  };
+
+  const onBubblePlay = (m: Msg) => {
+    Haptics.selectionAsync();
+    if (playing === m.id) {
+      stopAudio();
+      setPlaying(null);
+      return;
+    }
+    speak(m);
+  };
 
   useEffect(() => {
     (async () => {
@@ -42,10 +83,10 @@ export default function Talk() {
           const hist = await api.talkHistory(sid);
           const msgs: Msg[] = [];
           hist.turns.forEach((t: any) => {
-            if (t.role === "user") msgs.push({ role: "user", text: t.text });
+            if (t.role === "user") msgs.push({ id: nextId(), role: "user", text: t.text });
             else {
-              if (t.rayo) msgs.push({ role: "rayo", text: t.rayo });
-              if (t.casey) msgs.push({ role: "casey", text: t.casey });
+              if (t.rayo) msgs.push({ id: nextId(), role: "rayo", text: t.rayo });
+              if (t.casey) msgs.push({ id: nextId(), role: "casey", text: t.casey });
             }
           });
           setMessages(msgs);
@@ -59,7 +100,7 @@ export default function Talk() {
     if (!q || sending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setInput("");
-    setMessages((m) => [...m, { role: "user", text: q }]);
+    setMessages((m) => [...m, { id: nextId(), role: "user", text: q }]);
     setSending(true);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
     try {
@@ -68,13 +109,17 @@ export default function Talk() {
         setSession(res.session_id);
         await storage.setItem(SESSION_KEY, res.session_id);
       }
-      setMessages((m) => [
-        ...m,
-        ...(res.rayo ? [{ role: "rayo" as const, text: res.rayo }] : []),
-        ...(res.casey ? [{ role: "casey" as const, text: res.casey }] : []),
-      ]);
+      const newOnes: Msg[] = [];
+      if (res.rayo) newOnes.push({ id: nextId(), role: "rayo", text: res.rayo });
+      if (res.casey) newOnes.push({ id: nextId(), role: "casey", text: res.casey });
+      setMessages((m) => [...m, ...newOnes]);
+      if (audioOn) {
+        for (const nm of newOnes) {
+          await speak(nm);
+        }
+      }
     } catch {
-      setMessages((m) => [...m, { role: "rayo", text: "Booth's audio dropped for a second — hit me with that again, ¿sí?" }]);
+      setMessages((m) => [...m, { id: nextId(), role: "rayo", text: "Booth's audio dropped for a second — hit me with that again, ¿sí?" }]);
     } finally {
       setSending(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
@@ -91,6 +136,14 @@ export default function Talk() {
           <Text style={styles.headerTitle}>THE BOOTH</Text>
           <Text style={styles.headerSub}>Rayo & Casey · live</Text>
         </View>
+        <Pressable
+          testID="talk-audio-toggle"
+          onPress={() => { setAudioOn((v) => { if (v) { stopAudio(); setPlaying(null); } return !v; }); }}
+          hitSlop={10}
+          style={styles.audioBtn}
+        >
+          <Ionicons name={audioOn ? "volume-high" : "volume-mute"} size={18} color={audioOn ? colors.green : colors.textDim} />
+        </Pressable>
         <View style={styles.headerAvatars}>
           <Image source={RAYO} style={[styles.hAvatar, { borderColor: colors.green, marginRight: -10, zIndex: 2 }]} contentFit="cover" />
           <Image source={CASEY} style={[styles.hAvatar, { borderColor: colors.blue }]} contentFit="cover" />
@@ -99,7 +152,7 @@ export default function Talk() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="translate-with-padding" keyboardVerticalOffset={0}>
         <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {messages.length === 0 ? <Welcome onPick={send} /> : messages.map((m, i) => <Bubble key={i} msg={m} />)}
+          {messages.length === 0 ? <Welcome onPick={send} /> : messages.map((m) => <Bubble key={m.id} msg={m} onPlay={onBubblePlay} playing={playing === m.id} />)}
           {sending ? <Typing /> : null}
         </ScrollView>
 
@@ -144,7 +197,7 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
   );
 }
 
-function Bubble({ msg }: { msg: Msg }) {
+function Bubble({ msg, onPlay, playing }: { msg: Msg; onPlay: (m: Msg) => void; playing: boolean }) {
   if (msg.role === "user") {
     return (
       <View style={styles.userWrap}>
@@ -161,6 +214,9 @@ function Bubble({ msg }: { msg: Msg }) {
         <View style={styles.hostHead}>
           <Text style={[styles.hostName, { color: s.accent }]}>{isRayo ? "RAYO" : "CASEY"}</Text>
           <Text style={styles.hostRole}>{s.label}</Text>
+          <Pressable testID={`play-${msg.id}`} onPress={() => onPlay(msg)} hitSlop={8} style={[styles.playChip, { borderColor: s.accent }]}>
+            <Ionicons name={playing ? "pause" : "volume-medium"} size={13} color={s.accent} />
+          </Pressable>
         </View>
         <View style={[styles.hostBubble, { borderLeftColor: s.accent }]}><Text style={styles.hostText}>{msg.text}</Text></View>
       </View>
@@ -189,6 +245,8 @@ const styles = StyleSheet.create({
   headerSub: { color: colors.green, fontFamily: fonts.body, fontSize: 11 },
   headerAvatars: { flexDirection: "row", alignItems: "center" },
   hAvatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, backgroundColor: colors.surfaceAlt },
+  audioBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+  playChip: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", marginLeft: 2 },
 
   list: { padding: spacing.lg, gap: spacing.lg, flexGrow: 1 },
   welcome: { alignItems: "center", paddingTop: spacing.xl, gap: spacing.md },
