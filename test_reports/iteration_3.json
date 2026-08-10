@@ -1,0 +1,23 @@
+{
+  "summary": "Regression test PASSED for the YouTube highlights containment fix. RECAP → recap-game-mil-uti-17-2 opens the highlights screen with testID highlights-player, score header (Utica City 2 / Wave 17), FROM THE BOOTH commentary from both Rayo and Casey, and Back returns to RECAP without error. On web preview the fallback testID web-watch renders correctly with 'WATCH ON YOUTUBE' overlay (react-native-webview isn't supported on web, as expected). No red-box, no runtime pageerrors after the new WebView props (onShouldStartLoadWithRequest, setSupportMultipleWindows={false}, javaScriptCanOpenWindowsAutomatically={false}). Backend /api/games/mil-uti-17-2 returns video_id 'opW7LVDvTkQ' as required. Native containment (blocking youtube.com/watch and the YouTube app) cannot be validated on web preview and must be verified on device.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "onShouldStartLoadWithRequest logic is correct — allows youtube-nocookie/embed + asset domains, blocks vnd.youtube://, youtube:// deep links, /watch paths, and m.youtube.com. Combined with setSupportMultipleWindows={false} and javaScriptCanOpenWindowsAutomatically={false}, in-app containment should hold on device.",
+    "Web fallback correctly uses Linking.openURL for youtube.com/watch (acceptable — WebView is not available on RN Web)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Highlights containment RCA verified on web preview only. To validate native behavior (that tapping the video does NOT open the YouTube app or leave the Expo app), test on iOS/Android device or Expo Go — cannot be tested on web preview.",
+  "rca_of_issue": "Original bug: iframe/redirects were escaping to youtube.com/watch or the YouTube app. Fix used: (1) switched embed URL to youtube-nocookie.com/embed with playsinline=1, fs=0, rel=0, iv_load_policy=3, modestbranding=1; (2) added WebView onShouldStartLoadWithRequest that only permits youtube-nocookie/embed + Google asset hosts and explicitly rejects vnd.youtube:, youtube://, /watch, m.youtube.com; (3) disabled multi-window (setSupportMultipleWindows={false}) and JS-triggered popups (javaScriptCanOpenWindowsAutomatically={false}). Web preview screen renders web-watch fallback without error."
+}

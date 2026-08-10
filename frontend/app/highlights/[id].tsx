@@ -21,13 +21,22 @@ export default function Highlights() {
 
   const { game, home, away } = q.data;
   const vid = game.video_id;
-  const embed = `https://www.youtube.com/embed/${vid}?playsinline=1&rel=0&modestbranding=1&fs=1`;
+  const embed = `https://www.youtube-nocookie.com/embed/${vid}?playsinline=1&rel=0&modestbranding=1&fs=0&iv_load_policy=3&controls=1`;
   const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
     <body style="margin:0;padding:0;background:#000;overflow:hidden;">
       <iframe width="100%" height="100%" src="${embed}" frameborder="0"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen
+        allow="autoplay; encrypted-media; picture-in-picture"
         style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"></iframe>
     </body></html>`;
+
+  // Keep the user INSIDE the app: block any attempt to open the YouTube app or
+  // navigate to a youtube.com/watch page. Only allow the embedded player + assets.
+  const onShouldStart = (req: { url?: string }) => {
+    const u = (req.url || "").toLowerCase();
+    if (u.startsWith("about:blank") || u === "" || u.startsWith("data:")) return true;
+    if (u.startsWith("vnd.youtube") || u.startsWith("youtube://") || u.includes("/watch") || u.includes("m.youtube.com")) return false;
+    return u.includes("youtube-nocookie.com") || u.includes("youtube.com/embed") || u.includes("ytimg.com") || u.includes("googlevideo.com") || u.includes("gstatic.com") || u.includes("google.com");
+  };
 
   return (
     <Screen>
@@ -60,12 +69,16 @@ export default function Highlights() {
             <WebView
               source={{ html }}
               style={styles.web}
+              originWhitelist={["*"]}
               allowsInlineMediaPlayback
               mediaPlaybackRequiresUserAction={false}
-              allowsFullscreenVideo
+              allowsFullscreenVideo={false}
               javaScriptEnabled
               domStorageEnabled
               scrollEnabled={false}
+              setSupportMultipleWindows={false}
+              javaScriptCanOpenWindowsAutomatically={false}
+              onShouldStartLoadWithRequest={onShouldStart}
             />
           )}
         </View>
