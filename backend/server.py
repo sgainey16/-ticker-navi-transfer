@@ -191,6 +191,11 @@ async def get_segment(page: str):
     return {"page": page, "beats": beats}
 
 
+@api_router.get("/stars")
+async def get_stars():
+    return {"stars": data.stars()}
+
+
 # ---------------------------------------------------------------------------
 # TALK — Rayo & Casey chat
 # ---------------------------------------------------------------------------

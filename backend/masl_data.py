@@ -210,6 +210,58 @@ PLAYERS = [
 PLAYERS_BY_ID = {p["id"]: p for p in PLAYERS}
 
 
+# ---------------------------------------------------------------------------
+# STARS OF THE LEAGUE — Top 3 spotlight for the investor pitch.
+# Building brand + star value: the MVP, the Icon, and the Rookie on the rise.
+# ---------------------------------------------------------------------------
+
+STARS = [
+    {
+        "player_id": "rian-marques",
+        "tag": "LEAGUE MVP",
+        "accent": "gold",
+        "tagline": "The Face of MASL",
+        "stat_label": "GOALS",
+        "spotlight": "A first touch that turns a board-ball into a finish before the keeper can breathe. He didn't just take the scoring title with 52 — he carried San Diego to another Ron Newman Cup. This is the face you put on the poster.",
+    },
+    {
+        "player_id": "ian-bennett",
+        "tag": "THE ICON",
+        "accent": "blue",
+        "tagline": "Milwaukee's Living Legend",
+        "stat_label": "GOALS",
+        "spotlight": "Two decades of highlights and still the fastest thought on the floor. Bennett torched Utica in the 17-2 rout and drops hat tricks like it's routine. Every league needs a legend — Milwaukee has theirs.",
+    },
+    {
+        "player_id": "nikola-vignjevic",
+        "tag": "ROOKIE ON THE RISE",
+        "accent": "green",
+        "tagline": "The Next Big Thing",
+        "stat_label": "POINTS",
+        "spotlight": "Already the pulse of Utica's rebuild — a fearless young playmaker who acts like the moment is too small for him. The kind of talent a franchise is built around. Remember the name.",
+    },
+]
+
+
+def stars():
+    out = []
+    for s in STARS:
+        p = PLAYERS_BY_ID.get(s["player_id"])
+        if not p:
+            continue
+        team = TEAMS_BY_ID.get(p["team_id"])
+        stat_val = p.get("points") if s["stat_label"] == "POINTS" else p.get("goals", 0)
+        out.append({
+            **s,
+            "player": p,
+            "team": team,
+            "stat_value": stat_val,
+        })
+    return out
+
+
+
+
 def players_for_team(team_id):
     return [p for p in PLAYERS if p["team_id"] == team_id]
 

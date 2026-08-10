@@ -8,6 +8,7 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, LeaderEntry, Team } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
+import { StarSpotlight } from "@/src/components/StarSpotlight";
 import { TeamLogo } from "@/src/components/TeamLogo";
 
 const STAT_TABS = [
@@ -37,28 +38,26 @@ export default function Stats() {
 
   return (
     <TabScreen>
-      <View style={styles.headerPad}>
-        <Text style={styles.h1}>League Leaders</Text>
-      </View>
-      <View style={styles.chipRowWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {STAT_TABS.map((s) => {
-            const active = s.key === stat;
-            return (
-              <Pressable key={s.key} testID={`stat-chip-${s.key}`} onPress={() => { Haptics.selectionAsync(); setStat(s.key); }} style={[styles.chip, active && styles.chipActive]}>
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       {loading ? (
         <Loader />
       ) : error ? (
         <ErrorState message="Couldn't load stats" onRetry={() => { leaders.reload(); avail.reload(); }} />
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <StarSpotlight />
+
+          <Text style={styles.h1}>League Leaders</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
+            {STAT_TABS.map((s) => {
+              const active = s.key === stat;
+              return (
+                <Pressable key={s.key} testID={`stat-chip-${s.key}`} onPress={() => { Haptics.selectionAsync(); setStat(s.key); }} style={[styles.chip, active && styles.chipActive]}>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
           {(leaders.data![stat] || []).map((p: LeaderEntry, i: number) => (
             <Pressable key={p.id} style={styles.leaderRow} onPress={() => router.push(`/player/${p.id}`)} testID={`leader-${p.id}`}>
               <Text style={[styles.leaderRank, i === 0 && { color: colors.gold }]}>{i + 1}</Text>
@@ -93,15 +92,16 @@ export default function Stats() {
 
 const styles = StyleSheet.create({
   headerPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  h1: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800" },
+  h1: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", marginTop: spacing.xs, marginBottom: 2 },
+  chipScroll: { marginHorizontal: -spacing.lg, marginBottom: spacing.xs },
   chipRowWrap: { height: 56, justifyContent: "center" },
-  chipRow: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: "center" },
+  chipRow: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: "center", paddingVertical: 4 },
   chip: { height: 36, flexShrink: 0, paddingHorizontal: spacing.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   chipActive: { backgroundColor: colors.greenDim, borderColor: colors.green },
   chipText: { color: colors.textDim, fontFamily: fonts.display, fontSize: 14, fontWeight: "700", letterSpacing: 0.5 },
   chipTextActive: { color: colors.green },
 
-  content: { paddingHorizontal: spacing.lg, paddingBottom: 110, gap: spacing.sm },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 110, gap: spacing.sm },
   leaderRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   leaderRank: { color: colors.textDim, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", width: 22, textAlign: "center" },
   leaderName: { color: colors.text, fontFamily: fonts.display, fontSize: 17, fontWeight: "700", letterSpacing: 0.3 },

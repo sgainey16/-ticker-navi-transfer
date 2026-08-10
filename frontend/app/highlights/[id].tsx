@@ -1,7 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Linking } from "react-native";
-import { WebView } from "react-native-webview";
-import { Image } from "expo-image";
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 
@@ -10,10 +8,12 @@ import { api } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState } from "@/src/components/ui";
 import { TeamLogo } from "@/src/components/TeamLogo";
+import { YTPlayer } from "@/src/components/YTPlayer";
 import { BackBar } from "@/app/team/[id]";
 
 export default function Highlights() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { width } = useWindowDimensions();
   const q = useApi(() => api.game(id), [id]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Cueing the highlights…" /></Screen>;
@@ -21,22 +21,7 @@ export default function Highlights() {
 
   const { game, home, away } = q.data;
   const vid = game.video_id;
-  const embed = `https://www.youtube-nocookie.com/embed/${vid}?playsinline=1&rel=0&modestbranding=1&fs=0&iv_load_policy=3&controls=1`;
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-    <body style="margin:0;padding:0;background:#000;overflow:hidden;">
-      <iframe width="100%" height="100%" src="${embed}" frameborder="0"
-        allow="autoplay; encrypted-media; picture-in-picture"
-        style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"></iframe>
-    </body></html>`;
-
-  // Keep the user INSIDE the app: block any attempt to open the YouTube app or
-  // navigate to a youtube.com/watch page. Only allow the embedded player + assets.
-  const onShouldStart = (req: { url?: string }) => {
-    const u = (req.url || "").toLowerCase();
-    if (u.startsWith("about:blank") || u === "" || u.startsWith("data:")) return true;
-    if (u.startsWith("vnd.youtube") || u.startsWith("youtube://") || u.includes("/watch") || u.includes("m.youtube.com")) return false;
-    return u.includes("youtube-nocookie.com") || u.includes("youtube.com/embed") || u.includes("ytimg.com") || u.includes("googlevideo.com") || u.includes("gstatic.com") || u.includes("google.com");
-  };
+  const playerH = Math.round((Math.min(width, 640) - 32) * 9 / 16);
 
   return (
     <Screen>
@@ -50,38 +35,18 @@ export default function Highlights() {
         ) : null}
 
         {/* PLAYER */}
-        <View style={styles.player} testID="highlights-player">
-          {!vid ? (
+        {vid ? (
+          <View style={styles.ytWrap} testID="highlights-player">
+            <YTPlayer videoId={vid} height={playerH} />
+          </View>
+        ) : (
+          <View style={styles.player} testID="highlights-player">
             <View style={styles.noVideo}>
               <Ionicons name="videocam-off" size={28} color={colors.textDim} />
               <Text style={styles.noVideoText}>Highlights coming soon</Text>
             </View>
-          ) : Platform.OS === "web" ? (
-            <Pressable style={StyleSheet.absoluteFill} testID="web-watch" onPress={() => Linking.openURL(`https://www.youtube.com/watch?v=${vid}`)}>
-              <Image source={{ uri: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <View style={styles.webShade} />
-              <View style={styles.webPlayWrap}>
-                <View style={styles.webPlayCircle}><Ionicons name="play" size={28} color={colors.bg} /></View>
-                <Text style={styles.webPlayText}>WATCH ON YOUTUBE</Text>
-              </View>
-            </Pressable>
-          ) : (
-            <WebView
-              source={{ html }}
-              style={styles.web}
-              originWhitelist={["*"]}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              allowsFullscreenVideo={false}
-              javaScriptEnabled
-              domStorageEnabled
-              scrollEnabled={false}
-              setSupportMultipleWindows={false}
-              javaScriptCanOpenWindowsAutomatically={false}
-              onShouldStartLoadWithRequest={onShouldStart}
-            />
-          )}
-        </View>
+          </View>
+        )}
         <Text style={styles.credit}>Official highlights via MASLtv</Text>
 
         {/* SCORE HEADER */}
@@ -139,11 +104,7 @@ const styles = StyleSheet.create({
   kicker: { color: colors.green, fontFamily: fonts.accent, fontSize: 12, fontWeight: "700", letterSpacing: 1.5 },
 
   player: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.md, overflow: "hidden", backgroundColor: "#000", borderWidth: 1, borderColor: colors.border },
-  web: { flex: 1, backgroundColor: "#000" },
-  webShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(5,7,12,0.4)" },
-  webPlayWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  webPlayCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
-  webPlayText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 1 },
+  ytWrap: { width: "100%", borderRadius: radius.md, overflow: "hidden", backgroundColor: "#000", borderWidth: 1, borderColor: colors.border },
   noVideo: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   noVideoText: { color: colors.textDim, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
   credit: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 1, marginTop: 6, textAlign: "center" },

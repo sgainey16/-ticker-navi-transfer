@@ -49,6 +49,11 @@ export type StandingRow = {
 };
 
 export type LeaderEntry = { id: string; name: string; team_id: string; value: number };
+export type Star = {
+  player_id: string; tag: string; accent: "gold" | "blue" | "green"; tagline: string;
+  stat_label: string; spotlight: string; stat_value: number;
+  player: Player; team: Team;
+};
 
 export type ColdOpenBeat = { id: number; host: "rayo" | "casey" | "system"; kicker: string; text: string };
 
@@ -63,6 +68,7 @@ export const api = {
   game: (id: string) => get<{ game: Game; home: Team; away: Team }>(`/games/${id}`),
   coldOpen: () => get<any>("/coldopen"),
   segment: (page: string) => get<{ page: string; beats: ColdOpenBeat[] }>(`/segments/${page}`),
+  stars: () => get<{ stars: Star[] }>("/stars"),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),
