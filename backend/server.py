@@ -327,7 +327,27 @@ async def voices_select(req: SelectRequest):
     except Exception as e:
         logger.exception("Voice select error")
         raise HTTPException(status_code=502, detail=f"Voice save failed: {getattr(e, 'body', str(e))}")
+    await db.settings.update_one({"_id": "voices"}, {"$set": {req.host: voice.voice_id}}, upsert=True)
     return {"host": req.host, "voice_id": voice.voice_id}
+
+
+class SetVoiceRequest(BaseModel):
+    host: str
+    voice_id: str
+
+
+@api_router.get("/voices/selected")
+async def voices_selected():
+    doc = await db.settings.find_one({"_id": "voices"}) or {}
+    return {"rayo": doc.get("rayo"), "casey": doc.get("casey")}
+
+
+@api_router.post("/voices/set")
+async def voices_set(req: SetVoiceRequest):
+    if req.host not in ("rayo", "casey"):
+        raise HTTPException(status_code=400, detail="Unknown host")
+    await db.settings.update_one({"_id": "voices"}, {"$set": {req.host: req.voice_id}}, upsert=True)
+    return {"ok": True, "host": req.host, "voice_id": req.voice_id}
 
 
 @api_router.post("/tts")

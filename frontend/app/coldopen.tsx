@@ -36,7 +36,11 @@ export default function ColdOpen() {
     (async () => {
       const r = await storage.getItem<string>(VKEY_ID.rayo, "");
       const c = await storage.getItem<string>(VKEY_ID.casey, "");
-      setVoices({ rayo: r || undefined, casey: c || undefined });
+      let server: { rayo: string | null; casey: string | null } = { rayo: null, casey: null };
+      try {
+        server = await api.voicesSelected();
+      } catch {}
+      setVoices({ rayo: r || server.rayo || undefined, casey: c || server.casey || undefined });
     })();
     return () => stopAudio();
   }, []);
