@@ -58,7 +58,7 @@ export default function Talk() {
     if (!vid) return;
     setPlaying(m.id);
     try {
-      const res = await api.tts(m.text, vid);
+      const res = await api.tts(m.text, vid, m.role === "casey" ? 1.12 : 1.0);
       await playDataUri(res.audio);
     } catch {}
     setPlaying((cur) => (cur === m.id ? null : cur));

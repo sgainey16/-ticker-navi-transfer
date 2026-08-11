@@ -15,6 +15,7 @@ from typing import List, Optional
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from elevenlabs.client import ElevenLabs
+from elevenlabs import VoiceSettings
 
 import masl_data as data
 
@@ -290,6 +291,7 @@ class SelectRequest(BaseModel):
 class TtsRequest(BaseModel):
     text: str
     voice_id: str
+    speed: float | None = None
 
 
 @api_router.get("/voices/briefs")
@@ -370,7 +372,9 @@ async def tts(req: TtsRequest):
     text = (req.text or "").strip()
     if not text or not req.voice_id:
         raise HTTPException(status_code=400, detail="text and voice_id required")
-    key = f"{req.voice_id}:{hash(text)}"
+    speed = req.speed if req.speed else 1.0
+    speed = max(0.7, min(1.2, speed))
+    key = f"{req.voice_id}:{speed}:{hash(text)}"
     if key in _tts_cache:
         return {"audio": _tts_cache[key]}
     try:
@@ -378,6 +382,7 @@ async def tts(req: TtsRequest):
             text=text,
             voice_id=req.voice_id,
             model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(speed=speed),
         )
         audio_bytes = b"".join(stream)
     except Exception as e:

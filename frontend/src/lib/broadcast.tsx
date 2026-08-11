@@ -100,7 +100,7 @@ export function BroadcastProvider({ children }: { children: React.ReactNode }) {
       setSpeaking(true);
       (async () => {
         try {
-          const res = await api.tts(beat.text, voiceId);
+          const res = await api.tts(beat.text, voiceId, beat.host === "casey" ? 1.12 : 1.0);
           if (cancelled) return;
           await playDataUri(res.audio);
         } catch {}

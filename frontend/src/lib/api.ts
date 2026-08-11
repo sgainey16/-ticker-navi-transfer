@@ -74,7 +74,7 @@ export const api = {
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),
   selectVoice: (host: string, generated_voice_id: string) => post<{ host: string; voice_id: string }>("/voices/select", { host, generated_voice_id }),
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
-  tts: (text: string, voice_id: string) => post<{ audio: string }>("/tts", { text, voice_id }),
+  tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
   talk: (message: string, session_id: string | null) =>
     post<{ session_id: string; rayo: string; casey: string }>("/talk", { message, session_id }),
   talkHistory: (session_id: string) => get<{ session_id: string; turns: any[] }>(`/talk/${session_id}`),

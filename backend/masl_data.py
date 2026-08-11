@@ -497,6 +497,10 @@ SEGMENTS = {
          "text": "Don't sleep on the goalkeepers, though. The saves that never make the reel are the ones swinging these games — a diving stop off the glass changes everything."},
         {"id": 5, "host": "rayo", "kicker": "THE BOARDS",
          "text": "The boards are a weapon, mano. A good side plays the ricochet before the defender even turns. That's arena soccer, baby!"},
+        {"id": 6, "host": "casey", "kicker": "THE UPSET",
+         "text": "And the road teams are showing up. Kansas City walking into Baltimore and stealing it tells you how tight the margins are league-wide."},
+        {"id": 7, "host": "rayo", "kicker": "THE ENERGY",
+         "text": "Every building, every night, somebody's leaving it all on the turf. This is why I lose my voice, mi gente — I can't help it!"},
     ],
 
     "tonight": [
@@ -510,6 +514,10 @@ SEGMENTS = {
          "text": "The key is transition defense. Give up the fast break in this league and you're chasing the game by the second quarter."},
         {"id": 5, "host": "rayo", "kicker": "THE RACE",
          "text": "It's a knife fight for that Ron Newman Cup. Every possession matters now. Don't blink."},
+        {"id": 6, "host": "casey", "kicker": "THE X-FACTOR",
+         "text": "Watch the goalkeepers on the fourth-quarter push. When a team pulls the keeper for the extra attacker, one save flips the whole night."},
+        {"id": 7, "host": "rayo", "kicker": "THE BUILDING",
+         "text": "And the crowds are electric — boards rattling, horns going. Tonight's going to be loud, baby. Buckle up!"},
     ],
 
     "reels": [
@@ -521,6 +529,10 @@ SEGMENTS = {
          "text": "Marques, Bennett, Perera — these guys make the impossible look routine. Watch the feet, watch the angle. Pure art on turf!"},
         {"id": 4, "host": "casey", "kicker": "THE DETAIL",
          "text": "And notice the off-ball movement. The goal you see is the payoff — the real work happened three seconds earlier."},
+        {"id": 5, "host": "rayo", "kicker": "THE ANGLES",
+         "text": "We've got the cage-cam, the board-cam, everything! You'll see the spin off the wall like never before, mi gente."},
+        {"id": 6, "host": "casey", "kicker": "THE STUDY",
+         "text": "For the coaches watching — this is film. Spacing, timing, the give-and-go off the boards. It's all right here."},
     ],
 
     "scores": [
@@ -534,6 +546,10 @@ SEGMENTS = {
          "text": "And look at the bubble — Empire, Tacoma, all scrapping for that last playoff spot. Nobody's safe, nobody's out. Don't blink!"},
         {"id": 5, "host": "casey", "kicker": "THE CUSHION",
          "text": "The top two seeds earn the first-round bye. That cushion is worth its weight in April — rest matters in a best-of-three."},
+        {"id": 6, "host": "rayo", "kicker": "THE PUSH",
+         "text": "Down the stretch every game is a final, mano. One slip and your season's on the line. I LOVE this time of year!"},
+        {"id": 7, "host": "casey", "kicker": "THE PROJECTION",
+         "text": "Run the numbers out and it's still wide open. Two, maybe three sides have a real path to that top seed."},
     ],
 
     "stats": [
@@ -547,6 +563,10 @@ SEGMENTS = {
          "text": "Check the save numbers too. A goalkeeper stealing two a night is worth more than another scorer in this league."},
         {"id": 5, "host": "rayo", "kicker": "LOADED",
          "text": "Top to bottom, this leaderboard is loaded. Golden era on turf — don't blink!"},
+        {"id": 6, "host": "casey", "kicker": "THE TWO-WAY",
+         "text": "And don't overlook the defenders. The ones springing transition off the back wall quietly drive half this offense."},
+        {"id": 7, "host": "rayo", "kicker": "THE FUTURE",
+         "text": "Young legs coming up too — the next wave of stars is already knocking. This league only gets faster. Don't blink!"},
     ],
 }
 
