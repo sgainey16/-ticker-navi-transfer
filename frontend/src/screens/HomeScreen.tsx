@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,6 +13,8 @@ import { TabScreen, SectionTitle, Loader, ErrorState, Pill } from "@/src/compone
 import { TickerStrip } from "@/src/components/TickerStrip";
 import { TickerLogo } from "@/src/components/TickerLogo";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { GameRail } from "@/src/components/GameRail";
+import { GameDepth } from "@/src/components/GameDepth";
 
 const HERO = require("../../assets/images/broadcast-desk.png");
 
@@ -47,11 +49,28 @@ export default function Home() {
   const feed = useApi(() => api.nhlHome());
 
   const games = useMemo(() => feed.data?.slate?.games || [], [feed.data]);
-  const grouped = useMemo(() => {
-    const g = { live: [] as NhlGameCard[], upcoming: [] as NhlGameCard[], final: [] as NhlGameCard[] };
-    games.forEach((x) => g[x.group]?.push(x));
-    return g;
-  }, [games]);
+  const recapsQ = useApi(() => api.nhlRecaps());
+
+  // BROWSE rail = current slate (live/upcoming) + recent finals, de-duplicated.
+  const rail = useMemo(() => {
+    const slate = feed.data?.slate?.games || [];
+    const finals = recapsQ.data?.games || [];
+    const seen = new Set<string>();
+    const out: NhlGameCard[] = [];
+    [...slate, ...finals].forEach((g) => {
+      if (!seen.has(g.id)) { seen.add(g.id); out.push(g as NhlGameCard); }
+    });
+    return out;
+  }, [feed.data, recapsQ.data]);
+
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (selectedId) return;
+    const heroId = feed.data?.hero?.game?.id;
+    if (heroId && rail.some((g) => g.id === heroId)) setSelectedId(heroId);
+    else if (rail.length) setSelectedId(rail[0].id);
+  }, [rail, selectedId, feed.data]);
+  const selectedGame = useMemo(() => rail.find((g) => g.id === selectedId), [rail, selectedId]);
 
   const tickerItems = useMemo(() => {
     const items = games.map((x) => {
@@ -131,86 +150,24 @@ export default function Home() {
             </Pressable>
           ) : null}
 
-          {/* SLATE */}
-          {games.length ? (
+          {/* BROWSE — horizontal league rail + selected-game depth */}
+          {rail.length ? (
             <View style={styles.section}>
               <SectionTitle
-                title={slateLabel(games[0]?.game_type)}
+                title={slateLabel(feed.data?.slate?.games?.[0]?.game_type)}
                 accent={colors.blue}
                 action={feed.data?.slate?.date ? <Text style={styles.dateTxt}>{niceDate(feed.data.slate.date)}</Text> : undefined}
               />
               {feed.data?.slate?.is_future ? (
-                <Text style={styles.slateNote}>No NHL games today ({niceDate(feed.data?.slate?.today)}). Showing the next scheduled slate.</Text>
+                <Text style={styles.slateNote}>No NHL games today ({niceDate(feed.data?.slate?.today)}). Swipe the league below.</Text>
               ) : null}
-
-              {grouped.live.length ? (
-                <SlateGroup label="LIVE NOW" games={grouped.live} router={router} />
-              ) : null}
-              {grouped.upcoming.length ? (
-                <SlateGroup label="UPCOMING" games={grouped.upcoming} router={router} />
-              ) : null}
-              {grouped.final.length ? (
-                <SlateGroup label="FINAL" games={grouped.final} router={router} />
-              ) : null}
+              <GameRail games={rail} selectedId={selectedId} onSelect={setSelectedId} />
+              <GameDepth summary={selectedGame} />
             </View>
           ) : null}
         </ScrollView>
       )}
     </TabScreen>
-  );
-}
-
-function SlateGroup({ label, games, router }: { label: string; games: NhlGameCard[]; router: ReturnType<typeof useRouter> }) {
-  return (
-    <View style={styles.group}>
-      <Text style={styles.groupLabel}>{label}</Text>
-      <View style={{ gap: spacing.sm }}>
-        {games.map((g) => (
-          <GameCard key={g.id} g={g} onPress={g.group === "final" ? () => router.push(`/game/${g.id}`) : undefined} />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function GameCard({ g, onPress }: { g: NhlGameCard; onPress?: () => void }) {
-  const isFinal = g.group === "final";
-  const isLive = g.group === "live";
-  const winnerAway = isFinal && (g.away.score ?? 0) > (g.home.score ?? 0);
-  const winnerHome = isFinal && (g.home.score ?? 0) > (g.away.score ?? 0);
-
-  return (
-    <Pressable style={[styles.card, onPress && styles.cardTappable]} onPress={onPress} disabled={!onPress}>
-      {/* away */}
-      <View style={styles.side}>
-        <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={30} />
-        <View>
-          <Text style={[styles.cardAbbr, winnerAway && styles.winner]}>{g.away.abbr}</Text>
-          {g.away.record ? <Text style={styles.cardRec}>{g.away.record}</Text> : null}
-        </View>
-      </View>
-
-      {/* center */}
-      <View style={styles.center}>
-        {isFinal || isLive ? (
-          <Text style={styles.centerScore}>{g.away.score} – {g.home.score}</Text>
-        ) : (
-          <Text style={styles.centerTime}>{fmtTime(g.start_utc)}</Text>
-        )}
-        <Text style={styles.centerState}>
-          {isLive ? `P${g.period ?? ""} ${g.clock ?? ""}`.trim() : isFinal ? "FINAL" : "PUCK DROP"}
-        </Text>
-      </View>
-
-      {/* home */}
-      <View style={[styles.side, styles.sideRight]}>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={[styles.cardAbbr, winnerHome && styles.winner]}>{g.home.abbr}</Text>
-          {g.home.record ? <Text style={styles.cardRec}>{g.home.record}</Text> : null}
-        </View>
-        <NhlLogo abbr={g.home.abbr} url={g.home.logo} size={30} />
-      </View>
-    </Pressable>
   );
 }
 
@@ -240,20 +197,4 @@ const styles = StyleSheet.create({
   section: { gap: spacing.sm },
   dateTxt: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
   slateNote: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: -2 },
-
-  group: { gap: spacing.sm, marginTop: spacing.xs },
-  groupLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, marginTop: spacing.xs },
-
-  card: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  cardTappable: { borderColor: colors.blueDim },
-  side: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  sideRight: { justifyContent: "flex-end" },
-  cardAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 17, fontWeight: "700", letterSpacing: 0.4 },
-  cardRec: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 10 },
-  winner: { color: colors.white },
-
-  center: { alignItems: "center", minWidth: 78 },
-  centerScore: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 1 },
-  centerTime: { color: colors.text, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
-  centerState: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "600", letterSpacing: 1, marginTop: 2 },
 });

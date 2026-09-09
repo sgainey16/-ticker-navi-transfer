@@ -92,3 +92,20 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - All game cards now open the Game Page: Home slate, Tonight, Scores scoreboard, Recap date-grouped cards -> /game/{id}. Recap featured PLAY THE CALL still -> /recap/latest.
 - api.nhlGame(id) added.
 - Verified: /game/2025030416 (SCF G6, CAR 3 VGK 0) renders all sections with real data; Recap card -> Game Page -> back works; no regression to Home/Tonight/Scores/Recap.
+
+## Milestone 6 — Ticker Experience Layer: SHOW -> BROWSE -> DEPTH [DONE, awaiting approval]
+- Checkpoint before changes: tag ticker-nhl-foundation @ ad6a748.
+- Home: kept hero (SHOW). Replaced vertical slate with a horizontal GameRail (BROWSE) + GameDepth (DEPTH).
+- New components: src/components/GameRail.tsx (horizontal swipe, compact cards, selected highlight), src/components/GameDepth.tsx (fetches /api/nhl/game/{id} with module cache; final -> KEY MOMENTS + team stats; upcoming -> records+note; OPEN GAME -> /game/{id}).
+- Rail data = current slate (live/upcoming) + recent finals (nhlRecaps), deduped (20 cards). Default selection = latest final (hero) for immediate depth.
+- Browsing changes selection only: NO navigation, NO audio (broadcast layer untouched). Deliberate OPEN GAME / hero PLAY THE CALL are the only deep/audio actions.
+- Segment model (Task 4): preserved existing broadcast.tsx cached per-page segment architecture + server-side TTS cache; browsing does not trigger it. Live Talk unchanged.
+- One-panel kept; Ticker navy/blue; official NHL logos; persistent blue Talk FAB.
+- Verified: rail+depth render; selecting upcoming card updates depth without leaving Home.
+
+### HIGHLIGHTLY CAPABILITY AUDIT (report only, nothing built)
+- Highlightly: NOT integrated anywhere. No code refs, no key/URL in env, no reference in /app memory/docs. Zero retrievable today.
+- Existing "highlights" = MASL curated YouTube IDs (masl_data.py) via react-native-youtube-iframe (YTPlayer/ReelsScreen/highlights/[id]) = demo content, not a real API.
+- REAL video we already have (NHL landing feed, per goal): highlightClip (NHL video id), highlightClipSharingUrl (nhl.com/video/...), discreteClip; metadata: playerId, eventId, teamAbbrev, period, timeInPeriod, strength (ev/pp/sh), goalModifier (EN etc), shotType, assists, headshot, gameId.
+- This metadata CAN support building: all-goals-by-player, power-play moments, player moments in a game, player/selected-game highlight rails, eventual personalized packages. CAVEAT: clip URLs are nhl.com/video pages (official player), not raw embeddable streams -> inline in-app playback is UNPROVEN and must be validated; deep-linking is safe.
+- To use Highlightly specifically we need the user's Highlightly API credentials + plan/endpoints.
