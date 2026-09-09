@@ -532,6 +532,128 @@ async def _home_personal_facts(follows: HomeFollows) -> tuple[str, bool]:
     return "\n".join(lines), has
 
 
+def _final_headline(a: dict, h: dict) -> tuple[str, dict, dict]:
+    """People/result-led headline from a VERIFIED final score only. No fabrication."""
+    asc, hsc = a.get("score"), h.get("score")
+    win, lose = (a, h) if (asc or 0) >= (hsc or 0) else (h, a)
+    ws, ls = (win.get("score") or 0), (lose.get("score") or 0)
+    wn = win.get("name") or win.get("abbr")
+    ln = lose.get("name") or lose.get("abbr")
+    margin = ws - ls
+    if ls == 0:
+        verb = f"shut out {ln}"
+    elif margin == 1:
+        verb = f"edged {ln}"
+    elif margin >= 4:
+        verb = f"routed {ln}"
+    else:
+        verb = f"beat {ln}"
+    return f"{wn} {verb}, {ws}\u2013{ls}", win, lose
+
+
+async def _my_hockey_feed(follows: HomeFollows) -> dict:
+    fteams = {t.abbr for t in follows.teams if t.abbr}
+    fplayer_teams = {p.team_abbr for p in follows.players if p.team_abbr}
+    followed_abbrs = fteams | fplayer_teams
+    has = bool(follows.teams or follows.players)
+
+    mine: list[dict] = []
+    league: list[dict] = []
+
+    # 1) followed players' latest verified game line (people-first). Bounded.
+    players = sorted(follows.players, key=_round_key)[:4]
+    for p in players:
+        if not p.player_id:
+            continue
+        try:
+            d = await nhl.player_page(p.player_id)
+            pl = d["player"]
+            last5 = d.get("last5") or []
+            if not last5:
+                continue
+            g0 = last5[0]
+            opp = g0.get("opp")
+            if d.get("goalie"):
+                sv = (g0.get("shots_against") or 0) - (g0.get("goals_against") or 0)
+                headline = f"{pl['name']}: {sv}/{g0.get('shots_against')} saves vs {opp}"
+            else:
+                gg, aa = g0.get("goals") or 0, g0.get("assists") or 0
+                if gg == 0 and aa == 0:
+                    continue
+                bits = []
+                if gg: bits.append(f"{gg}G")
+                if aa: bits.append(f"{aa}A")
+                headline = f"{pl['name']}: {' '.join(bits)} vs {opp}"
+            mine.append({
+                "type": "player", "player_id": pl["id"], "game_id": g0.get("game_id"),
+                "team_abbr": pl.get("team_abbr"), "team_logo": pl.get("team_logo"),
+                "headshot": pl.get("headshot"), "headline": headline,
+                "sub": f"{pl.get('pos')} \u00b7 {pl.get('team_abbr')}", "followed": True, "video": None,
+            })
+        except Exception:
+            logger.exception("my_hockey player %s failed", p.player_id)
+
+    # 2) recent finals -> result stories. Followed teams first.
+    try:
+        finals = await nhl.recent_finals_now(limit=14)
+    except Exception:
+        finals = []
+    for c in finals:
+        a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+        if a.get("score") is None or h.get("score") is None:
+            continue
+        headline, _w, _l = _final_headline(a, h)
+        item = {
+            "type": "final", "game_id": c.get("id"), "headline": headline,
+            "away": {"abbr": a.get("abbr"), "logo": a.get("logo"), "score": a.get("score")},
+            "home": {"abbr": h.get("abbr"), "logo": h.get("logo"), "score": h.get("score")},
+            "video": None,
+        }
+        if a.get("abbr") in followed_abbrs or h.get("abbr") in followed_abbrs:
+            item["followed"] = True
+            mine.append(item)
+        else:
+            item["followed"] = False
+            league.append(item)
+
+    # 3) upcoming games involving follows -> preview cards.
+    try:
+        slate = await nhl.scoreboard_now()
+        for g in slate.get("games", []) or []:
+            if g.get("group") != "upcoming":
+                continue
+            a, h = g.get("away", {}) or {}, g.get("home", {}) or {}
+            if a.get("abbr") in followed_abbrs or h.get("abbr") in followed_abbrs:
+                hn = h.get("name") or h.get("abbr")
+                an = a.get("name") or a.get("abbr")
+                mine.append({
+                    "type": "upcoming", "game_id": g.get("id"),
+                    "headline": f"{hn} host {an}",
+                    "away": {"abbr": a.get("abbr"), "logo": a.get("logo")},
+                    "home": {"abbr": h.get("abbr"), "logo": h.get("logo")},
+                    "date": g.get("start_utc"), "followed": True, "video": None,
+                })
+    except Exception:
+        logger.exception("my_hockey slate failed")
+
+    items = mine + league[:10] if has else league[:14]
+    return {"items": items, "personalized": has}
+
+
+@api_router.post("/ticker/my_hockey")
+async def ticker_my_hockey(follows: HomeFollows):
+    """My Hockey feed: verified, people-led items assembled from Draft Board priorities.
+
+    No LLM/TTS, no fabricated highlights. `video` is null today; the same card can
+    graduate to a playable moment when a legitimate video source is connected.
+    """
+    try:
+        return await _my_hockey_feed(follows)
+    except Exception:
+        logger.exception("ticker_my_hockey failed")
+        return {"items": [], "personalized": bool(follows.teams or follows.players)}
+
+
 @api_router.post("/ticker/home_segment")
 async def ticker_home_segment(follows: HomeFollows):
     """Personalized My Ticker desk segment, programmed from the user's Draft Board.

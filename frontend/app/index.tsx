@@ -21,7 +21,7 @@ const TABS = [
   { key: "recap", label: "RECAP", C: RecapScreen },
   { key: "tonight", label: "NEXT", C: TonightScreen },
   { key: "home", label: "HOME", C: HomeScreen },
-  { key: "reels", label: "REELS", C: ReelsScreen },
+  { key: "reels", label: "MY HOCKEY", C: ReelsScreen },
   { key: "scores", label: "SCORES", C: ScoresScreen },
   { key: "stats", label: "STATS", C: StatsScreen },
 ];

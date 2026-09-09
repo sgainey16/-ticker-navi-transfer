@@ -198,3 +198,11 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Backend: ticker_recap.build_my_ticker + MYTICKER_PROMPT + fallback; server.py POST /ticker/home_segment with HomeFollows model + _home_personal_facts (bounded team_page/player_page/scoreboard fetches, verified only).
 - Verified on device: Draft Board hierarchy renders (BOS 1st / player 2nd / TOR 3rd / EDM FOLLOWING); desk personalized (curl: "Your Bruins... McDavid's your guy 138 points... Leafs 32-36"); entry=1 desk fetch/0 TTS; PLAY=1 TTS + ON AIR/PAUSE; browsing adds NO desk/LLM/TTS; board tile->Team/Player routing; relaunch (same session) persists board; onboarding terminology updated. Three distinct programs on one desk (HOME my hockey / RECAP happened / NEXT coming).
 - Scope held: Reels/Highlights, Stats, Game Call, leagues, Highlightly/Sportlogiq untouched.
+
+## Remediation - Reels -> MY HOCKEY (converted, not deleted) [DONE, awaiting approval]
+- Tab REELS renamed MY HOCKEY (app/index.tsx). ReelsScreen fully rebuilt; ALL MASL content removed (arena.jpg/rayo/casey/fake reels gone).
+- Verified-only, people/result-led feed assembled from Draft Board priorities. NOT a Reggie/Marc desk (Home owns that); fast + visual scan-and-tap.
+- Backend: POST /api/ticker/my_hockey (HomeFollows) -> _my_hockey_feed. No LLM/TTS, no fabrication. Items: player last-game line (skater G/A or goalie saves, skipped if none), final result stories (_final_headline: shut out/edged/routed/beat from verified score), upcoming previews ("Leafs host Canadiens"). Followed teams/players first, then league. `video: null` on every item = capability-gated; same card graduates to playable when a real source connects (no empty video box, no "coming soon").
+- Frontend: sections "Around Your Hockey" (followed) + "Around the NHL"; player card->/player, final/upcoming->/game. Empty/new user -> honest league feed + "Build your Draft Board" card.
+- Verified on device: tab renamed; personalized feed (Leafs/Bruins upcoming under Around Your Hockey; league finals with headlines like "Hurricanes shut out Golden Knights, 3-0"); card tap routes to canonical Game page; no MASL; no fake video. McDavid player line correctly omitted (no recent game -> no fabrication).
+- Scope held: Stats, Game Call, leagues, Highlightly untouched. Home/Recap/Next/Scores/Team/Player intact.

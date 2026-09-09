@@ -1,95 +1,166 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
-import { colors, fonts, spacing, radius, hostStyle } from "@/src/theme";
-import { TabScreen } from "@/src/components/ui";
+import { colors, fonts, spacing, radius } from "@/src/theme";
+import { api, MyHockeyItem } from "@/src/lib/api";
+import { useApi } from "@/src/lib/useApi";
+import { useFollows } from "@/src/lib/follows";
+import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
+import { NhlLogo } from "@/src/components/NhlLogo";
 
-const ARENA = require("../../assets/images/arena.jpg");
-const DESK = require("../../assets/images/broadcast-desk.png");
+function niceDate(utc?: string | null) {
+  if (!utc) return "";
+  try {
+    const d = new Date(utc);
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  } catch { return ""; }
+}
+function initials(name?: string) {
+  if (!name) return "?";
+  const p = name.replace(/:.*/, "").trim().split(/\s+/);
+  return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase();
+}
 
-const REELS = [
-  { id: "1", title: "17-2: How It Happened", host: "rayo", dur: "1:12", tag: "RECORD NIGHT", img: ARENA },
-  { id: "2", title: "Marques' 52 in 60 Seconds", host: "rayo", dur: "1:00", tag: "TOP SCORER", img: DESK },
-  { id: "3", title: "Casey Breaks Down the Power Play", host: "casey", dur: "2:04", tag: "FILM ROOM", img: DESK },
-  { id: "4", title: "Rayo's Top 5 Board Goals", host: "rayo", dur: "1:48", tag: "TOP 5", img: ARENA },
-  { id: "5", title: "Golden Goal: Tacoma Stuns KC", host: "rayo", dur: "0:52", tag: "BUZZER BEATER", img: ARENA },
-  { id: "6", title: "Utica's Fight Through the Skid", host: "casey", dur: "2:30", tag: "STORYLINE", img: DESK },
-];
+export default function MyHockey() {
+  const router = useRouter();
+  const { follows } = useFollows();
+  const followSig = useMemo(() => JSON.stringify(follows), [follows]);
+  const q = useApi(() => api.myHockey(follows), [followSig]);
 
-export default function Reels() {
-  const [active, setActive] = useState<string | null>(null);
+  const items = useMemo(() => q.data?.items || [], [q.data]);
+  const personalized = !!q.data?.personalized;
+  const mine = useMemo(() => items.filter((i) => i.followed), [items]);
+  const league = useMemo(() => items.filter((i) => !i.followed), [items]);
+
+  const open = (it: MyHockeyItem) => {
+    Haptics.selectionAsync();
+    if (it.type === "player" && it.player_id) router.push(`/player/${it.player_id}`);
+    else if (it.game_id) router.push(`/game/${it.game_id}`);
+  };
 
   return (
     <TabScreen>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleRow}>
-          <Text style={styles.h1}>Reels</Text>
-          <Text style={styles.count}>{REELS.length} CLIPS</Text>
-        </View>
-        <Text style={styles.sub}>Short-form highlights & film breakdowns from the booth.</Text>
+      {q.loading ? (
+        <Loader label="Rounding up your hockey…" />
+      ) : q.error ? (
+        <ErrorState message="Couldn't load My Hockey" onRetry={() => q.reload()} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl tintColor={colors.blue} refreshing={false} onRefresh={() => q.reload()} />}
+        >
+          <View style={styles.head}>
+            <View style={styles.headBar} />
+            <Text style={styles.headTitle}>MY HOCKEY</Text>
+          </View>
 
-        {REELS.map((r) => {
-          const s = hostStyle[r.host as "rayo" | "casey"];
-          const isActive = active === r.id;
-          return (
-            <Pressable
-              key={r.id}
-              testID={`reel-${r.id}`}
-              style={styles.card}
-              onPress={() => { Haptics.selectionAsync(); setActive(isActive ? null : r.id); }}
-            >
-              <Image source={r.img} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <LinearGradient colors={["rgba(5,7,12,0.25)", "rgba(5,7,12,0.55)", "rgba(5,7,12,0.95)"]} style={StyleSheet.absoluteFill} />
-              <View style={styles.cardTop}>
-                <View style={[styles.tagPill, { borderColor: s.accent }]}>
-                  <Text style={[styles.tagText, { color: s.accent }]}>{r.tag}</Text>
-                </View>
-                <View style={styles.durPill}><Text style={styles.durText}>{r.dur}</Text></View>
-              </View>
-              <View style={styles.playWrap}>
-                <View style={[styles.playCircle, isActive && { backgroundColor: colors.green }]}>
-                  <Ionicons name={isActive ? "hourglass-outline" : "play"} size={22} color={isActive ? colors.bg : colors.white} />
-                </View>
-              </View>
-              <View style={styles.cardBottom}>
-                <Text style={styles.reelTitle}>{r.title}</Text>
-                <View style={styles.hostRow}>
-                  <View style={[styles.hostDot, { backgroundColor: s.accent }]} />
-                  <Text style={styles.hostName}>{r.host === "rayo" ? "Rayo" : "Casey"}</Text>
-                  {isActive ? <Text style={styles.soon}>· clip coming soon</Text> : null}
-                </View>
-              </View>
+          {personalized && mine.length ? (
+            <View style={styles.section}>
+              <SectionTitle title="Around Your Hockey" accent={colors.blue} />
+              {mine.map((it, i) => <FeedCard key={`m${i}`} item={it} onPress={() => open(it)} />)}
+            </View>
+          ) : null}
+
+          {league.length ? (
+            <View style={styles.section}>
+              <SectionTitle title={personalized ? "Around the NHL" : "Around the League"} accent={colors.blue} />
+              {league.map((it, i) => <FeedCard key={`l${i}`} item={it} onPress={() => open(it)} />)}
+            </View>
+          ) : null}
+
+          {!items.length ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>No hockey to show yet.</Text>
+              <Text style={styles.emptySub}>New games and results will appear here.</Text>
+            </View>
+          ) : null}
+
+          {!personalized ? (
+            <Pressable style={styles.build} onPress={() => router.push("/onboarding?reset=1")}>
+              <Ionicons name="albums-outline" size={18} color={colors.blue} />
+              <Text style={styles.buildText}>Build your Draft Board to make this yours.</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
             </Pressable>
-          );
-        })}
-      </ScrollView>
+          ) : null}
+
+          <View style={{ height: spacing.xxxl }} />
+        </ScrollView>
+      )}
     </TabScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: 110, gap: spacing.md },
-  titleRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
-  h1: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800" },
-  count: { color: colors.textDim, fontFamily: fonts.display, fontSize: 15, fontWeight: "700", letterSpacing: 1.5 },
-  sub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.xs },
+function FeedCard({ item, onPress }: { item: MyHockeyItem; onPress: () => void }) {
+  return (
+    <Pressable style={[styles.card, item.followed && styles.cardMine]} onPress={onPress} testID={`myhockey-${item.type}`}>
+      {/* visual */}
+      <View style={styles.visual}>
+        {item.type === "player" ? (
+          item.headshot ? (
+            <Image source={item.headshot} style={styles.headshot} contentFit="cover" />
+          ) : (
+            <View style={styles.avatar}><Text style={styles.avInit}>{initials(item.headline)}</Text></View>
+          )
+        ) : (
+          <View style={styles.matchup}>
+            <NhlLogo abbr={item.away?.abbr} url={item.away?.logo} size={26} />
+            <NhlLogo abbr={item.home?.abbr} url={item.home?.logo} size={26} />
+          </View>
+        )}
+      </View>
 
-  card: { height: 200, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
-  cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.md },
-  tagPill: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, backgroundColor: "rgba(5,7,12,0.5)" },
-  tagText: { fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  durPill: { backgroundColor: "rgba(5,7,12,0.6)", borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-  durText: { color: colors.white, fontFamily: fonts.display, fontSize: 12, fontWeight: "700" },
-  playWrap: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center" },
-  playCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: "rgba(250,42,42,0.9)", alignItems: "center", justifyContent: "center" },
-  cardBottom: { padding: spacing.lg },
-  reelTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
-  hostRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  hostDot: { width: 8, height: 8, borderRadius: 4 },
-  hostName: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13 },
-  soon: { color: colors.green, fontFamily: fonts.body, fontSize: 12, fontStyle: "italic" },
+      {/* text */}
+      <View style={{ flex: 1 }}>
+        <View style={styles.tagRow}>
+          <Text style={[styles.tag, { color: item.type === "upcoming" ? colors.textDim : colors.blue }]}>
+            {item.type === "final" ? "FINAL" : item.type === "upcoming" ? "COMING UP" : "PLAYER"}
+          </Text>
+          {item.followed ? <View style={styles.mineDot} /> : null}
+        </View>
+        <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
+        <Text style={styles.sub} numberOfLines={1}>
+          {item.type === "final" && item.away && item.home
+            ? `${item.away.abbr} ${item.away.score} · ${item.home.abbr} ${item.home.score}`
+            : item.type === "upcoming"
+            ? `${item.away?.abbr} @ ${item.home?.abbr}${item.date ? ` · ${niceDate(item.date)}` : ""}`
+            : item.sub || ""}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: spacing.lg, paddingBottom: 110, gap: spacing.lg },
+  head: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headBar: { width: 4, height: 20, borderRadius: 2, backgroundColor: colors.blue },
+  headTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 22, fontWeight: "800", letterSpacing: 1 },
+
+  section: { gap: spacing.sm },
+  card: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+  cardMine: { borderColor: colors.blueDim, borderLeftWidth: 3, borderLeftColor: colors.blue },
+  visual: { width: 56, alignItems: "center", justifyContent: "center" },
+  headshot: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surfaceHi },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  avInit: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800" },
+  matchup: { flexDirection: "row", alignItems: "center", gap: 2 },
+
+  tagRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  tag: { fontFamily: fonts.accent, fontSize: 9.5, fontWeight: "700", letterSpacing: 1.5 },
+  mineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.blue },
+  headline: { color: colors.white, fontFamily: fonts.display, fontSize: 15.5, fontWeight: "700", letterSpacing: 0.2, marginTop: 2 },
+  sub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+
+  empty: { alignItems: "center", paddingVertical: spacing.xxxl, gap: 6 },
+  emptyText: { color: colors.textDim, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
+  emptySub: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 13 },
+
+  build: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.blueDim, padding: spacing.lg },
+  buildText: { flex: 1, color: colors.text, fontFamily: fonts.body, fontSize: 13.5 },
 });

@@ -99,6 +99,22 @@ export type DeskSegment = {
   voices: { reggie: string | null; marc: string | null };
 };
 
+export type MyHockeyItem = {
+  type: "player" | "final" | "upcoming";
+  game_id?: string | null;
+  player_id?: string;
+  headline: string;
+  sub?: string;
+  team_abbr?: string;
+  team_logo?: string | null;
+  headshot?: string | null;
+  away?: { abbr?: string; logo?: string | null; score?: number | null };
+  home?: { abbr?: string; logo?: string | null; score?: number | null };
+  date?: string | null;
+  followed?: boolean;
+  video?: null;
+};
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
@@ -122,6 +138,7 @@ export const api = {
   tickerSegment: (surface: string, subject?: string) =>
     get<DeskSegment>(`/ticker/segment?surface=${encodeURIComponent(surface)}${subject ? `&subject=${encodeURIComponent(subject)}` : ""}`),
   tickerHomeSegment: (follows: unknown) => post<DeskSegment>(`/ticker/home_segment`, follows),
+  myHockey: (follows: unknown) => post<{ items: MyHockeyItem[]; personalized: boolean }>(`/ticker/my_hockey`, follows),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),
