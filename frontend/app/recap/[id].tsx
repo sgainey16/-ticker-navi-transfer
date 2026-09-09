@@ -122,7 +122,7 @@ export default function Recap() {
       {/* PLAY BAR */}
       <View style={styles.playBar}>
         <Pressable style={[styles.playBtn, playing && styles.playBtnStop]} onPress={playing ? stop : play} testID="recap-play">
-          {playing ? <Ionicons name="stop" size={20} color={colors.white} /> : <Ionicons name="play" size={20} color={colors.bg} />}
+          {playing ? <Ionicons name="stop" size={20} color={colors.white} /> : <Ionicons name="play" size={20} color={colors.white} />}
           <Text style={[styles.playText, playing && { color: colors.white }]}>{playing ? "STOP" : "PLAY THE RECAP"}</Text>
         </Pressable>
       </View>
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   grounded: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 1, textAlign: "center", marginTop: spacing.lg },
 
   playBar: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.lg, backgroundColor: "rgba(5,7,12,0.9)" },
-  playBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.green, borderRadius: radius.pill, paddingVertical: 15 },
+  playBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingVertical: 15 },
   playBtnStop: { backgroundColor: colors.red },
-  playText: { color: colors.bg, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 1 },
+  playText: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 1 },
 });
