@@ -85,8 +85,8 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   mic: {
     position: "absolute", right: 18, width: 60, height: 60, borderRadius: 30,
-    backgroundColor: colors.green, alignItems: "center", justifyContent: "center",
-    shadowColor: colors.green, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+    backgroundColor: colors.blue, alignItems: "center", justifyContent: "center",
+    shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
   micDot: { position: "absolute", top: 6, right: 6, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.gold, borderWidth: 2, borderColor: colors.bg },
 });
