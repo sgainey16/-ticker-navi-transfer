@@ -164,3 +164,29 @@ Underneath, The Ticker can be a very conventional sports app. On top, it should 
 7. Scores / Game / Team / Player refinement
 
 Rationale: restore the connective show behavior FIRST; do not polish individual pages before the thing that connects them all is back.
+
+---
+
+# STEP 3 HOME — FOLLOW-HIERARCHY AUDIT (read-only) + PROPOSAL
+Home's identity is corrected to **MY HOCKEY WORLD**, organized by ranked follows (1ST / 2ND / 3RD STAR), which also weight what Reggie + Marc lead with. Audited the current build before proposing. NO Home changes made.
+
+## What already exists (reusable)
+- **Visual pattern only — `src/components/StarSpotlight.tsx`**: a MASL-era "STARS OF THE LEAGUE" card set with exactly the 1/2/3 ranking visual language (rank watermark, gold/blue/green accents, team logo + player identity + stat + tagline). It is **editorial MASL content**, fed by `api.stars()` -> `GET /api/stars` -> `masl_data.stars()` (hard-coded MASL players). Currently rendered ONLY inside `StatsScreen.tsx`. Reusable as a VISUAL TEMPLATE for the Star tiers; its DATA is fake MASL and must not be used.
+- **Persistence infra — `src/utils/storage/index.ts`**: generic AsyncStorage (`getItem/setItem/removeItem`) + SecureStore helpers. Ready to hold follows locally. No follow keys defined today.
+- **Canonical IDs everywhere**: real NHL `team abbr/id` and `player_id` flow through Team, Player, scorers, rosters, game data — follows can key directly on these.
+
+## What does NOT exist (nothing to restore)
+- No backend user / follow / favorite / preference / profile / onboarding model or Mongo collection (grep clean).
+- No ranking / 1st-2nd-3rd Star personal-follow persistence anywhere.
+- No onboarding flow.
+- The only "stars" in the build is MASL editorial, NOT personal follows.
+Conclusion: there is no prior personal follow hierarchy hiding in this fork — only a reusable visual pattern + storage infra + real IDs.
+
+## Smallest proposed implementation (NOT yet built — for approval)
+1. **Follows store (local-first):** reuse `storage` util; one key `ticker.follows` = `{ teams:[{abbr, tier}], players:[{player_id, team_abbr, tier}] }`, tier in {1,2,3}. No backend user system / no auth needed yet.
+2. **Home identity:** reorganize Home as MY HOCKEY WORLD — 1ST/2ND/3RD STAR clusters using team logos + compact player identity (team colors/initials), horizontal rails, reusing the StarSpotlight visual language rebuilt on real NHL data. Tap team -> Team, player -> Player.
+3. **Desk intelligence:** extend `/ticker/segment?surface=home` to accept the ranked follows and weight the opening show 1st > 2nd > 3rd > league, grounded on verified data for those teams/players (reuse team_page/player_page/scoreboard). If no follows exist -> current honest league opening (already built).
+4. **Honesty:** when follows are empty, Home shows the league fallback (today's behavior) and the desk does not fake "your team." No hard-coded favorites.
+5. **Deferred (NOT this step):** onboarding UI, a full follow-management surface, backend per-user storage/auth. A minimal "follow at tier" affordance on Team/Player could be the smallest way to populate real follows — flag for the user to decide.
+
+STOP: awaiting approval on the proposal before modifying Home.
