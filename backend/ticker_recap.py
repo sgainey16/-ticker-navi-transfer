@@ -123,3 +123,97 @@ async def build_recap(g: Game, llm_key: str) -> list[dict]:
     except Exception as e:
         logger.exception("recap LLM failed: %s", e)
         return _fallback(g)
+
+
+# ---------------------------------------------------------------------------
+# NEXT — league-level upcoming-slate PREVIEW segment (SHOW layer).
+# Grounded strictly on the verified slate (team names, records, count, date).
+# ---------------------------------------------------------------------------
+
+def build_preview_fact_sheet(slate: dict) -> str:
+    games = slate.get("games", []) or []
+    lines: list[str] = []
+    if slate.get("is_future"):
+        lines.append(f"There are NO NHL games today ({slate.get('today')}).")
+        lines.append(f"The NEXT scheduled slate is {slate.get('date')}.")
+    else:
+        lines.append(f"NHL slate for {slate.get('date')}.")
+    lines.append(f"Games on that slate: {len(games)}.")
+    for g in games:
+        a = g.get("away", {}) or {}
+        h = g.get("home", {}) or {}
+        ar = f" ({a.get('record')})" if a.get("record") else ""
+        hr = f" ({h.get('record')})" if h.get("record") else ""
+        lines.append(f"  {a.get('name') or a.get('abbr')}{ar} at {h.get('name') or h.get('abbr')}{hr}")
+    return "\n".join(lines)
+
+
+PREVIEW_PROMPT = """Write a SHORT on-air PREVIEW open for THE TICKER: Reggie and Marc setting up
+the UPCOMING hockey (not a game that already happened).
+
+The open should answer, woven naturally (not as headings):
+1) Is there hockey today, and if not, what's next?  2) What's the shape of the coming slate?
+3) One or two matchups worth pointing at (use team names).
+
+Length: 4 to 6 total lines, alternating hosts, Reggie opens. Energetic but honest.
+
+HARD RULES:
+- Use ONLY the facts in the sheet above. Do NOT invent scores, records, standings, storylines,
+  injuries, trades, start times, or which team is favoured. If it's not in the sheet, omit it.
+- If there are no games today, say so plainly and pivot to what's coming — do not fake urgency.
+- People/teams first. Keep it TV-paced; each line 1-2 sentences.
+
+Return STRICT JSON only, no prose around it:
+{"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}
+
+VERIFIED FACTS (the only truth you may use):
+---
+%s
+---"""
+
+
+def _preview_fallback(slate: dict) -> list[dict]:
+    games = slate.get("games", []) or []
+    n = len(games)
+    first = games[0] if games else None
+    matchup = ""
+    if first:
+        a = (first.get("away") or {}).get("abbr")
+        h = (first.get("home") or {}).get("abbr")
+        matchup = f"{a} and {h}"
+    if slate.get("is_future"):
+        beats = [
+            {"host": "reggie", "text": f"No NHL on the board today — but don't go anywhere, the next slate is already loading."},
+            {"host": "marc", "text": f"{n} games when the puck drops next" + (f", starting with {matchup}." if matchup else ".")},
+        ]
+    else:
+        beats = [
+            {"host": "reggie", "text": f"We've got {n} on the ice — let's get you ready."},
+            {"host": "marc", "text": (f"Circle {matchup} on that list." if matchup else "Plenty to watch across the league.")},
+        ]
+    return beats
+
+
+async def build_next_preview(slate: dict, llm_key: str) -> list[dict]:
+    facts = build_preview_fact_sheet(slate)
+    if not llm_key:
+        return _preview_fallback(slate)
+    chat = LlmChat(
+        api_key=llm_key,
+        session_id=f"preview-{slate.get('date')}",
+        system_message=HOST_BIBLE,
+    ).with_model("anthropic", "claude-sonnet-4-6")
+    try:
+        reply = await chat.send_message(UserMessage(text=PREVIEW_PROMPT % facts))
+        raw = reply if isinstance(reply, str) else str(reply)
+        start, end = raw.find("{"), raw.rfind("}")
+        data = json.loads(raw[start:end + 1])
+        beats = [
+            {"host": ("reggie" if b.get("host", "").lower().startswith("reg") else "marc"),
+             "text": (b.get("text") or "").strip()}
+            for b in data.get("beats", []) if (b.get("text") or "").strip()
+        ]
+        return beats or _preview_fallback(slate)
+    except Exception as e:
+        logger.exception("preview LLM failed: %s", e)
+        return _preview_fallback(slate)

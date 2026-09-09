@@ -155,3 +155,11 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 ## Player routing completion (acceptance)
 - Added scorer_id (ScoringPlay), player_id (StarLine, GoalieLine) to canonical game model; provider populates from NHL landing/boxscore playerId.
 - Game Page now routes to /player/{id} from: Scoring Summary scorer, Three Stars, Goaltending, Key Players. Team routes from leading scorers, goalie, roster. Verified live for skater (Necas) + goalie (Blackwood/Hellebuyck).
+
+## Remediation Step 1 - Global sports-desk behavior, proven on NEXT [DONE, awaiting approval]
+- Shared reusable Reggie+Marc SHOW layer: TickerDesk component + GET /api/ticker/segment (one endpoint, context-driven). Presence constant, programming changes by surface/subject.
+- NEXT rebuilt as SHOW (TickerDesk, prepared/cached league preview) -> BROWSE (GameRail) -> DEPTH (GameDepth, OPEN GAME). One-panel rule preserved; off-day honesty preserved; Talk FAB untouched.
+- Prepared segments cached in Mongo (db.segments) keyed by slate date+count; TTS server-cached and produced ONLY on deliberate PLAY. Verified: entering NEXT = 1 segment call / 0 TTS; browsing rail = still 1/0 (no restart, no LLM, no ElevenLabs); PLAY = 1 TTS, ON AIR + PAUSE.
+- Same endpoint proven in 2 contexts: league preview (NEXT) + game desk (surface=game&subject=id reuses grounded recap beats). Voices server-first, IDs never exposed. Audio failure never blocks page.
+- Files: backend ticker_recap.py (build_next_preview + fact sheet + fallback), server.py (/ticker/segment + _next_segment_beats, cached), frontend src/lib/api.ts (tickerSegment + DeskSegment types), src/components/TickerDesk.tsx (new, shared), src/screens/TonightScreen.tsx (rebuilt SHOW/BROWSE/DEPTH). Reused: GameRail, GameDepth, audio lib, tts endpoint, desk artwork.
+- Game Call transcript screen NOT touched (RED recorded for later audio remediation).

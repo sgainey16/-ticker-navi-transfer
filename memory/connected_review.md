@@ -65,6 +65,15 @@ Reels, Stats, Rayo, MASL players/content, and any remaining soccer/demo material
 ### Bucket 3 — Audio Presentation 🟡/🔴 YELLOW→RED
 Voices work, but the game call renders as a large transcript/chat-log feed. Needs sports-show presentation, not chat-log presentation.
 
+#### Clarification from the current Game-Call screen (RED — for later audio remediation)
+The Game Call proves the grounded script/audio pipeline works — REUSE that capability, but do NOT adopt its presentation as the desk UI. For the later audio-presentation step:
+- Do NOT replicate stacked Reggie/Marc dialogue cards.
+- Do NOT repeat "Instigator/Guardian" labels throughout.
+- Do NOT make written transcripts the primary representation of the show.
+- Preserve the working grounded script/audio pipeline.
+
+Target hierarchy (what Step 1 restores): **ENTER → DESK/SHOW → BROWSE → SELECTED CONTEXT → OPTIONAL GAME DEPTH** — NOT ENTER → BROWSE → OPEN GAME → TRANSCRIPT → PLAY. The desk must move UP into the primary surface; Reggie & Marc come to meet the user rather than making them drill down. (Game Call screen itself is NOT to be redesigned in Step 1.)
+
 ### Bucket 4 — Connected NHL Product 🟢 GREEN (protect)
 Real NHL data, scores, schedules, horizontal browsing, Game → Team → Player connections, logos, and the dark sports-desk chassis are working and worth protecting.
 

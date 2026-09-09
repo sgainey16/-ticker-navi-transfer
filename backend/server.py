@@ -22,7 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
-from ticker_recap import build_recap
+from ticker_recap import build_recap, build_next_preview
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -428,6 +428,66 @@ async def _recap_beats(game, refresh: bool = False):
         upsert=True,
     )
     return beats
+
+
+async def _next_segment_beats(slate: dict):
+    """Prepared/cached NEXT preview beats, keyed by slate date + game count.
+
+    Cached in Mongo so ordinary browsing/re-entry never re-hits the LLM.
+    """
+    key = f"next:{slate.get('date')}:{len(slate.get('games', []) or [])}"
+    doc = await db.segments.find_one({"_id": key})
+    if doc and doc.get("beats"):
+        return doc["beats"]
+    beats = await build_next_preview(slate, EMERGENT_LLM_KEY)
+    await db.segments.update_one(
+        {"_id": key},
+        {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return beats
+
+
+@api_router.get("/ticker/segment")
+async def ticker_segment(surface: str, subject: str | None = None):
+    """Shared Reggie + Marc sports-desk SHOW layer.
+
+    One reusable endpoint that returns a PREPARED/CACHED contextual segment for a
+    surface (+ optional subject). Presence is constant across the app; the segment
+    (its programming) changes with context. Never generated on passive browsing —
+    callers fetch once per surface/subject, and TTS is produced only on deliberate play.
+    """
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+
+    # GAME-level context: reuse the grounded, Mongo-cached game recap beats.
+    if surface == "game" and subject:
+        try:
+            game = await nhl.game_by_id(subject)
+            beats = await _recap_beats(game)
+            return {"surface": surface, "segment_type": "game", "subject": subject,
+                    "title": f"{game.away.abbr} @ {game.home.abbr} · GAME DESK",
+                    "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment game failed")
+            return {"surface": surface, "segment_type": "game", "subject": subject,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level NEXT context: prepared upcoming-slate preview.
+    if surface == "next":
+        try:
+            slate = await nhl.scoreboard_now()
+            beats = await _next_segment_beats(slate)
+            title = "NEXT ON THE TICKER" if slate.get("is_future") else "TONIGHT ON THE TICKER"
+            return {"surface": "next", "segment_type": "preview", "subject": "league",
+                    "title": title, "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment next failed")
+            return {"surface": "next", "segment_type": "preview", "subject": "league",
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    raise HTTPException(status_code=404, detail=f"No desk segment for surface '{surface}'")
 
 
 @api_router.get("/recap/{game_id}")

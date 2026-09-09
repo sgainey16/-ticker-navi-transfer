@@ -92,6 +92,13 @@ export type NhlStandRow = {
 export type NhlScoreboard = { date: string | null; today?: string | null; is_future?: boolean; games: NhlGameCard[] };
 export type NhlFinalCard = NhlGameCard & { date: string; period_type?: string | null };
 
+export type DeskBeat = { host: "reggie" | "marc"; text: string };
+export type DeskSegment = {
+  surface: string; segment_type: string; subject: string; title?: string | null;
+  state: "ready" | "unavailable"; beats: DeskBeat[];
+  voices: { reggie: string | null; marc: string | null };
+};
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
@@ -112,6 +119,8 @@ export const api = {
   segment: (page: string) => get<{ page: string; beats: ColdOpenBeat[] }>(`/segments/${page}`),
   stars: () => get<{ stars: Star[] }>("/stars"),
   recap: (gameId: string) => get<RecapResponse>(`/recap/${gameId}`),
+  tickerSegment: (surface: string, subject?: string) =>
+    get<DeskSegment>(`/ticker/segment?surface=${encodeURIComponent(surface)}${subject ? `&subject=${encodeURIComponent(subject)}` : ""}`),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),
