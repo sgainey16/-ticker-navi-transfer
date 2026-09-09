@@ -22,7 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
-from ticker_recap import build_recap, build_next_preview, build_recap_show
+from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -508,6 +508,35 @@ async def ticker_segment(surface: str, subject: str | None = None):
         except Exception:
             logger.exception("ticker_segment recap failed")
             return {"surface": "recap", "segment_type": "recap", "subject": "league",
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level HOME context: the Ticker opening show (honest, NHL-only for now).
+    if surface == "home":
+        try:
+            slate = await nhl.scoreboard_now()
+            hero_game = None
+            try:
+                hero_game = (await nhl.latest_game()).model_dump()
+            except Exception:
+                hero_game = None
+            hid = hero_game.get("id") if hero_game else "none"
+            key = f"home:{hid}:{len(slate.get('games', []) or [])}:{slate.get('date')}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_home_open(hero_game, slate, EMERGENT_LLM_KEY)
+                await db.segments.update_one(
+                    {"_id": key},
+                    {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            return {"surface": "home", "segment_type": "opening", "subject": "league",
+                    "title": "YOUR HOCKEY STARTS HERE", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment home failed")
+            return {"surface": "home", "segment_type": "opening", "subject": "league",
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     raise HTTPException(status_code=404, detail=f"No desk segment for surface '{surface}'")

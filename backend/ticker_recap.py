@@ -313,3 +313,102 @@ async def build_recap_show(finals: list[dict], llm_key: str) -> list[dict]:
     except Exception as e:
         logger.exception("recap show LLM failed: %s", e)
         return _show_fallback(finals)
+
+
+# ---------------------------------------------------------------------------
+# HOME / MY TICKER — the opening-show segment (SHOW layer).
+# Honest for NHL-only proof: NO personalization claims ("your team") until
+# real follows exist. Grounded on the latest notable final + what's coming.
+# ---------------------------------------------------------------------------
+
+def build_home_fact_sheet(hero_game: dict | None, slate: dict) -> str:
+    lines: list[str] = []
+    if hero_game:
+        a = hero_game.get("away", {}) or {}
+        h = hero_game.get("home", {}) or {}
+        an, hn = a.get("name") or a.get("abbr"), h.get("name") or h.get("abbr")
+        asc, hsc = a.get("score"), h.get("score")
+        series = hero_game.get("series") or {}
+        ctx = ""
+        if series.get("round_label"):
+            ctx = f" ({series.get('round_label')}" + (f", Game {series.get('game_number')}" if series.get("game_number") else "") + ")"
+        if asc is not None and hsc is not None:
+            if asc >= hsc:
+                lines.append(f"Most recent notable final: {an} beat {hn} {asc}-{hsc}{ctx}.")
+            else:
+                lines.append(f"Most recent notable final: {hn} beat {an} {hsc}-{asc}{ctx}.")
+    games = slate.get("games", []) or []
+    if slate.get("is_future"):
+        lines.append(f"No NHL games today ({slate.get('today')}); next slate is {slate.get('date')} with {len(games)} games.")
+    else:
+        lines.append(f"Today's slate: {len(games)} games ({slate.get('date')}).")
+    if not lines:
+        lines.append("Live NHL information is limited right now.")
+    return "\n".join(lines)
+
+
+HOME_PROMPT = """Write a SHORT opening for THE TICKER's HOME screen: Reggie and Marc welcoming
+the viewer into their hockey world and flagging what's worth knowing right now.
+
+Woven naturally (not headings): a quick welcome, the headline result worth knowing, and a
+nod to what's coming up.
+
+Length: 3 to 5 total lines, alternating hosts, Reggie opens. Warm, energetic, honest.
+
+HARD RULES:
+- Use ONLY the facts in the sheet above. Do NOT invent scores, records, storylines or stats.
+- This is NHL-only right now: do NOT say "your team", "your players", or imply we know the
+  viewer's favourites. Speak to the hockey world generally.
+- Do NOT claim results happened "tonight" or on a specific day unless the sheet says so.
+- People/teams first. TV-paced; each line 1-2 sentences.
+
+Return STRICT JSON only:
+{"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}
+
+VERIFIED FACTS (the only truth you may use):
+---
+%s
+---"""
+
+
+def _home_fallback(hero_game: dict | None, slate: dict) -> list[dict]:
+    games = slate.get("games", []) or []
+    lead = ""
+    if hero_game:
+        a = hero_game.get("away", {}) or {}
+        h = hero_game.get("home", {}) or {}
+        if a.get("score") is not None and h.get("score") is not None:
+            if a["score"] >= h["score"]:
+                lead = f"{a.get('abbr')} took down {h.get('abbr')} {a['score']}-{h['score']}"
+            else:
+                lead = f"{h.get('abbr')} took down {a.get('abbr')} {h['score']}-{a['score']}"
+    return [
+        {"host": "reggie", "text": "Welcome to The Ticker — here's your hockey world at a glance."},
+        {"host": "marc", "text": (f"Latest headline: {lead}." if lead else "We'll keep you on top of every result.")},
+        {"host": "reggie", "text": (f"And {len(games)} games are on the way." if games else "More hockey coming soon.")},
+    ]
+
+
+async def build_home_open(hero_game: dict | None, slate: dict, llm_key: str) -> list[dict]:
+    facts = build_home_fact_sheet(hero_game, slate)
+    if not llm_key:
+        return _home_fallback(hero_game, slate)
+    chat = LlmChat(
+        api_key=llm_key,
+        session_id=f"homeopen-{(hero_game.get('id') if hero_game else 'none')}-{len(slate.get('games', []) or [])}",
+        system_message=HOST_BIBLE,
+    ).with_model("anthropic", "claude-sonnet-4-6")
+    try:
+        reply = await chat.send_message(UserMessage(text=HOME_PROMPT % facts))
+        raw = reply if isinstance(reply, str) else str(reply)
+        start, end = raw.find("{"), raw.rfind("}")
+        data = json.loads(raw[start:end + 1])
+        beats = [
+            {"host": ("reggie" if b.get("host", "").lower().startswith("reg") else "marc"),
+             "text": (b.get("text") or "").strip()}
+            for b in data.get("beats", []) if (b.get("text") or "").strip()
+        ]
+        return beats or _home_fallback(hero_game, slate)
+    except Exception as e:
+        logger.exception("home open LLM failed: %s", e)
+        return _home_fallback(hero_game, slate)

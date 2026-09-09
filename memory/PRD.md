@@ -170,3 +170,11 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Frontend: RecapScreen static banner replaced with <TickerDesk surface="recap">. BROWSE (GameRail recent finals) + DEPTH (GameDepth deep: HEAR THE RECAP -> /recap/[id], OPEN GAME) preserved.
 - Verified on device: entry = 1 segment / 0 TTS; browsing finals = still 1/0 (no restart/LLM/TTS); one-panel rule preserved. Same shared endpoint/component now proven across NEXT (preview) + RECAP (postgame) + GAME (desk).
 - Game Call transcript screen still untouched (audio-presentation RED deferred).
+
+## Remediation Step 3 - Home / My Ticker on the shared desk [DONE, awaiting approval]
+- Home now leads with the SAME shared TickerDesk (surface="home") programmed as the Ticker OPENING SHOW: prepared/cached, grounded on the latest notable final + what's coming. Honest title "YOUR HOCKEY STARTS HERE" - NO fake personalization / no "your team".
+- Command-center shape, NOT a Recap/Next clone: (1) live scores wire strip, (2) shared desk opening show, (3) HAPPENING headline spotlight as a GAME card (removed the old duplicate desk-image hero -> one-panel rule now truly single desk), (4) AROUND THE NHL importance rail (live+finals) + depth, (5) COMING UP compact upcoming strip, (6) MY TEAMS/MY PLAYERS future slots render nothing until real follows exist (no Coming Soon boxes).
+- Backend: ticker_recap.build_home_open + home fact sheet + fallback; server.py /ticker/segment surface=="home" (Mongo-cached by hero id + slate). RECAP prompt also hardened to timeless phrasing (never claims "tonight").
+- Verified on device: desk present on entry; browsing rail = 0 new segment/TTS (no restart/LLM/ElevenLabs); PLAY = 1 TTS + ON AIR/PAUSE; spotlight->Game, rail->depth, Coming Up->Game.
+- THREE distinct programs on one desk confirmed: HOME "YOUR HOCKEY STARTS HERE" (opening) / RECAP "THE TICKER RECAP" (postgame) / NEXT "NEXT ON THE TICKER" (preview).
+- Files: backend ticker_recap.py, server.py; frontend src/screens/HomeScreen.tsx (rebuilt). Reused TickerDesk/GameRail/GameDepth/NhlLogo/TickerStrip. Scores/Game/Team/Player/Reels/Stats untouched.
