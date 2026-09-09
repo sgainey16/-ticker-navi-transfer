@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 
 import { colors, fonts, spacing } from "@/src/theme";
@@ -64,7 +64,7 @@ export default function Scores() {
                   <Text style={[styles.th, styles.colPts]}>PTS</Text>
                 </View>
                 {standings.data![conf].map((r: NhlStandRow) => (
-                  <View key={r.abbr} style={styles.tr} testID={`standing-${r.abbr}`}>
+                  <Pressable key={r.abbr} style={styles.tr} testID={`standing-${r.abbr}`} onPress={() => router.push(`/team/${r.abbr}`)}>
                     <View style={[styles.colTeam, styles.teamCell]}>
                       <Text style={styles.rank}>{r.conf_rank}</Text>
                       <NhlLogo abbr={r.abbr} url={r.logo} size={24} />
@@ -75,7 +75,7 @@ export default function Scores() {
                     <Text style={[styles.td, styles.colNum]}>{r.losses}</Text>
                     <Text style={[styles.td, styles.colNum]}>{r.ot}</Text>
                     <Text style={[styles.tdPts, styles.colPts]}>{r.points}</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ))

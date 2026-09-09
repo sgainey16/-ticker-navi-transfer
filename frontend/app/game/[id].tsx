@@ -96,14 +96,14 @@ export default function GameDetail() {
           <Text style={styles.seriesKicker}>{g.series.round_label}{g.series.game_number ? ` · GAME ${g.series.game_number}` : ""}</Text>
         ) : null}
         <View style={styles.board}>
-          <TeamCol abbr={g.away.abbr} name={g.away.name} logo={g.away.logo} score={g.away.score} isFinal={isFinal} win={awayWin} />
+          <TeamCol abbr={g.away.abbr} name={g.away.name} logo={g.away.logo} score={g.away.score} isFinal={isFinal} win={awayWin} onPress={() => router.push(`/team/${g.away.abbr}`)} />
           <View style={styles.center}>
             <Text style={[styles.status, !isFinal && { color: colors.blue }]}>
               {isFinal ? "FINAL" : isFuture ? "UPCOMING" : (g.status || "").toUpperCase()}
             </Text>
             {!isFinal && isFuture ? <Text style={styles.puck}>{fmtTime(g.start_utc)}</Text> : <Text style={styles.dash}>—</Text>}
           </View>
-          <TeamCol abbr={g.home.abbr} name={g.home.name} logo={g.home.logo} score={g.home.score} isFinal={isFinal} win={homeWin} />
+          <TeamCol abbr={g.home.abbr} name={g.home.name} logo={g.home.logo} score={g.home.score} isFinal={isFinal} win={homeWin} onPress={() => router.push(`/team/${g.home.abbr}`)} />
         </View>
 
         <Text style={styles.subMeta}>{fmtDate(g.date)}{g.venue ? ` · ${g.venue}` : ""}</Text>
@@ -267,13 +267,13 @@ export default function GameDetail() {
   );
 }
 
-function TeamCol({ abbr, name, logo, score, isFinal, win }: { abbr: string; name: string; logo?: string | null; score?: number | null; isFinal: boolean; win: boolean }) {
+function TeamCol({ abbr, name, logo, score, isFinal, win, onPress }: { abbr: string; name: string; logo?: string | null; score?: number | null; isFinal: boolean; win: boolean; onPress?: () => void }) {
   return (
-    <View style={styles.teamCol}>
+    <Pressable style={styles.teamCol} onPress={onPress} disabled={!onPress}>
       <NhlLogo abbr={abbr} url={logo} size={52} />
       <Text style={styles.teamName} numberOfLines={2}>{name}</Text>
       {isFinal ? <Text style={[styles.bigScore, { color: win ? colors.white : colors.textDim }]}>{score}</Text> : <Text style={styles.teamAbbr}>{abbr}</Text>}
-    </View>
+    </Pressable>
   );
 }
 

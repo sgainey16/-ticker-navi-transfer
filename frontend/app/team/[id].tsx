@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -8,106 +7,175 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
-import { TeamLogo } from "@/src/components/TeamLogo";
-import { ScoreRow } from "@/src/components/ScoreRow";
+import { NhlLogo } from "@/src/components/NhlLogo";
 
-export default function TeamDetail() {
+function niceDate(iso?: string) {
+  if (!iso) return "";
+  try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); }
+  catch { return iso; }
+}
+function fmtTime(utc?: string) {
+  if (!utc) return "";
+  const d = new Date(utc); let h = d.getHours(); const m = d.getMinutes();
+  const ap = h >= 12 ? "PM" : "AM"; h = h % 12; if (h === 0) h = 12;
+  return `${h}:${m.toString().padStart(2, "0")} ${ap}`;
+}
+
+export default function TeamPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const q = useApi(() => api.team(id), [id]);
+  const q = useApi(() => api.nhlTeam(id), [id]);
 
-  if (q.loading) return <Screen><BackBar /><Loader /></Screen>;
+  if (q.loading) return <Screen><BackBar /><Loader label="Loading the team…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load team" onRetry={q.reload} /></Screen>;
 
-  const { team, roster, recaps } = q.data;
-  const teamLite = { abbr: team.abbr, short: team.short, primary: team.primary, secondary: team.secondary };
-
-  const metrics = [
-    { label: "RECORD", value: `${team.wins}-${team.losses}` },
-    { label: "POINTS", value: `${team.points}`, accent: colors.green },
-    { label: "GOALS FOR", value: `${team.gf}` },
-    { label: "GOALS AGAINST", value: `${team.ga}` },
-    { label: "GOAL DIFF", value: `${team.gd > 0 ? "+" : ""}${team.gd}`, accent: team.gd >= 0 ? colors.green : colors.red },
-    { label: "STREAK", value: team.streak, accent: team.streak.startsWith("W") ? colors.green : colors.red },
-  ];
+  const { team, record, goals, form, scorers, goalie, recent, next: nextGame, roster } = q.data;
+  const diff = goals.diff ?? 0;
 
   return (
     <Screen>
       <BackBar />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* IDENTITY */}
         <View style={styles.banner}>
-          <LinearGradient colors={[team.primary + "55", colors.bg]} style={StyleSheet.absoluteFill} />
-          <TeamLogo abbr={team.abbr} primary={team.primary} secondary={team.secondary} size={72} />
+          <NhlLogo abbr={team.abbr} url={team.logo} size={68} />
           <Text style={styles.name}>{team.name}</Text>
-          <Text style={styles.meta}>{team.conference} · Seed #{team.seed} · {team.arena}</Text>
-          <Text style={styles.coach}>Head Coach · {team.coach}</Text>
+          <Text style={styles.meta}>#{record.div_rank} {team.division} · #{record.conf_rank} {team.conference}</Text>
+          <Text style={styles.record}>{record.wins}-{record.losses}-{record.ot}  ·  {record.points} PTS</Text>
         </View>
 
-        <Text style={styles.blurb}>{team.blurb}</Text>
-
-        <View style={styles.metricGrid}>
-          {metrics.map((m) => (
-            <View key={m.label} style={styles.metric}>
-              <Text style={[styles.metricVal, m.accent && { color: m.accent }]}>{m.value}</Text>
-              <Text style={styles.metricLabel}>{m.label}</Text>
-            </View>
-          ))}
+        {/* TICKER READ — verified data restated, one line (no second host panel) */}
+        <View style={styles.read}>
+          <Ionicons name="mic" size={13} color={colors.blue} />
+          <Text style={styles.readText}>
+            {team.short} sit #{record.div_rank} in the {team.division}, {form.l10} over their last 10 ({form.streak}).
+          </Text>
         </View>
 
-        <View style={styles.section}>
-          <SectionTitle title="Roster" />
-          {roster.map((p) => (
-            <Pressable key={p.id} style={styles.playerRow} onPress={() => router.push(`/player/${p.id}`)} testID={`roster-${p.id}`}>
-              <Text style={styles.num}>{p.number}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.playerName}>{p.name}</Text>
-                <Text style={styles.pos}>{posName(p.position)}</Text>
+        {/* KEY NUMBERS */}
+        <View style={styles.grid}>
+          <Stat label="GF" value={goals.gf} />
+          <Stat label="GA" value={goals.ga} />
+          <Stat label="DIFF" value={`${diff > 0 ? "+" : ""}${diff}`} accent={diff >= 0 ? colors.blue : colors.red} />
+          <Stat label="L10" value={form.l10} />
+          <Stat label="HOME" value={form.home} />
+          <Stat label="ROAD" value={form.road} />
+        </View>
+
+        {/* NEXT GAME */}
+        {nextGame ? (
+          <View style={styles.section}>
+            <SectionTitle title="Next Game" accent={colors.blue} />
+            <Pressable style={styles.card} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}`)}>
+              <View style={styles.gRow}>
+                <NhlLogo abbr={nextGame.away.abbr} url={nextGame.away.logo} size={26} />
+                <Text style={styles.gAbbr}>{nextGame.away.abbr}</Text>
+                <Text style={styles.gAt}>@</Text>
+                <Text style={styles.gAbbr}>{nextGame.home.abbr}</Text>
+                <NhlLogo abbr={nextGame.home.abbr} url={nextGame.home.logo} size={26} />
+                <View style={{ flex: 1 }} />
+                <Text style={styles.gWhen}>{niceDate(nextGame.date)}{nextGame.start_utc ? `\n${fmtTime(nextGame.start_utc)}` : ""}</Text>
               </View>
-              {p.position === "GK" ? (
-                <Stat value={`${p.save_pct?.toFixed(3)}`} unit="SV%" />
-              ) : (
-                <>
-                  <Stat value={`${p.goals}`} unit="G" />
-                  <Stat value={`${p.assists}`} unit="A" />
-                </>
-              )}
             </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <SectionTitle title="Recent Games" />
-          <View style={{ gap: spacing.sm }}>
-            {recaps.map((g) => (
-              <ScoreRow
-                key={g.id}
-                home={g.home_id === team.id ? teamLite : undefined}
-                away={g.away_id === team.id ? teamLite : undefined}
-                homeScore={g.home_score}
-                awayScore={g.away_score}
-                date={g.date}
-                onPress={() => router.push(`/game/${g.id}`)}
-              />
-            ))}
           </View>
-        </View>
+        ) : null}
+
+        {/* TOP SCORERS — people first */}
+        {scorers?.length ? (
+          <View style={styles.section}>
+            <SectionTitle title="Leading the Way" accent={colors.blue} />
+            <View style={styles.card}>
+              {scorers.map((s: any, i: number) => (
+                <View key={s.player_id ?? i} style={styles.pRow}>
+                  <Text style={styles.pRank}>{i + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pName}>{s.name}</Text>
+                    <Text style={styles.pMeta}>{s.pos} · {s.gp} GP</Text>
+                  </View>
+                  <Text style={styles.pPts}>{s.points}</Text>
+                  <Text style={styles.pSub}>{s.goals}G {s.assists}A</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* GOALIE */}
+        {goalie ? (
+          <View style={styles.section}>
+            <SectionTitle title="In Goal" accent={colors.blue} />
+            <View style={styles.card}>
+              <View style={styles.pRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pName}>{goalie.name}</Text>
+                  <Text style={styles.pMeta}>{goalie.record}{goalie.so ? ` · ${goalie.so} SO` : ""}</Text>
+                </View>
+                <Text style={styles.pPts}>{goalie.svpct ?? "–"}</Text>
+                <Text style={styles.pSub}>{goalie.gaa ?? "–"} GAA</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* TEAM HIGHLIGHTS — reserved future slot; renders nothing until a real source exists. */}
+
+        {/* RECENT RESULTS */}
+        {recent?.length ? (
+          <View style={styles.section}>
+            <SectionTitle title="Recent Results" accent={colors.blue} />
+            <View style={{ gap: spacing.sm }}>
+              {recent.map((g: any) => (
+                <Pressable key={g.id} style={styles.card} onPress={() => router.push(`/game/${g.id}`)}>
+                  <View style={styles.gRow}>
+                    <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={24} />
+                    <Text style={styles.gAbbr}>{g.away.abbr} {g.away.score}</Text>
+                    <Text style={styles.gAt}>–</Text>
+                    <Text style={styles.gAbbr}>{g.home.score} {g.home.abbr}</Text>
+                    <NhlLogo abbr={g.home.abbr} url={g.home.logo} size={24} />
+                    <View style={{ flex: 1 }} />
+                    <Text style={styles.gWhen}>{niceDate(g.date)}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* ROSTER */}
+        {roster ? (
+          <View style={styles.section}>
+            <SectionTitle title="Roster" accent={colors.blue} />
+            {(["forwards", "defensemen", "goalies"] as const).map((grp) =>
+              roster[grp]?.length ? (
+                <View key={grp} style={styles.rosterBlock}>
+                  <Text style={styles.rosterLabel}>{grp.toUpperCase()}</Text>
+                  <View style={styles.rosterWrap}>
+                    {roster[grp].map((p: any) => (
+                      <View key={p.player_id} style={styles.chip}>
+                        <Text style={styles.chipNum}>{p.number ?? "–"}</Text>
+                        <Text style={styles.chipName} numberOfLines={1}>{p.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null
+            )}
+          </View>
+        ) : null}
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </Screen>
   );
 }
 
-function Stat({ value, unit }: { value: string; unit: string }) {
+function Stat({ label, value, accent }: { label: string; value: any; accent?: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statVal}>{value}</Text>
-      <Text style={styles.statUnit}>{unit}</Text>
+      <Text style={[styles.statVal, accent && { color: accent }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-}
-
-function posName(p: string) {
-  return { GK: "Goalkeeper", D: "Defender", M: "Midfielder", F: "Forward" }[p] || p;
 }
 
 export function BackBar() {
@@ -123,28 +191,43 @@ export function BackBar() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: spacing.xxxl },
-  banner: { alignItems: "center", paddingVertical: spacing.xl, gap: 4, overflow: "hidden" },
-  name: { color: colors.white, fontFamily: fonts.display, fontSize: 28, fontWeight: "800", letterSpacing: 0.5, marginTop: spacing.sm },
-  meta: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
-  coach: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 12 },
-  blurb: { color: colors.textDim, fontFamily: fonts.body, fontSize: 14, lineHeight: 21, paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  backBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start" },
+  backText: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
 
-  metricGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, gap: spacing.sm },
-  metric: { width: "31.5%", backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, alignItems: "center" },
-  metricVal: { color: colors.text, fontFamily: fonts.display, fontSize: 22, fontWeight: "800" },
-  metricLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "600", letterSpacing: 0.5, marginTop: 2 },
+  content: { paddingBottom: spacing.xxxl, gap: spacing.md },
+  banner: { alignItems: "center", paddingTop: spacing.sm, paddingBottom: spacing.md, gap: 4 },
+  name: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", letterSpacing: 0.5, marginTop: spacing.sm, textAlign: "center" },
+  meta: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
+  record: { color: colors.white, fontFamily: fonts.display, fontSize: 16, fontWeight: "800", letterSpacing: 0.5, marginTop: 2 },
 
-  section: { paddingHorizontal: spacing.lg, marginTop: spacing.xl, gap: spacing.sm },
-  playerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  num: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", width: 28, textAlign: "center" },
-  playerName: { color: colors.text, fontFamily: fonts.display, fontSize: 16, fontWeight: "700", letterSpacing: 0.3 },
-  pos: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11 },
-  stat: { alignItems: "center", width: 40 },
-  statVal: { color: colors.text, fontFamily: fonts.display, fontSize: 17, fontWeight: "800" },
-  statUnit: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "600" },
+  read: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  readText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17, flex: 1 },
 
-  backBar: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  backBtn: { flexDirection: "row", alignItems: "center", paddingVertical: 6, paddingHorizontal: 8 },
-  backText: { color: colors.text, fontFamily: fonts.body, fontSize: 15 },
+  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, gap: spacing.sm },
+  stat: { width: "31%", flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, alignItems: "center", gap: 2 },
+  statVal: { color: colors.text, fontFamily: fonts.display, fontSize: 18, fontWeight: "800" },
+  statLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "700", letterSpacing: 1 },
+
+  section: { gap: spacing.sm, paddingHorizontal: spacing.lg },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+
+  gRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  gAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "800" },
+  gAt: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 13, fontWeight: "700" },
+  gWhen: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 0.5, textAlign: "right" },
+
+  pRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  pRank: { color: colors.blue, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", width: 16 },
+  pName: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
+  pMeta: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 11 },
+  pPts: { color: colors.white, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", width: 40, textAlign: "right" },
+  pSub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11, width: 54, textAlign: "right" },
+
+  rosterBlock: { gap: 6, marginTop: spacing.xs },
+  rosterLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.2 },
+  rosterWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 6 },
+  chipNum: { color: colors.blue, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", minWidth: 16 },
+  chipName: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "600", maxWidth: 120 },
 });

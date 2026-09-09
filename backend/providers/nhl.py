@@ -7,6 +7,7 @@ gamecenter/{id}/right-rail, gamecenter/{id}/boxscore.
 All network I/O is async (httpx) so it never blocks the FastAPI event loop.
 """
 from __future__ import annotations
+import asyncio
 import logging
 from datetime import date, timedelta
 from typing import Optional
@@ -371,3 +372,97 @@ async def recent_finals(client: httpx.AsyncClient, limit: int = 15) -> list[dict
 async def recent_finals_now(limit: int = 15) -> list[dict]:
     async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
         return await recent_finals(client, limit)
+
+
+# ---------------------------------------------------------------------------
+# Team Page — verified team snapshot.
+# ---------------------------------------------------------------------------
+
+def _sched_card(g: dict) -> dict:
+    return {
+        "id": str(g.get("id")),
+        "date": g.get("gameDate"),
+        "start_utc": g.get("startTimeUTC"),
+        "state": g.get("gameState"),
+        "away": _score_team(g.get("awayTeam", {})),
+        "home": _score_team(g.get("homeTeam", {})),
+    }
+
+
+async def team_page(tri: str) -> dict:
+    tri = tri.upper()
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+        standings_data, cs, sched, roster = await asyncio.gather(
+            _get(client, "standings/now"),
+            _get(client, f"club-stats/{tri}/now"),
+            _get(client, f"club-schedule-season/{tri}/now"),
+            _get(client, f"roster/{tri}/current"),
+        )
+
+    row = next((r for r in standings_data.get("standings", [])
+                if _n(r.get("teamAbbrev")) == tri), None)
+    if not row:
+        raise ValueError(f"Unknown team {tri}")
+
+    team = {
+        "abbr": tri,
+        "name": _n(row.get("teamName")),
+        "short": _n(row.get("teamCommonName")),
+        "logo": row.get("teamLogo"),
+        "conference": row.get("conferenceName"),
+        "division": row.get("divisionName"),
+    }
+    record = {
+        "wins": row.get("wins"), "losses": row.get("losses"), "ot": row.get("otLosses"),
+        "points": row.get("points"), "gp": row.get("gamesPlayed"),
+        "div_rank": row.get("divisionSequence"), "conf_rank": row.get("conferenceSequence"),
+        "point_pct": row.get("pointPctg"),
+    }
+    goals = {"gf": row.get("goalFor"), "ga": row.get("goalAgainst"), "diff": row.get("goalDifferential")}
+    form = {
+        "l10": f"{row.get('l10Wins', 0)}-{row.get('l10Losses', 0)}-{row.get('l10OtLosses', 0)}",
+        "streak": f"{row.get('streakCode', '') or ''}{row.get('streakCount', '') or ''}",
+        "home": f"{row.get('homeWins', 0)}-{row.get('homeLosses', 0)}-{row.get('homeOtLosses', 0)}",
+        "road": f"{row.get('roadWins', 0)}-{row.get('roadLosses', 0)}-{row.get('roadOtLosses', 0)}",
+    }
+
+    skaters = sorted(cs.get("skaters", []), key=lambda s: (s.get("points") or 0, s.get("goals") or 0), reverse=True)
+    scorers = [{
+        "player_id": s.get("playerId"),
+        "name": f"{_n(s.get('firstName'))} {_n(s.get('lastName'))}".strip(),
+        "pos": s.get("positionCode"), "gp": s.get("gamesPlayed"),
+        "goals": s.get("goals"), "assists": s.get("assists"), "points": s.get("points"),
+    } for s in skaters[:5]]
+
+    goalies = sorted(cs.get("goalies", []), key=lambda g: (g.get("wins") or 0), reverse=True)
+    goalie = None
+    if goalies:
+        g0 = goalies[0]
+        goalie = {
+            "player_id": g0.get("playerId"),
+            "name": f"{_n(g0.get('firstName'))} {_n(g0.get('lastName'))}".strip(),
+            "record": f"{g0.get('wins', 0)}-{g0.get('losses', 0)}-{g0.get('overtimeLosses', 0)}",
+            "gaa": round(g0.get("goalsAgainstAverage"), 2) if g0.get("goalsAgainstAverage") is not None else None,
+            "svpct": round(g0.get("savePercentage"), 3) if g0.get("savePercentage") is not None else None,
+            "so": g0.get("shutouts"),
+        }
+
+    games = sched.get("games", [])
+    finals = [g for g in games if g.get("gameState") in FINAL_STATES]
+    upcoming = [g for g in games if g.get("gameState") not in FINAL_STATES and g.get("gameState") not in ("LIVE", "CRIT")]
+    recent = [_sched_card(g) for g in finals[-5:]][::-1]
+    nxt = _sched_card(upcoming[0]) if upcoming else None
+
+    def _people(group):
+        return [{
+            "player_id": p.get("id"),
+            "name": f"{_n(p.get('firstName'))} {_n(p.get('lastName'))}".strip(),
+            "number": p.get("sweaterNumber"), "pos": p.get("positionCode"),
+        } for p in roster.get(group, [])]
+
+    return {
+        "team": team, "record": record, "goals": goals, "form": form,
+        "scorers": scorers, "goalie": goalie,
+        "recent": recent, "next": nxt,
+        "roster": {"forwards": _people("forwards"), "defensemen": _people("defensemen"), "goalies": _people("goalies")},
+    }

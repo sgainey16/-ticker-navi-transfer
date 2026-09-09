@@ -126,3 +126,15 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Browsing rail = setSelectedId only; NO audio triggered/restarted (no broadcast/tts calls in GameRail/GameDepth). HEAR THE RECAP + OPEN GAME are the only deliberate actions.
 - Default selected = most recent final. Empty state if no finals.
 - Untouched: Home, Next, Scores, Game Page, broadcast/audio, Reels; no Team/Player/Highlightly.
+
+## Milestone 8 — Real NHL Team Page [DONE, awaiting approval]
+- New endpoint GET /api/nhl/team/{tri}; provider nhl.team_page() concurrently pulls standings/now + club-stats/{tri}/now + club-schedule-season/{tri}/now + roster/{tri}/current (added asyncio import + _sched_card).
+- Returns verified: identity(logo/name/conf/div), record(W-L-OT/pts/div+conf rank), goals(gf/ga/diff), form(l10/streak/home/road), top5 scorers(player_id), goalie snapshot, recent finals, next game, roster(F/D/G with player_id).
+- PP
+## Milestone 8 - Real NHL Team Page [DONE, awaiting approval]
+- New endpoint GET /api/nhl/team/{tri}; provider nhl.team_page() concurrently pulls standings/now + club-stats/{tri}/now + club-schedule-season/{tri}/now + roster/{tri}/current (added asyncio import + _sched_card).
+- Verified fields: identity(logo/name/conf/div), record(W-L-OT/pts/div+conf rank), goals(gf/ga/diff), form(l10/streak/home/road), top5 scorers(player_id), goalie snapshot, recent finals, next game, roster(F/D/G with player_id).
+- PP-pct/PK-pct intentionally OMITTED (not in these verified feeds) -> hidden, not fabricated. Recent Results empty in offseason -> section hidden.
+- Frontend app/team/[id].tsx rewritten (people-first, compact); BackBar export preserved. Reserved TEAM HIGHLIGHTS slot (comment, renders nothing). One compact TICKER READ line from verified data (no second host panel). Player rows/roster keep player_id for future Player Page.
+- Entry points wired (minimal): Scores standings rows -> /team/{abbr}; Game Page team columns -> /team/{abbr}. Game links on Team -> /game/{id}.
+- api.nhlTeam added. No architecture changes to Home/Recap/Next/Scores/Game beyond routing taps.
