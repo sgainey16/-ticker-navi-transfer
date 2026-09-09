@@ -61,3 +61,13 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 ## Notes
 - No auth (open prototype).
 - Cold Open host audio uses expo-audio — best experienced on a real device / Expo Go (web preview may not play audio).
+
+## Milestone 2b — Host Artwork Swap (DONE, awaiting user sign-off)
+- Installed user-approved Reggie Banks + Marc Collins artwork (cartoon "THE TICKER AI SPORTS NETWORK" canon).
+- Replaced ONLY existing host image slots (no code/redesign):
+  - assets/images/rayo.jpg  -> Reggie face-only avatar crop (400x400), zoomed out ~23% for clean circular read.
+  - assets/images/casey.jpg -> Marc face-only avatar crop (400x400).
+  - assets/images/broadcast-desk.png -> two-host desk hero banner, edge-extended to 1497x998 (1.5:1) so both hosts survive the hero cover-crop.
+- Full posters (with nameplates/taglines) retained at /tmp for future large-portrait slot; not wired to any screen yet.
+- Verified live: Home hero shows both hosts; Talk booth avatars read cleanly (green Reggie / blue Marc).
+- NOT changed (intentional, per user scope): coldopen/voices still show legacy "RAYO/CASEY/Mateo Reyes/Casey Whitfield" text labels; MASL body content unchanged.
