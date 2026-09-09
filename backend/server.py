@@ -484,6 +484,26 @@ async def nhl_home():
     }
 
 
+@api_router.get("/nhl/scoreboard")
+async def nhl_scoreboard():
+    """Current-day NHL slate (Tonight/Scores)."""
+    try:
+        return await nhl.scoreboard_now()
+    except Exception:
+        logger.exception("nhl_scoreboard failed")
+        return {"date": None, "games": []}
+
+
+@api_router.get("/nhl/standings")
+async def nhl_standings():
+    """Real NHL standings by conference (Scores)."""
+    try:
+        return await nhl.standings_now()
+    except Exception:
+        logger.exception("nhl_standings failed")
+        return {"Eastern": [], "Western": []}
+
+
 app.include_router(api_router)
 
 app.add_middleware(

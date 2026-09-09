@@ -81,9 +81,19 @@ export type NhlHomeResponse = {
   voices: { reggie: string | null; marc: string | null };
 };
 
+export type NhlStandRow = {
+  abbr: string; name: string; short: string; logo?: string | null;
+  conference: string; division?: string | null;
+  gp?: number | null; wins?: number | null; losses?: number | null; ot?: number | null;
+  points?: number | null; gf?: number | null; ga?: number | null; streak?: string | null;
+  conf_rank?: number | null;
+};
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
+  nhlScoreboard: () => get<{ date: string | null; games: NhlGameCard[] }>("/nhl/scoreboard"),
+  nhlStandings: () => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>("/nhl/standings"),
   teams: () => get<{ teams: Team[] }>("/teams"),
   team: (id: string) => get<{ team: Team; roster: Player[]; recaps: Game[] }>(`/teams/${id}`),
   player: (id: string) => get<{ player: Player; team: Team }>(`/players/${id}`),

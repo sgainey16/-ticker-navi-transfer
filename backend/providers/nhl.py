@@ -249,3 +249,41 @@ async def scoreboard(client: httpx.AsyncClient) -> dict:
 async def scoreboard_now() -> dict:
     async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
         return await scoreboard(client)
+
+
+# ---------------------------------------------------------------------------
+# Standings — used by the Scores screen.
+# ---------------------------------------------------------------------------
+
+async def standings(client: httpx.AsyncClient) -> dict:
+    st = await _get(client, "standings/now")
+    east: list[dict] = []
+    west: list[dict] = []
+    for r in st.get("standings", []):
+        conf = r.get("conferenceName") or ""
+        row = {
+            "abbr": _n(r.get("teamAbbrev")),
+            "name": _n(r.get("teamName")),
+            "short": _n(r.get("teamCommonName")),
+            "logo": r.get("teamLogo"),
+            "conference": conf,
+            "division": r.get("divisionName"),
+            "gp": r.get("gamesPlayed"),
+            "wins": r.get("wins"),
+            "losses": r.get("losses"),
+            "ot": r.get("otLosses"),
+            "points": r.get("points"),
+            "gf": r.get("goalFor"),
+            "ga": r.get("goalAgainst"),
+            "streak": f"{r.get('streakCode', '') or ''}{r.get('streakCount', '') or ''}",
+            "conf_rank": r.get("conferenceSequence"),
+        }
+        (east if conf == "Eastern" else west).append(row)
+    east.sort(key=lambda x: x["conf_rank"] or 999)
+    west.sort(key=lambda x: x["conf_rank"] or 999)
+    return {"Eastern": east, "Western": west}
+
+
+async def standings_now() -> dict:
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+        return await standings(client)
