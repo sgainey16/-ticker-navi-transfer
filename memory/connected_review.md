@@ -91,3 +91,30 @@ Constraints (unchanged):
 
 Guiding principle: **MAXIMIZE THE SPORTS DESK VIBE.**
 > Without Reggie and Marc, we can build a very competent hockey app. With them persistently inhabiting the hockey world, we have The Ticker.
+
+---
+
+## CONNECTED REVIEW — SCOPE UPDATE (consolidated findings)
+The screenshots make clear substantial **experience** work remains. Do NOT interpret the working NHL architecture as a finished MVP experience. The plumbing is ahead of the product experience — but this is presentation/programming-layer work, NOT another rebuild. The canonical NHL foundation is doing its job.
+
+### Major RED areas
+- **🔴 RECAP** — Too flat/passive on entry. Must feel like tuning into a Reggie + Marc **postgame show**, not opening a list of completed games and hunting for Play.
+- **🔴 NEXT** — Accurate schedule utility, but lacks the active sports-desk experience. Reggie + Marc need a context-appropriate **upcoming-hockey presence even when there are no games today.**
+- **🔴 REELS / HIGHLIGHTS** — Still visibly MARSL/indoor-soccer. Not acceptable as a Ticker launch surface. Do not fix yet; classify for **conversion/removal** decision.
+- **🔴 STATS** — Still visibly MARSL/indoor-soccer. Not a Ticker launch surface in current form.
+
+### Yellow/Red
+- **🟡/🔴 HOME** — Real NHL data + horizontal browsing work, but Home and Recap feel too **structurally similar.** Home needs a clearer identity as **"My Ticker / what's happening in my hockey world"**; Recap is **"what happened."**
+- **🟡/🔴 AUDIO PRESENTATION** — Voices work, but game-specific playback becomes a large **transcript/chat-log**. Direction: feel like a **sports broadcast**, with substantially less text dominating the screen.
+
+### 🟢 GREEN — PROTECT
+Canonical NHL architecture · Real NHL data · Game → Team → Player connectivity · Horizontal browse interaction · Dark Ticker chassis · Reggie + Marc desk artwork · One-panel rule · Capability-driven rich modules.
+
+### CORE DIRECTION
+**MAXIMIZE THE SPORTS DESK.** Reggie + Marc remain present across the product; behavior/intensity changes with context, presence does not. **Keep the desk. Make the desk come alive.**
+
+### MODE
+REVIEW-ONLY. Do not start fixing items individually. No features, leagues, Highlightly, Sportlogiq, or new architecture. These findings become ONE ordered remediation plan, executed one controlled change at a time.
+
+### NEXT STEP (change of gears)
+Stop hunting individual defects. Define what each surface is supposed to **feel like** — especially what Reggie & Marc are doing on each: Home, Recap, Next, Scores, Reels/Highlights, Stats, Game, Team, Player. Lock that first; then Emergent works down the screens without redesigning mid-build.
