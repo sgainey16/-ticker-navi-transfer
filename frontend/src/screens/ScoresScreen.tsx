@@ -46,7 +46,7 @@ export default function Scores() {
               {board.data?.is_future ? (
                 <Text style={styles.note}>No NHL games today ({niceDate(board.data?.today)}). Showing the next scheduled slate.</Text>
               ) : null}
-              <NhlSlate games={games} onFinalPress={(id) => router.push(`/recap/${id}`)} />
+              <NhlSlate games={games} onFinalPress={(id) => router.push(`/game/${id}`)} />
             </View>
           ) : null}
 

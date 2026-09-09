@@ -39,6 +39,7 @@ export default function Recap() {
   }, [games]);
 
   const open = (id: string) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/recap/${id}`); };
+  const openGame = (id: string) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/game/${id}`); };
 
   return (
     <TabScreen>
@@ -87,7 +88,7 @@ export default function Recap() {
                 <SectionTitle title={niceDate(grp.date)} accent={colors.blue} />
                 <View style={{ gap: spacing.sm }}>
                   {grp.items.map((g) => (
-                    <NhlGameCard key={g.id} g={g} onPress={() => open(g.id)} />
+                    <NhlGameCard key={g.id} g={g} onPress={() => openGame(g.id)} />
                   ))}
                 </View>
               </View>

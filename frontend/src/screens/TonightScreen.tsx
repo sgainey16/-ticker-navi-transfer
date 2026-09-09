@@ -48,7 +48,7 @@ export default function Tonight() {
           </View>
 
           {games.length ? (
-            <NhlSlate games={games} onFinalPress={(id) => router.push(`/recap/${id}`)} />
+            <NhlSlate games={games} onFinalPress={(id) => router.push(`/game/${id}`)} />
           ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>No NHL games scheduled.</Text>

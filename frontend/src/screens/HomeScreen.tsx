@@ -166,7 +166,7 @@ function SlateGroup({ label, games, router }: { label: string; games: NhlGameCar
       <Text style={styles.groupLabel}>{label}</Text>
       <View style={{ gap: spacing.sm }}>
         {games.map((g) => (
-          <GameCard key={g.id} g={g} onPress={g.group === "final" ? () => router.push(`/recap/${g.id}`) : undefined} />
+          <GameCard key={g.id} g={g} onPress={g.group === "final" ? () => router.push(`/game/${g.id}`) : undefined} />
         ))}
       </View>
     </View>

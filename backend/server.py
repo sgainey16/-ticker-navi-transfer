@@ -504,6 +504,21 @@ async def nhl_standings():
         return {"Eastern": [], "Western": []}
 
 
+@api_router.get("/nhl/game/{game_id}")
+async def nhl_game(game_id: str):
+    """Real NHL game facts for the Game Page (no LLM; facts only).
+
+    game_id may be a real NHL id or 'latest'. PLAY THE CALL on the client opens
+    /recap/{id} which runs the grounded Reggie+Marc engine separately.
+    """
+    try:
+        game = await nhl.game_by_id(game_id)
+    except Exception as e:
+        logger.exception("nhl_game fetch failed")
+        raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
+    return {"game": game.model_dump()}
+
+
 @api_router.get("/nhl/recaps")
 async def nhl_recaps():
     """Recent completed NHL games for the Recap screen (real data only)."""

@@ -98,6 +98,7 @@ export const api = {
   nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
   nhlStandings: () => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>("/nhl/standings"),
   nhlRecaps: () => get<{ games: NhlFinalCard[] }>("/nhl/recaps"),
+  nhlGame: (id: string) => get<{ game: any }>(`/nhl/game/${id}`),
   teams: () => get<{ teams: Team[] }>("/teams"),
   team: (id: string) => get<{ team: Team; roster: Player[]; recaps: Game[] }>(`/teams/${id}`),
   player: (id: string) => get<{ player: Player; team: Team }>(`/players/${id}`),

@@ -14,7 +14,7 @@ from typing import Optional
 import httpx
 
 from models.hockey import (
-    Game, TeamRef, ScoringPlay, GoalieLine, StarLine, SeriesContext,
+    Game, TeamRef, ScoringPlay, PenaltyPlay, SkaterLine, GoalieLine, StarLine, SeriesContext,
 )
 
 logger = logging.getLogger("ticker.nhl")
@@ -128,6 +128,21 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
                 empty_net=en,
             ))
 
+    penalties: list[PenaltyPlay] = []
+    for per in landing.get("summary", {}).get("penalties", []):
+        pnum = per.get("periodDescriptor", {}).get("number", 0)
+        ptype = per.get("periodDescriptor", {}).get("periodType", "REG")
+        for pen in per.get("penalties", []):
+            cp = pen.get("committedByPlayer") or {}
+            pname = (_n(cp.get("firstName")) + " " + _n(cp.get("lastName"))).strip()
+            penalties.append(PenaltyPlay(
+                period=pnum, period_type=ptype, time=_n(pen.get("timeInPeriod")),
+                team_abbr=_n(pen.get("teamAbbrev")), player=pname,
+                type=_n(pen.get("type")) or "MIN",
+                duration=pen.get("duration"),
+                desc=(_n(pen.get("descKey")).replace("-", " ") or None),
+            ))
+
     stars = []
     for s in landing.get("summary", {}).get("threeStars", []):
         bits = []
@@ -159,6 +174,23 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
     for row in rr.get("teamGameStats", []):
         team_stats[row.get("category")] = {"away": row.get("awayValue"), "home": row.get("homeValue")}
 
+    # Top skaters (box-score key players) — points first, then goals.
+    top_skaters: list[SkaterLine] = []
+    for side, abbr in (("awayTeam", away_abbr), ("homeTeam", home_abbr)):
+        for grp in ("forwards", "defense"):
+            for sk in pbg.get(side, {}).get(grp, []):
+                pts = sk.get("points") or 0
+                if pts <= 0:
+                    continue
+                top_skaters.append(SkaterLine(
+                    name=_n(sk.get("name")), team_abbr=abbr,
+                    player_id=sk.get("playerId"), position=sk.get("position"),
+                    goals=sk.get("goals") or 0, assists=sk.get("assists") or 0, points=pts,
+                    sog=sk.get("sog"), toi=_n(sk.get("toi")) or None,
+                ))
+    top_skaters.sort(key=lambda x: (x.points, x.goals), reverse=True)
+    top_skaters = top_skaters[:6]
+
     series = None
     gt = landing.get("gameType")
     ssw = rr.get("seasonSeriesWins") or {}
@@ -179,10 +211,12 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
 
     return Game(
         id=str(game_id), league="NHL", date=_n(landing.get("gameDate")) or landing.get("gameDate", ""),
+        start_utc=landing.get("startTimeUTC"),
         status=landing.get("gameState", "FINAL"),
         venue=_n(landing.get("venue")),
         home=team_ref(home), away=team_ref(away),
-        scoring=scoring, goalies=goalies, three_stars=stars,
+        scoring=scoring, penalties=penalties, goalies=goalies,
+        top_skaters=top_skaters, three_stars=stars,
         team_stats=team_stats, series=series,
     )
 

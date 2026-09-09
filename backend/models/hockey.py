@@ -46,6 +46,29 @@ class StarLine(BaseModel):
     note: Optional[str] = None
 
 
+class PenaltyPlay(BaseModel):
+    period: int
+    period_type: str = "REG"
+    time: str
+    team_abbr: str
+    player: str = ""
+    type: str = ""            # MIN | MAJ | BEN | MIS | ...
+    duration: Optional[int] = None
+    desc: Optional[str] = None  # e.g. "tripping"
+
+
+class SkaterLine(BaseModel):
+    name: str
+    team_abbr: str
+    player_id: Optional[int] = None   # structured for future Player pages
+    position: Optional[str] = None
+    goals: int = 0
+    assists: int = 0
+    points: int = 0
+    sog: Optional[int] = None
+    toi: Optional[str] = None
+
+
 class SeriesContext(BaseModel):
     is_playoffs: bool = False
     round_label: Optional[str] = None   # e.g. "Stanley Cup Final"
@@ -60,12 +83,15 @@ class Game(BaseModel):
     id: str
     league: str = "NHL"
     date: str
+    start_utc: Optional[str] = None
     status: str  # e.g. "FINAL"
     venue: Optional[str] = None
     home: TeamRef
     away: TeamRef
     scoring: List[ScoringPlay] = []
+    penalties: List[PenaltyPlay] = []
     goalies: List[GoalieLine] = []
+    top_skaters: List[SkaterLine] = []
     three_stars: List[StarLine] = []
     team_stats: dict = {}
     series: Optional[SeriesContext] = None

@@ -82,3 +82,13 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - New components: src/components/NhlLogo.tsx (expo-image SVG from assets.nhle.com, abbr fallback). api.ts: NhlHome types + api.nhlHome().
 - Verified: /api/nhl/home returns SCF G6 (CAR 3 @ VGK 0) + grounded takes + 5 real preseason games; Home renders correctly on mobile.
 - Untouched by design: global green mic/Talk FAB (persistent layer, not Home), Recap/Tonight/Reels/Scores/Stats, MASL data module still backs those other screens.
+
+## Milestone 5 — Real NHL Game Page [DONE, awaiting approval]
+- Recap detail PLAY THE RECAP button recolored green -> Ticker blue (behavior/audio unchanged). Checkpoint tag ticker-recap-datefix-approved @ 56d1930.
+- Canonical model extended: PenaltyPlay, SkaterLine; Game gained penalties, top_skaters, start_utc.
+- providers/nhl.py fetch_game now populates penalties (landing summary.penalties), top_skaters (boxscore, points>0, top 6), start_utc.
+- New endpoint GET /api/nhl/game/{id} -> {game} (facts only, no LLM). PLAY THE CALL opens /recap/{id} (existing grounded engine).
+- Frontend app/game/[id].tsx fully rewritten -> real NHL Game Page: single-panel scoreboard (official logos/names/score/status/date/venue/series line), PLAY THE CALL (finals only), Scoring Summary (by period, strength tags), Three Stars, Key Players box score, Goaltending, Team Stats (SOG/PP/PIM/FO%/Hits/Blocks), Penalties. Scheduled/live show only available info; empty sections hidden. Highlights slot left as a code comment (not built). team_abbr + player_id retained for future Team/Player linking (not built).
+- All game cards now open the Game Page: Home slate, Tonight, Scores scoreboard, Recap date-grouped cards -> /game/{id}. Recap featured PLAY THE CALL still -> /recap/latest.
+- api.nhlGame(id) added.
+- Verified: /game/2025030416 (SCF G6, CAR 3 VGK 0) renders all sections with real data; Recap card -> Game Page -> back works; no regression to Home/Tonight/Scores/Recap.
