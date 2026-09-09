@@ -18,7 +18,7 @@ import StatsScreen from "@/src/screens/StatsScreen";
 
 const TABS = [
   { key: "recap", label: "RECAP", C: RecapScreen },
-  { key: "tonight", label: "TONIGHT", C: TonightScreen },
+  { key: "tonight", label: "NEXT", C: TonightScreen },
   { key: "home", label: "HOME", C: HomeScreen },
   { key: "reels", label: "REELS", C: ReelsScreen },
   { key: "scores", label: "SCORES", C: ScoresScreen },
