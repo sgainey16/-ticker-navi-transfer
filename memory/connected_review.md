@@ -190,3 +190,30 @@ Conclusion: there is no prior personal follow hierarchy hiding in this fork — 
 5. **Deferred (NOT this step):** onboarding UI, a full follow-management surface, backend per-user storage/auth. A minimal "follow at tier" affordance on Team/Player could be the smallest way to populate real follows — flag for the user to decide.
 
 STOP: awaiting approval on the proposal before modifying Home.
+
+---
+
+# SEQUENCE CHANGE — ONBOARDING FIRST (audit + proposal, read-only)
+New order: Onboarding -> Follow hierarchy (Stars) -> Home rebuilt from real follows -> rest of remediation. NO build yet.
+
+## Audit — what exists
+- **No onboarding anywhere.** `app/` routes are: index, coldopen, talk, voices, game/[id], player/[id], recap/[id], team/[id], highlights/[id]. No welcome/intro/wizard/stepper/picker/multi-select components exist (grep hits were false positives inside existing screens). Nothing to reuse structurally.
+- **Team data for a picker EXISTS:** `GET /api/nhl/standings` (`nhl.standings_now()`) returns every NHL team by conference WITH official logos + records — a ready full team list.
+- **Player data for a picker EXISTS:** per-team roster is already returned by `GET /api/nhl/team/{abbr}` (forwards/defense/goalies, each with real `player_id`, name, position). Onboarding can load rosters for the chosen teams. (Headshots are only on the player landing; compact initials/team-colour identity works without them.)
+- **Leagues:** NHL only today -> "choose leagues" is effectively NHL now (honest; multi-league later). 
+- **Persistence infra EXISTS:** `src/utils/storage` (primitive-typed, so store the follow model as a JSON string). Reusable UI: `NhlLogo`, `Pill`, `SectionTitle`, theme. A compact player-identity chip (initials + team colours) would be small new UI.
+
+## Smallest clean onboarding proposal (NOT built — for approval)
+- **Route:** new `app/onboarding.tsx` (Stack screen). First-launch gate via `storage` flag `ticker.onboarded`; `app/index.tsx` redirects to `/onboarding` when unset. (Add a hidden way to re-run later; not required for MVP.)
+- **Flow (short, visual, minimal typing):**
+  1. **Leagues** — NHL preselected (single option now).
+  2. **Teams** — grid of official logos from `/api/nhl/standings`; tap to toggle follow.
+  3. **Players** — from the rosters of chosen teams; compact identity chips (initials + team colours); tap to toggle.
+  4. **Stars** — assign 1ST / 2ND / 3RD STAR to the picks the user cares most about. Ranking is NOT mandatory for every follow; unranked picks stay followed at default weight.
+  5. **Finish** -> write follows -> land on HOME / MY HOCKEY WORLD.
+- **Output = the follow model Home consumes:** `{ teams:[{abbr, tier}], players:[{player_id, team_abbr, tier}] }` (tier optional; 1/2/3). Persisted locally only.
+- **Star language:** 1ST STAR = MY CORE, 2ND STAR = MY REGULARS, 3RD STAR = KEEP ME POSTED.
+- **Guardrails:** no auth, no backend user profile, no social, no complex settings; real canonical NHL IDs; don't over-configure; friends-and-family local persistence only.
+- **New shared piece:** a small `src/lib/follows` store (context + hook) that both onboarding (write) and Home (read) use — created as part of the onboarding build, not before.
+
+STOP: awaiting approval before building onboarding. Home + Team/Player follow controls remain deferred.
