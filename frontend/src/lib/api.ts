@@ -89,11 +89,15 @@ export type NhlStandRow = {
   conf_rank?: number | null;
 };
 
+export type NhlScoreboard = { date: string | null; today?: string | null; is_future?: boolean; games: NhlGameCard[] };
+export type NhlFinalCard = NhlGameCard & { date: string; period_type?: string | null };
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
-  nhlScoreboard: () => get<{ date: string | null; games: NhlGameCard[] }>("/nhl/scoreboard"),
+  nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
   nhlStandings: () => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>("/nhl/standings"),
+  nhlRecaps: () => get<{ games: NhlFinalCard[] }>("/nhl/recaps"),
   teams: () => get<{ teams: Team[] }>("/teams"),
   team: (id: string) => get<{ team: Team; roster: Player[]; recaps: Game[] }>(`/teams/${id}`),
   player: (id: string) => get<{ player: Player; team: Team }>(`/players/${id}`),

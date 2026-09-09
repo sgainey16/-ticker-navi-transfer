@@ -223,8 +223,16 @@ def _score_team(t: dict) -> dict:
 
 
 async def scoreboard(client: httpx.AsyncClient) -> dict:
-    """Return the current-day NHL slate simplified for the Home screen."""
+    """Return the current-day NHL slate simplified for the Home screen.
+
+    NHL's `score/now` rolls forward to the next day that actually has games, so
+    in the offseason `currentDate` can be a FUTURE date. We compare it against the
+    real system date and flag `is_future` so the UI can label it honestly (NEXT UP)
+    rather than silently presenting a future slate as "tonight".
+    """
     now = await _get(client, "score/now")
+    sb_date = now.get("currentDate")
+    today = date.today().isoformat()
     games = []
     for g in now.get("games", []):
         pd = g.get("periodDescriptor") or {}
@@ -243,7 +251,7 @@ async def scoreboard(client: httpx.AsyncClient) -> dict:
             "away": _score_team(g.get("awayTeam", {})),
             "home": _score_team(g.get("homeTeam", {})),
         })
-    return {"date": now.get("currentDate"), "games": games}
+    return {"date": sb_date, "today": today, "is_future": bool(sb_date and sb_date != today), "games": games}
 
 
 async def scoreboard_now() -> dict:
@@ -287,3 +295,45 @@ async def standings(client: httpx.AsyncClient) -> dict:
 async def standings_now() -> dict:
     async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
         return await standings(client)
+
+
+# ---------------------------------------------------------------------------
+# Recent finals — used by the Recap screen.
+# ---------------------------------------------------------------------------
+
+async def recent_finals(client: httpx.AsyncClient, limit: int = 15) -> list[dict]:
+    """Walk backward from the real 'today' collecting completed games.
+
+    Uses each day's `prevDate` pointer so offseason gaps are skipped in a single
+    hop (e.g. Sep 9 -> last Stanley Cup Final day). Real data only.
+    """
+    cursor = date.today().isoformat()
+    out: list[dict] = []
+    guard = 0
+    while cursor and len(out) < limit and guard < 40:
+        guard += 1
+        try:
+            s = await _get(client, f"score/{cursor}")
+        except Exception:
+            break
+        day = s.get("currentDate") or cursor
+        for g in s.get("games", []):
+            if g.get("gameState") in FINAL_STATES:
+                po = (g.get("gameOutcome") or {}).get("lastPeriodType")
+                out.append({
+                    "id": str(g.get("id")),
+                    "state": "OFF",
+                    "group": "final",
+                    "date": day,
+                    "game_type": g.get("gameType"),
+                    "period_type": po,
+                    "away": _score_team(g.get("awayTeam", {})),
+                    "home": _score_team(g.get("homeTeam", {})),
+                })
+        cursor = s.get("prevDate")
+    return out[:limit]
+
+
+async def recent_finals_now(limit: int = 15) -> list[dict]:
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+        return await recent_finals(client, limit)

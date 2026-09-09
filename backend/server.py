@@ -504,6 +504,17 @@ async def nhl_standings():
         return {"Eastern": [], "Western": []}
 
 
+@api_router.get("/nhl/recaps")
+async def nhl_recaps():
+    """Recent completed NHL games for the Recap screen (real data only)."""
+    try:
+        games = await nhl.recent_finals_now()
+    except Exception:
+        logger.exception("nhl_recaps failed")
+        games = []
+    return {"games": games}
+
+
 app.include_router(api_router)
 
 app.add_middleware(

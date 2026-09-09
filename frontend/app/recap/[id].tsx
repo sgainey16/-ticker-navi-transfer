@@ -9,6 +9,7 @@ import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState } from "@/src/components/ui";
 import { BackBar } from "@/app/team/[id]";
 import { playDataUri, stopAudio } from "@/src/lib/audio";
+import { NhlLogo } from "@/src/components/NhlLogo";
 
 const HOSTS: Record<string, { name: string; role: string; accent: string }> = {
   reggie: { name: "Reggie Banks", role: "THE INSTIGATOR", accent: colors.green },
@@ -74,13 +75,13 @@ export default function Recap() {
 
         {/* SCOREBOARD */}
         <View style={styles.board}>
-          <TeamCol abbr={g.away.abbr} name={g.away.name} score={g.away.score} win={winnerAbbr === g.away.abbr} />
+          <TeamCol abbr={g.away.abbr} name={g.away.name} logo={g.away.logo} score={g.away.score} win={winnerAbbr === g.away.abbr} />
           <View style={styles.mid}>
             <Text style={styles.final}>{(g.status || "FINAL").toUpperCase()}</Text>
             <Text style={styles.dash}>—</Text>
             <Text style={styles.meta}>{fmtDate(g.date)}</Text>
           </View>
-          <TeamCol abbr={g.home.abbr} name={g.home.name} score={g.home.score} win={winnerAbbr === g.home.abbr} />
+          <TeamCol abbr={g.home.abbr} name={g.home.name} logo={g.home.logo} score={g.home.score} win={winnerAbbr === g.home.abbr} />
         </View>
         {series?.clinched_by ? (
           <View style={styles.clinch}><Text style={styles.clinchText}>{series.clinched_by} WIN THE SERIES {seriesLine(series, g)}</Text></View>
@@ -129,12 +130,14 @@ export default function Recap() {
   );
 }
 
-function TeamCol({ abbr, name, score, win }: { abbr: string; name: string; score: number; win: boolean }) {
+function TeamCol({ abbr, name, logo, score, win }: { abbr: string; name: string; logo?: string | null; score: number; win: boolean }) {
   return (
     <View style={styles.teamCol}>
-      <View style={[styles.crest, win && { borderColor: colors.green }]}><Text style={styles.crestText}>{abbr}</Text></View>
+      <View style={[styles.crest, win && { borderColor: colors.blue }]}>
+        <NhlLogo abbr={abbr} url={logo} size={40} />
+      </View>
       <Text style={styles.teamName} numberOfLines={1}>{name}</Text>
-      <Text style={[styles.score, { color: win ? colors.green : colors.text }]}>{score}</Text>
+      <Text style={[styles.score, { color: win ? colors.white : colors.text }]}>{score}</Text>
     </View>
   );
 }

@@ -9,6 +9,15 @@ import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui
 import { NhlSlate } from "@/src/components/NhlSlate";
 import { NhlLogo } from "@/src/components/NhlLogo";
 
+function niceDate(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
 export default function Scores() {
   const router = useRouter();
   const board = useApi(() => api.nhlScoreboard());
@@ -33,7 +42,10 @@ export default function Scores() {
           {/* SCOREBOARD */}
           {games.length ? (
             <View style={styles.section}>
-              <SectionTitle title="Scoreboard" accent={colors.blue} action={board.data?.date ? <Text style={styles.date}>{board.data.date}</Text> : undefined} />
+              <SectionTitle title={board.data?.is_future ? "Next Slate" : "Scoreboard"} accent={colors.blue} action={board.data?.date ? <Text style={styles.date}>{niceDate(board.data.date)}</Text> : undefined} />
+              {board.data?.is_future ? (
+                <Text style={styles.note}>No NHL games today ({niceDate(board.data?.today)}). Showing the next scheduled slate.</Text>
+              ) : null}
               <NhlSlate games={games} onFinalPress={(id) => router.push(`/recap/${id}`)} />
             </View>
           ) : null}
@@ -83,6 +95,7 @@ const styles = StyleSheet.create({
   h1: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800" },
   section: { gap: spacing.sm },
   date: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
+  note: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
   tableHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   th: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 0.5, textAlign: "center" },
   tr: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },

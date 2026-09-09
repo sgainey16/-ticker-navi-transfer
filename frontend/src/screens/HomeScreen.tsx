@@ -33,6 +33,15 @@ function slateLabel(gt?: number | null) {
   return "AROUND THE NHL";
 }
 
+function niceDate(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
 export default function Home() {
   const router = useRouter();
   const feed = useApi(() => api.nhlHome());
@@ -128,8 +137,11 @@ export default function Home() {
               <SectionTitle
                 title={slateLabel(games[0]?.game_type)}
                 accent={colors.blue}
-                action={<Text style={styles.dateTxt}>{feed.data?.slate?.date}</Text>}
+                action={feed.data?.slate?.date ? <Text style={styles.dateTxt}>{niceDate(feed.data.slate.date)}</Text> : undefined}
               />
+              {feed.data?.slate?.is_future ? (
+                <Text style={styles.slateNote}>No NHL games today ({niceDate(feed.data?.slate?.today)}). Showing the next scheduled slate.</Text>
+              ) : null}
 
               {grouped.live.length ? (
                 <SlateGroup label="LIVE NOW" games={grouped.live} router={router} />
@@ -227,6 +239,7 @@ const styles = StyleSheet.create({
 
   section: { gap: spacing.sm },
   dateTxt: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
+  slateNote: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: -2 },
 
   group: { gap: spacing.sm, marginTop: spacing.xs },
   groupLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, marginTop: spacing.xs },
