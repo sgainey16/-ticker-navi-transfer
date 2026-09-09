@@ -186,3 +186,15 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Dev reset: /onboarding?reset=1 or "Start over (dev reset)" on step 0 -> clears follows + onboarded only.
 - Verified on web session: fresh launch->onboarding; team+player select; 1st/2nd/3rd assignment; one UNRANKED follow persisted (player w/o tier); finish->Home; relaunch (same session) skips onboarding & follows survive; reset clears state. Stored model exactly {teams:[{abbr,tier}],players:[{player_id,team_abbr,tier?}]}.
 - Home NOT rebuilt yet; no Team/Player follow controls added. Next: rebuild Home/My Ticker from these real follows.
+
+## Remediation Step 3 (real) - HOME / MY TICKER + Draft Board [DONE, awaiting approval]
+- Terminology: Stars -> MY DRAFT BOARD. 1ST ROUND (Can't-Miss) / 2ND ROUND (Regulars) / 3RD ROUND (Keep Me Posted). Onboarding updated (ribbon chips, "Build your Draft Board"). Underlying model UNCHANGED: tier 1|2|3 (presentation only). Added optional display name/pos to follows (additive; canonical keys abbr/player_id/team_abbr/tier intact).
+- Home rebuilt from real onboarding follows:
+  1) MY TICKER DESK: shared TickerDesk now personalized via POST /api/ticker/home_segment (Draft Board -> weighted 1st>2nd>3rd>unranked>league, verified facts only, Mongo-cached by follows signature). No autoplay/transcript; one-panel rule.
+  2) MY DRAFT BOARD: compact horizontal round rails; 1st Round bigger tiles (gold), 2nd (blue), 3rd (silver), unranked under FOLLOWING. Teams=official logos, players=initials avatar in round colour. Tap team->Team, player->Player.
+  3) AROUND MY HOCKEY: happening/upcoming rails prioritize followed teams/players first, then league; GameDepth for selected. Coming Up strip highlights followed games.
+  - Empty follows -> honest "Build your Draft Board" card + general NHL fallback (desk broadens honestly).
+- TickerDesk extended with optional segmentFetcher + cacheKey (keeps GET surfaces unchanged; Home uses POST fetcher keyed by follows signature).
+- Backend: ticker_recap.build_my_ticker + MYTICKER_PROMPT + fallback; server.py POST /ticker/home_segment with HomeFollows model + _home_personal_facts (bounded team_page/player_page/scoreboard fetches, verified only).
+- Verified on device: Draft Board hierarchy renders (BOS 1st / player 2nd / TOR 3rd / EDM FOLLOWING); desk personalized (curl: "Your Bruins... McDavid's your guy 138 points... Leafs 32-36"); entry=1 desk fetch/0 TTS; PLAY=1 TTS + ON AIR/PAUSE; browsing adds NO desk/LLM/TTS; board tile->Team/Player routing; relaunch (same session) persists board; onboarding terminology updated. Three distinct programs on one desk (HOME my hockey / RECAP happened / NEXT coming).
+- Scope held: Reels/Highlights, Stats, Game Call, leagues, Highlightly/Sportlogiq untouched.

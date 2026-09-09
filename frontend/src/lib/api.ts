@@ -121,6 +121,7 @@ export const api = {
   recap: (gameId: string) => get<RecapResponse>(`/recap/${gameId}`),
   tickerSegment: (surface: string, subject?: string) =>
     get<DeskSegment>(`/ticker/segment?surface=${encodeURIComponent(surface)}${subject ? `&subject=${encodeURIComponent(subject)}` : ""}`),
+  tickerHomeSegment: (follows: unknown) => post<DeskSegment>(`/ticker/home_segment`, follows),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),

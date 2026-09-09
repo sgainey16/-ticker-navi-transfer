@@ -22,7 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
-from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open
+from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -446,6 +446,121 @@ async def _next_segment_beats(slate: dict):
         upsert=True,
     )
     return beats
+
+
+class FollowItem(BaseModel):
+    abbr: Optional[str] = None
+    player_id: Optional[str] = None
+    team_abbr: Optional[str] = None
+    tier: Optional[int] = None
+
+
+class HomeFollows(BaseModel):
+    teams: List[FollowItem] = []
+    players: List[FollowItem] = []
+
+
+ROUND_LABEL = {1: "1ST ROUND (can't-miss)", 2: "2ND ROUND", 3: "3RD ROUND"}
+
+
+def _round_key(x) -> int:
+    return x.tier if x.tier in (1, 2, 3) else 9
+
+
+def _card_line(c: dict) -> str:
+    a = c.get("away", {}) or {}
+    h = c.get("home", {}) or {}
+    if a.get("score") is not None and h.get("score") is not None:
+        return f"{a.get('abbr')} {a.get('score')}, {h.get('abbr')} {h.get('score')}"
+    return f"{a.get('abbr')} @ {h.get('abbr')} ({c.get('date') or ''})"
+
+
+async def _home_personal_facts(follows: HomeFollows) -> tuple[str, bool]:
+    teams = sorted(follows.teams, key=_round_key)[:4]
+    players = sorted(follows.players, key=_round_key)[:3]
+    has = bool(teams or players)
+    lines: list[str] = []
+    if has:
+        lines.append("The viewer's Draft Board (priority order):")
+    for t in teams:
+        if not t.abbr:
+            continue
+        try:
+            d = await nhl.team_page(t.abbr)
+            label = ROUND_LABEL.get(t.tier, "FOLLOWING")
+            seg = f"{label}: {d['team']['name']} ({d['record']['wins']}-{d['record']['losses']}-{d['record']['ot']})"
+            recent = d.get("recent") or []
+            if recent:
+                seg += f"; latest {_card_line(recent[0])}"
+            nxt = d.get("next")
+            if nxt:
+                seg += f"; next {nxt.get('away', {}).get('abbr')} @ {nxt.get('home', {}).get('abbr')} on {nxt.get('date')}"
+            lines.append(seg)
+        except Exception:
+            logger.exception("home facts team %s failed", t.abbr)
+    for p in players:
+        if not p.player_id:
+            continue
+        try:
+            d = await nhl.player_page(p.player_id)
+            pl = d["player"]
+            label = ROUND_LABEL.get(p.tier, "FOLLOWING")
+            seg = f"{label}: {pl['name']} ({pl.get('pos')}, {pl.get('team_abbr')})"
+            sk = d.get("skater")
+            gl = d.get("goalie")
+            if sk and sk.get("points") is not None:
+                seg += f"; season {sk.get('goals')}G {sk.get('assists')}A {sk.get('points')}P"
+            elif gl and gl.get("svpct") is not None:
+                seg += f"; season {gl.get('svpct')} SV%, {gl.get('gaa')} GAA"
+            last5 = d.get("last5") or []
+            if last5:
+                g0 = last5[0]
+                if "points" in g0:
+                    seg += f"; last game vs {g0.get('opp')}: {g0.get('goals')}G {g0.get('assists')}A"
+            lines.append(seg)
+        except Exception:
+            logger.exception("home facts player %s failed", p.player_id)
+    try:
+        slate = await nhl.scoreboard_now()
+        g = slate.get("games", []) or []
+        if slate.get("is_future"):
+            lines.append(f"League: no NHL today ({slate.get('today')}); next slate {slate.get('date')} has {len(g)} games.")
+        else:
+            lines.append(f"League: {len(g)} games today ({slate.get('date')}).")
+    except Exception:
+        logger.exception("home facts slate failed")
+    return "\n".join(lines), has
+
+
+@api_router.post("/ticker/home_segment")
+async def ticker_home_segment(follows: HomeFollows):
+    """Personalized My Ticker desk segment, programmed from the user's Draft Board.
+
+    Verified facts only. Cached in Mongo by a signature of the follows so ordinary
+    re-entry never re-hits the LLM; TTS is produced only on deliberate play.
+    """
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    try:
+        facts, has = await _home_personal_facts(follows)
+        sig = hashlib.sha1(facts.encode()).hexdigest()[:16]
+        key = f"myticker:{sig}"
+        doc = await db.segments.find_one({"_id": key})
+        if doc and doc.get("beats"):
+            beats = doc["beats"]
+        else:
+            beats = await build_my_ticker(facts, has, EMERGENT_LLM_KEY)
+            await db.segments.update_one(
+                {"_id": key},
+                {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+        return {"surface": "home", "segment_type": "opening", "subject": "myticker",
+                "title": "YOUR HOCKEY STARTS HERE", "state": "ready" if beats else "unavailable",
+                "beats": beats, "voices": voices}
+    except Exception:
+        logger.exception("ticker_home_segment failed")
+        return {"surface": "home", "segment_type": "opening", "subject": "myticker",
+                "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
 
 @api_router.get("/ticker/segment")

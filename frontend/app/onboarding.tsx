@@ -14,10 +14,10 @@ import { TickerLogo } from "@/src/components/TickerLogo";
 type TeamLite = { abbr: string; name: string; logo?: string | null };
 type PlayerLite = { player_id: string; team_abbr: string; name: string; pos?: string; number?: number };
 
-const STAR: Record<Tier, { label: string; sub: string; color: string }> = {
-  1: { label: "1ST STAR", sub: "MY CORE", color: colors.gold },
-  2: { label: "2ND STAR", sub: "MY REGULARS", color: colors.blue },
-  3: { label: "3RD STAR", sub: "KEEP ME POSTED", color: "#9AA6B8" },
+const ROUND: Record<Tier, { label: string; short: string; sub: string; color: string }> = {
+  1: { label: "1ST ROUND", short: "1ST", sub: "CAN'T-MISS", color: colors.gold },
+  2: { label: "2ND ROUND", short: "2ND", sub: "REGULARS", color: colors.blue },
+  3: { label: "3RD ROUND", short: "3RD", sub: "KEEP ME POSTED", color: "#9AA6B8" },
 };
 
 function initials(name: string) {
@@ -100,8 +100,8 @@ export default function Onboarding() {
 
   const finish = async () => {
     const follows: Follows = {
-      teams: selectedTeamList.map((t) => ({ abbr: t.abbr, tier: tiers[`team:${t.abbr}`] })),
-      players: selectedPlayerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, tier: tiers[`player:${p.player_id}`] })),
+      teams: selectedTeamList.map((t) => ({ abbr: t.abbr, name: t.name, tier: tiers[`team:${t.abbr}`] })),
+      players: selectedPlayerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, tier: tiers[`player:${p.player_id}`] })),
     };
     await completeOnboarding(follows);
     router.replace("/");
@@ -194,8 +194,8 @@ export default function Onboarding() {
 
       {step === 3 && (
         <View style={styles.flexStep}>
-          <Text style={styles.stepTitle}>Set your Stars</Text>
-          <Text style={styles.stepSub}>Optional. Elevate the few that matter most — the rest stay followed.</Text>
+          <Text style={styles.stepTitle}>Build your Draft Board</Text>
+          <Text style={styles.stepSub}>Optional. Draft the few that matter most into a round — the rest stay followed.</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.sm }}>
             {selectedTeamList.map((t) => (
               <StarRow key={`t${t.abbr}`} title={t.name} sub={t.abbr} logo={<NhlLogo abbr={t.abbr} url={t.logo} size={30} />}
@@ -254,9 +254,9 @@ function StarRow({ title, sub, logo, tier, onSet }: { title: string; sub: string
         {([1, 2, 3] as Tier[]).map((tr) => {
           const on = tier === tr;
           return (
-            <Pressable key={tr} style={[styles.starChip, on && { backgroundColor: STAR[tr].color, borderColor: STAR[tr].color }]} onPress={() => onSet(tr)} testID={`tier-${tr}`}>
-              <Ionicons name={on ? "star" : "star-outline"} size={11} color={on ? colors.bg : STAR[tr].color} />
-              <Text style={[styles.starChipText, { color: on ? colors.bg : STAR[tr].color }]}>{tr === 1 ? "1ST" : tr === 2 ? "2ND" : "3RD"}</Text>
+            <Pressable key={tr} style={[styles.starChip, on && { backgroundColor: ROUND[tr].color, borderColor: ROUND[tr].color }]} onPress={() => onSet(tr)} testID={`tier-${tr}`}>
+              <Ionicons name={on ? "ribbon" : "ribbon-outline"} size={11} color={on ? colors.bg : ROUND[tr].color} />
+              <Text style={[styles.starChipText, { color: on ? colors.bg : ROUND[tr].color }]}>{ROUND[tr].short}</Text>
             </Pressable>
           );
         })}

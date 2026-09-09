@@ -412,3 +412,70 @@ async def build_home_open(hero_game: dict | None, slate: dict, llm_key: str) -> 
     except Exception as e:
         logger.exception("home open LLM failed: %s", e)
         return _home_fallback(hero_game, slate)
+
+
+# ---------------------------------------------------------------------------
+# HOME / MY TICKER — personalized opening driven by the user's Draft Board.
+# Facts are assembled server-side (verified only); priority order is encoded
+# in the sheet: 1st Round > 2nd Round > 3rd Round > following > league.
+# ---------------------------------------------------------------------------
+
+MYTICKER_PROMPT = """Write a SHORT opening for THE TICKER's HOME screen ("My Ticker") for a viewer who
+follows specific teams and players (their "Draft Board"). Reggie and Marc should make it obvious
+they know who this viewer follows.
+
+Priorities (lead with the highest that actually has something real in the sheet):
+1st Round (can't-miss) > 2nd Round > 3rd Round > other follows > general NHL.
+
+Length: 3 to 5 total lines, alternating hosts, Reggie opens. Warm, personal, honest.
+
+HARD RULES:
+- Use ONLY the facts in the sheet. Do NOT invent scores, records, stats or storylines.
+- Name the viewer's followed teams/players when you reference them.
+- If the followed teams/players have nothing meaningful in the sheet, broaden to the NHL honestly.
+- Do NOT claim results happened "tonight" unless the sheet says so; prefer "latest"/"recently".
+- People/teams first. TV-paced; each line 1-2 sentences.
+
+Return STRICT JSON only:
+{"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}
+
+VERIFIED FACTS (the only truth you may use):
+---
+%s
+---"""
+
+
+def _myticker_fallback(has_follows: bool) -> list[dict]:
+    if has_follows:
+        return [
+            {"host": "reggie", "text": "Welcome back — here's your hockey world."},
+            {"host": "marc", "text": "We're tracking your teams and players; tap in for the details."},
+        ]
+    return [
+        {"host": "reggie", "text": "Welcome to The Ticker — build your Draft Board and we'll make this yours."},
+        {"host": "marc", "text": "For now, here's what's moving around the NHL."},
+    ]
+
+
+async def build_my_ticker(facts_text: str, has_follows: bool, llm_key: str) -> list[dict]:
+    if not llm_key:
+        return _myticker_fallback(has_follows)
+    chat = LlmChat(
+        api_key=llm_key,
+        session_id=f"myticker-{abs(hash(facts_text)) % 10_000_000}",
+        system_message=HOST_BIBLE,
+    ).with_model("anthropic", "claude-sonnet-4-6")
+    try:
+        reply = await chat.send_message(UserMessage(text=MYTICKER_PROMPT % facts_text))
+        raw = reply if isinstance(reply, str) else str(reply)
+        start, end = raw.find("{"), raw.rfind("}")
+        data = json.loads(raw[start:end + 1])
+        beats = [
+            {"host": ("reggie" if b.get("host", "").lower().startswith("reg") else "marc"),
+             "text": (b.get("text") or "").strip()}
+            for b in data.get("beats", []) if (b.get("text") or "").strip()
+        ]
+        return beats or _myticker_fallback(has_follows)
+    except Exception as e:
+        logger.exception("my ticker LLM failed: %s", e)
+        return _myticker_fallback(has_follows)
