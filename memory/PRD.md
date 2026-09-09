@@ -163,3 +163,10 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Same endpoint proven in 2 contexts: league preview (NEXT) + game desk (surface=game&subject=id reuses grounded recap beats). Voices server-first, IDs never exposed. Audio failure never blocks page.
 - Files: backend ticker_recap.py (build_next_preview + fact sheet + fallback), server.py (/ticker/segment + _next_segment_beats, cached), frontend src/lib/api.ts (tickerSegment + DeskSegment types), src/components/TickerDesk.tsx (new, shared), src/screens/TonightScreen.tsx (rebuilt SHOW/BROWSE/DEPTH). Reused: GameRail, GameDepth, audio lib, tts endpoint, desk artwork.
 - Game Call transcript screen NOT touched (RED recorded for later audio remediation).
+
+## Remediation Step 2 - Recap postgame show on the shared desk [DONE, awaiting approval]
+- Recap now leads with the SAME shared TickerDesk (surface="recap"): prepared/cached POSTGAME show grounded strictly on recent final scores (team names + scores only; timeless phrasing, never claims "tonight").
+- Backend: ticker_recap.build_recap_show + show fact sheet + fallback; server.py /ticker/segment surface=="recap" (Mongo-cached by latest-final id + count).
+- Frontend: RecapScreen static banner replaced with <TickerDesk surface="recap">. BROWSE (GameRail recent finals) + DEPTH (GameDepth deep: HEAR THE RECAP -> /recap/[id], OPEN GAME) preserved.
+- Verified on device: entry = 1 segment / 0 TTS; browsing finals = still 1/0 (no restart/LLM/TTS); one-panel rule preserved. Same shared endpoint/component now proven across NEXT (preview) + RECAP (postgame) + GAME (desk).
+- Game Call transcript screen still untouched (audio-presentation RED deferred).

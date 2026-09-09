@@ -217,3 +217,99 @@ async def build_next_preview(slate: dict, llm_key: str) -> list[dict]:
     except Exception as e:
         logger.exception("preview LLM failed: %s", e)
         return _preview_fallback(slate)
+
+
+# ---------------------------------------------------------------------------
+# RECAP — league-level POSTGAME SHOW segment (SHOW layer).
+# Grounded strictly on verified final results (team names + final scores).
+# ---------------------------------------------------------------------------
+
+def build_show_fact_sheet(finals: list[dict]) -> str:
+    lines: list[str] = [f"Completed NHL games: {len(finals)}."]
+    for g in finals[:8]:
+        a = g.get("away", {}) or {}
+        h = g.get("home", {}) or {}
+        asc = a.get("score")
+        hsc = h.get("score")
+        an = a.get("name") or a.get("abbr")
+        hn = h.get("name") or h.get("abbr")
+        if asc is None or hsc is None:
+            lines.append(f"  {an} at {hn} (final)")
+            continue
+        if asc > hsc:
+            lines.append(f"  {an} beat {hn} {asc}-{hsc}")
+        elif hsc > asc:
+            lines.append(f"  {hn} beat {an} {hsc}-{asc}")
+        else:
+            lines.append(f"  {an} and {hn} tied {asc}-{hsc}")
+    return "\n".join(lines)
+
+
+SHOW_PROMPT = """Write a SHORT on-air POSTGAME SHOW open for THE TICKER: Reggie and Marc
+setting up what happened across the league in the most recent action.
+
+Answer naturally (not as headings): what was the shape of the recent slate, and one or two results
+worth leading with (use team names and the real final scores from the sheet).
+
+Length: 4 to 6 total lines, alternating hosts, Reggie opens. Broadcast energy, honest.
+
+HARD RULES:
+- Use ONLY the facts in the sheet above. Do NOT invent goal scorers, records, standings,
+  storylines, momentum, injuries, or which was the "best" game beyond what the scores show.
+- Do NOT claim these happened "tonight" or on any specific day — the sheet does not say when.
+  Use timeless phrasing like "in the latest action" or "across these finals".
+- If a fact (like who scored) is not in the sheet, do not state it.
+- People/teams first. TV-paced; each line 1-2 sentences.
+
+Return STRICT JSON only:
+{"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}
+
+VERIFIED FACTS (the only truth you may use):
+---
+%s
+---"""
+
+
+def _show_fallback(finals: list[dict]) -> list[dict]:
+    n = len(finals)
+    lead = ""
+    if finals:
+        g = finals[0]
+        a = g.get("away", {}) or {}
+        h = g.get("home", {}) or {}
+        if a.get("score") is not None and h.get("score") is not None:
+            if a["score"] >= h["score"]:
+                lead = f"{a.get('abbr')} over {h.get('abbr')} {a['score']}-{h['score']}"
+            else:
+                lead = f"{h.get('abbr')} over {a.get('abbr')} {h['score']}-{a['score']}"
+    return [
+        {"host": "reggie", "text": f"{n} finals in the books — let's get to it."},
+        {"host": "marc", "text": (f"We'll start with {lead}." if lead else "Plenty of finals to run through.")},
+    ]
+
+
+async def build_recap_show(finals: list[dict], llm_key: str) -> list[dict]:
+    if not finals:
+        return []
+    facts = build_show_fact_sheet(finals)
+    if not llm_key:
+        return _show_fallback(finals)
+    chat = LlmChat(
+        api_key=llm_key,
+        session_id=f"recapshow-{len(finals)}-{(finals[0].get('id') if finals else '')}",
+        system_message=HOST_BIBLE,
+    ).with_model("anthropic", "claude-sonnet-4-6")
+    try:
+        reply = await chat.send_message(UserMessage(text=SHOW_PROMPT % facts))
+        raw = reply if isinstance(reply, str) else str(reply)
+        start, end = raw.find("{"), raw.rfind("}")
+        data = json.loads(raw[start:end + 1])
+        beats = [
+            {"host": ("reggie" if b.get("host", "").lower().startswith("reg") else "marc"),
+             "text": (b.get("text") or "").strip()}
+            for b in data.get("beats", []) if (b.get("text") or "").strip()
+        ]
+        return beats or _show_fallback(finals)
+    except Exception as e:
+        logger.exception("recap show LLM failed: %s", e)
+        return _show_fallback(finals)

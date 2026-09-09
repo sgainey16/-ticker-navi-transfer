@@ -22,7 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
-from ticker_recap import build_recap, build_next_preview
+from ticker_recap import build_recap, build_next_preview, build_recap_show
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -485,6 +485,29 @@ async def ticker_segment(surface: str, subject: str | None = None):
         except Exception:
             logger.exception("ticker_segment next failed")
             return {"surface": "next", "segment_type": "preview", "subject": "league",
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level RECAP context: prepared postgame show over recent finals.
+    if surface == "recap":
+        try:
+            finals = await nhl.recent_finals_now(limit=8)
+            key = f"recap:{(finals[0].get('id') if finals else 'none')}:{len(finals)}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_recap_show(finals, EMERGENT_LLM_KEY)
+                await db.segments.update_one(
+                    {"_id": key},
+                    {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            return {"surface": "recap", "segment_type": "recap", "subject": "league",
+                    "title": "THE TICKER RECAP", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment recap failed")
+            return {"surface": "recap", "segment_type": "recap", "subject": "league",
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     raise HTTPException(status_code=404, detail=f"No desk segment for surface '{surface}'")
