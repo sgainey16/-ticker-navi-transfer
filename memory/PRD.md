@@ -71,3 +71,14 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Full posters (with nameplates/taglines) retained at /tmp for future large-portrait slot; not wired to any screen yet.
 - Verified live: Home hero shows both hosts; Talk booth avatars read cleanly (green Reggie / blue Marc).
 - NOT changed (intentional, per user scope): coldopen/voices still show legacy "RAYO/CASEY/Mateo Reyes/Casey Whitfield" text labels; MASL body content unchanged.
+
+## Milestone 3 — HOME converted to THE TICKER (real NHL) [DONE, awaiting approval]
+- New backend endpoint GET /api/nhl/home (providers/nhl.scoreboard_now + latest_game + cached recap beats).
+  - hero: most recent completed NHL game (canonical model) + first Reggie + first Marc grounded beat.
+  - slate: current-day NHL slate simplified (live/upcoming/final groups) with real logos+records.
+  - Refactored recap into server._recap_beats() (shared by /recap and /nhl/home).
+- providers/nhl.py: added scoreboard()/scoreboard_now() + _state_group/_score_team.
+- Frontend HomeScreen.tsx fully rewritten: Ticker header, hero (TICKER logo, FINAL/LIVE badge, real team logos+score, series line, Reggie/Marc avatar takes, PLAY THE CALL -> /recap/latest), AROUND THE NHL slate grouped live/upcoming/final; final cards tap -> /recap/{id}. Empty modules hidden. Ticker blue/navy/white treatment (no MASL green on Home). No placeholders.
+- New components: src/components/NhlLogo.tsx (expo-image SVG from assets.nhle.com, abbr fallback). api.ts: NhlHome types + api.nhlHome().
+- Verified: /api/nhl/home returns SCF G6 (CAR 3 @ VGK 0) + grounded takes + 5 real preseason games; Home renders correctly on mobile.
+- Untouched by design: global green mic/Talk FAB (persistent layer, not Home), Recap/Tonight/Reels/Scores/Stats, MASL data module still backs those other screens.

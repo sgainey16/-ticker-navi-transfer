@@ -64,8 +64,26 @@ export type RecapResponse = {
 
 export type ColdOpenBeat = { id: number; host: "rayo" | "casey" | "system"; kicker: string; text: string };
 
+// ---- Real NHL (THE TICKER Home) ----
+export type NhlTeamRef = { abbr: string; name: string; logo?: string | null; score?: number | null; record?: string | null };
+export type NhlGameCard = {
+  id: string; state: string; group: "live" | "upcoming" | "final";
+  start_utc?: string | null; game_type?: number | null;
+  period?: number | null; period_type?: string | null; clock?: string | null; in_intermission?: boolean | null;
+  away: NhlTeamRef; home: NhlTeamRef;
+};
+export type NhlHomeResponse = {
+  hero: {
+    game: any;
+    context: RecapBeat[];
+  } | null;
+  slate: { date: string | null; games: NhlGameCard[] };
+  voices: { reggie: string | null; marc: string | null };
+};
+
 export const api = {
   home: () => get<any>("/home"),
+  nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
   teams: () => get<{ teams: Team[] }>("/teams"),
   team: (id: string) => get<{ team: Team; roster: Player[]; recaps: Game[] }>(`/teams/${id}`),
   player: (id: string) => get<{ player: Player; team: Team }>(`/players/${id}`),

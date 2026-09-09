@@ -415,6 +415,21 @@ async def tts(req: TtsRequest):
     return {"audio": uri}
 
 
+async def _recap_beats(game, refresh: bool = False):
+    """Grounded Reggie+Marc beats for a canonical game, cached in Mongo."""
+    doc = None if refresh else await db.recaps.find_one({"_id": game.id})
+    if doc and doc.get("beats"):
+        return doc["beats"]
+    beats = await build_recap(game, EMERGENT_LLM_KEY)
+    await db.recaps.update_one(
+        {"_id": game.id},
+        {"$set": {"beats": beats,
+                  "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return beats
+
+
 @api_router.get("/recap/{game_id}")
 async def get_recap(game_id: str, refresh: bool = False):
     """Real NHL game -> Reggie + Marc recap (text). Milestone-1 proof.
@@ -428,20 +443,43 @@ async def get_recap(game_id: str, refresh: bool = False):
         logger.exception("NHL fetch failed")
         raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
 
-    doc = None if refresh else await db.recaps.find_one({"_id": game.id})
-    if doc and doc.get("beats"):
-        beats = doc["beats"]
-    else:
-        beats = await build_recap(game, EMERGENT_LLM_KEY)
-        await db.recaps.update_one(
-            {"_id": game.id},
-            {"$set": {"beats": beats,
-                      "created_at": datetime.now(timezone.utc).isoformat()}},
-            upsert=True,
-        )
+    beats = await _recap_beats(game, refresh=refresh)
     return {
         "game": game.model_dump(),
         "beats": beats,
+        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+    }
+
+
+@api_router.get("/nhl/home")
+async def nhl_home():
+    """THE TICKER Home feed — real NHL data only.
+
+    hero  : the most recent completed game + a short grounded Reggie/Marc take.
+    slate : the current-day NHL slate (live / upcoming / final), simplified.
+    Any module with no real data is returned empty so the client can hide it.
+    """
+    hero = None
+    try:
+        game = await nhl.latest_game()
+        beats = await _recap_beats(game)
+        reggie = next((b for b in beats if b.get("host") == "reggie"), None)
+        marc = next((b for b in beats if b.get("host") == "marc"), None)
+        hero = {"game": game.model_dump(),
+                "context": [b for b in (reggie, marc) if b]}
+    except Exception:
+        logger.exception("nhl_home hero failed")
+        hero = None
+
+    try:
+        slate = await nhl.scoreboard_now()
+    except Exception:
+        logger.exception("nhl_home slate failed")
+        slate = {"date": None, "games": []}
+
+    return {
+        "hero": hero,
+        "slate": slate,
         "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
     }
 

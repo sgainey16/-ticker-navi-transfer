@@ -198,3 +198,54 @@ async def game_by_id(game_id: str) -> Game:
         return await latest_game()
     async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
         return await fetch_game(client, game_id)
+
+
+# ---------------------------------------------------------------------------
+# Scoreboard (today's slate) — used by the Home screen.
+# ---------------------------------------------------------------------------
+
+def _state_group(state: str) -> str:
+    if state in ("LIVE", "CRIT"):
+        return "live"
+    if state in FINAL_STATES:
+        return "final"
+    return "upcoming"
+
+
+def _score_team(t: dict) -> dict:
+    return {
+        "abbr": _n(t.get("abbrev")),
+        "name": _n(t.get("name")),
+        "logo": t.get("logo"),
+        "score": t.get("score"),
+        "record": t.get("record"),
+    }
+
+
+async def scoreboard(client: httpx.AsyncClient) -> dict:
+    """Return the current-day NHL slate simplified for the Home screen."""
+    now = await _get(client, "score/now")
+    games = []
+    for g in now.get("games", []):
+        pd = g.get("periodDescriptor") or {}
+        clock = g.get("clock") or {}
+        state = g.get("gameState", "")
+        games.append({
+            "id": str(g.get("id")),
+            "state": state,
+            "group": _state_group(state),
+            "start_utc": g.get("startTimeUTC"),
+            "game_type": g.get("gameType"),
+            "period": pd.get("number"),
+            "period_type": pd.get("periodType"),
+            "clock": clock.get("timeRemaining"),
+            "in_intermission": clock.get("inIntermission"),
+            "away": _score_team(g.get("awayTeam", {})),
+            "home": _score_team(g.get("homeTeam", {})),
+        })
+    return {"date": now.get("currentDate"), "games": games}
+
+
+async def scoreboard_now() -> dict:
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+        return await scoreboard(client)
