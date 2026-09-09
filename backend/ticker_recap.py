@@ -69,6 +69,13 @@ The recap must answer, woven naturally (not as headings):
 
 Length: 6 to 8 total lines, alternating hosts, Reggie opens. People first, numbers support.
 
+HARD RULES:
+- People first, numbers support. Use names.
+- GROUNDING: use ONLY the facts in the sheet above. Do NOT add ages, biographies, injury/trade
+  history, career milestones, hometowns, standings or any context that is not explicitly present.
+  If a detail is not in the sheet, omit it. Never guess a number.
+- Keep it TV-paced; each line 1-2 sentences.
+
 Return STRICT JSON only, no prose around it:
 {"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}
 

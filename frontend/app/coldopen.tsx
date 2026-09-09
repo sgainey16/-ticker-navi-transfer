@@ -40,7 +40,7 @@ export default function ColdOpen() {
       try {
         server = await api.voicesSelected();
       } catch {}
-      setVoices({ rayo: r || server.rayo || undefined, casey: c || server.casey || undefined });
+      setVoices({ rayo: server.rayo || r || undefined, casey: server.casey || c || undefined });
     })();
     return () => stopAudio();
   }, []);

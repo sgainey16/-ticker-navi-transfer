@@ -20,10 +20,10 @@ const SESSION_KEY = "masl_talk_session";
 type Msg = { id: number; role: "user" | "rayo" | "casey"; text: string };
 
 const SUGGESTIONS = [
-  "How did Milwaukee beat Utica 17-2?",
-  "Is Rian Marques the MVP?",
-  "Explain a power play in arena soccer",
-  "What's a three-line violation?",
+  "How did Carolina win the Cup?",
+  "Was Bussi's shutout the difference?",
+  "Explain a power play in hockey",
+  "Who's the best goalie right now?",
 ];
 
 export default function Talk() {
@@ -48,7 +48,7 @@ export default function Talk() {
       try {
         server = await api.voicesSelected();
       } catch {}
-      setVoices({ rayo: r || server.rayo || undefined, casey: c || server.casey || undefined });
+      setVoices({ rayo: server.rayo || r || undefined, casey: server.casey || c || undefined });
     })();
     return () => stopAudio();
   }, []);
@@ -119,7 +119,7 @@ export default function Talk() {
         }
       }
     } catch {
-      setMessages((m) => [...m, { id: nextId(), role: "rayo", text: "Booth's audio dropped for a second — hit me with that again, ¿sí?" }]);
+      setMessages((m) => [...m, { id: nextId(), role: "rayo", text: "Booth audio dropped for a second — hit me with that again." }]);
     } finally {
       setSending(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
@@ -134,7 +134,7 @@ export default function Talk() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>THE BOOTH</Text>
-          <Text style={styles.headerSub}>Rayo & Casey · live</Text>
+          <Text style={styles.headerSub}>Reggie & Marc · live</Text>
         </View>
         <Pressable
           testID="talk-audio-toggle"
@@ -162,7 +162,7 @@ export default function Talk() {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Ask the booth about the MASL…"
+            placeholder="Ask the booth about the hockey…"
             placeholderTextColor={colors.textFaint}
             multiline
           />
@@ -184,7 +184,7 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
       </View>
       <Text style={styles.welcomeTitle}>WELCOME TO THE BOOTH</Text>
       <Text style={styles.welcomeText}>
-        <Text style={{ color: colors.green }}>Rayo</Text> brings the passion, <Text style={{ color: colors.blue }}>Casey</Text> brings the numbers. Ask them anything about arena soccer and the 2025-26 MASL season.
+        <Text style={{ color: colors.green }}>Reggie</Text> brings the passion, <Text style={{ color: colors.blue }}>Marc</Text> brings the numbers. Ask them anything about the hockey you care about.
       </Text>
       <View style={styles.chips}>
         {SUGGESTIONS.map((s) => (
@@ -212,7 +212,7 @@ function Bubble({ msg, onPlay, playing }: { msg: Msg; onPlay: (m: Msg) => void; 
       <Image source={isRayo ? RAYO : CASEY} style={[styles.avatar, { borderColor: s.accent }]} contentFit="cover" />
       <View style={{ flex: 1 }}>
         <View style={styles.hostHead}>
-          <Text style={[styles.hostName, { color: s.accent }]}>{isRayo ? "RAYO" : "CASEY"}</Text>
+          <Text style={[styles.hostName, { color: s.accent }]}>{s.name}</Text>
           <Text style={styles.hostRole}>{s.label}</Text>
           <Pressable testID={`play-${msg.id}`} onPress={() => onPlay(msg)} hitSlop={8} style={[styles.playChip, { borderColor: s.accent }]}>
             <Ionicons name={playing ? "pause" : "volume-medium"} size={13} color={s.accent} />

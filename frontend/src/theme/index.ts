@@ -63,6 +63,6 @@ export const fontSize = {
 
 // Per-host styling used across Cold Open + Talk.
 export const hostStyle = {
-  rayo: { accent: colors.green, soft: colors.greenSoft, label: "PLAY-BY-PLAY", handle: "@RayoOnTheCall" },
-  casey: { accent: colors.blue, soft: colors.blueSoft, label: "ANALYST", handle: "@CaseyWhitefield_" },
+  rayo: { accent: colors.green, soft: colors.greenSoft, name: "REGGIE BANKS", label: "THE INSTIGATOR", handle: "@ReggieBanks" },
+  casey: { accent: colors.blue, soft: colors.blueSoft, name: "MARC COLLINS", label: "THE GUARDIAN", handle: "@MarcCollins" },
 } as const;

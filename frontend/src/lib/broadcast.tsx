@@ -42,7 +42,7 @@ export function BroadcastProvider({ children }: { children: React.ReactNode }) {
       try {
         server = await api.voicesSelected();
       } catch {}
-      const resolved = { rayo: r || server.rayo || undefined, casey: c || server.casey || undefined };
+      const resolved = { rayo: server.rayo || r || undefined, casey: server.casey || c || undefined };
       voicesRef.current = resolved;
       setVoices(resolved);
     })();
