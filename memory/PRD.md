@@ -206,3 +206,10 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Frontend: sections "Around Your Hockey" (followed) + "Around the NHL"; player card->/player, final/upcoming->/game. Empty/new user -> honest league feed + "Build your Draft Board" card.
 - Verified on device: tab renamed; personalized feed (Leafs/Bruins upcoming under Around Your Hockey; league finals with headlines like "Hurricanes shut out Golden Knights, 3-0"); card tap routes to canonical Game page; no MASL; no fake video. McDavid player line correctly omitted (no recent game -> no fabrication).
 - Scope held: Stats, Game Call, leagues, Highlightly untouched. Home/Recap/Next/Scores/Team/Player intact.
+
+## Remediation - STATS -> Ticker consumer Stats [DONE, awaiting approval]
+- StatsScreen fully rebuilt; MASL removed (StarSpotlight, api.leaders/teams/availability, green, availability report all gone). People-first, no analytics/betting/charts/sortable tables/AI conclusions, no Reggie/Marc desk.
+- Sections: (1) WHERE MY TEAMS SIT - followed teams' verified standing (rank in conference, record, points; tap->Team); (2) LEAGUE LEADERS - chips Points/Goals/Assists/Wins/GAA/SV%, real NHL leaders with headshots (tap->Player), followed players/teams highlighted; (3) STANDINGS - both conferences, followed highlighted (tap->Team).
+- Backend: providers/nhl.leaders_now() via NHL skater-stats-leaders/current + goalie-stats-leaders/current (follow_redirects); GET /api/nhl/leaders. Verified only; unavailable -> omitted, never manufactured.
+- Verified on device: My teams (BOS 5th East 100pts, EDM 5th West 93pts); leaders McDavid 138 / Kucherov 130 / MacKinnon 127...; SV% chip -> Wedgewood .921; standings both confs; leader/team taps route to Player/Team pages. No MASL, no fabricated data.
+- LAST product-surface change before Friends & Family freeze. Scope held: Home/My Hockey/Recap/Next/Scores/Game/Team/Player/leagues/integrations untouched.

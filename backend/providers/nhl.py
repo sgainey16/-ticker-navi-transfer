@@ -551,3 +551,50 @@ async def player_page(pid: str) -> dict:
         last5.append(row)
 
     return {"player": player, "skater": skater, "goalie": goalie, "last5": last5, "next": nxt}
+
+
+# ---------------------------------------------------------------------------
+# LEAGUE LEADERS — verified NHL skater/goalie stat leaders (consumer Stats).
+# ---------------------------------------------------------------------------
+
+def _abbr(v):
+    if isinstance(v, dict):
+        return v.get("default") or ""
+    return v or ""
+
+
+def _leader_row(x: dict) -> dict:
+    return {
+        "id": str(x.get("id")),
+        "name": f"{_n(x.get('firstName'))} {_n(x.get('lastName'))}".strip(),
+        "team_abbr": _abbr(x.get("teamAbbrev")),
+        "pos": x.get("position"),
+        "value": x.get("value"),
+        "headshot": x.get("headshot"),
+    }
+
+
+async def leaders_now(limit: int = 8) -> dict:
+    out = {"skaters": {}, "goalies": {}}
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}, follow_redirects=True, timeout=25) as client:
+        for cat in ("points", "goals", "assists"):
+            try:
+                r = await client.get(f"{BASE}/skater-stats-leaders/current", params={"categories": cat, "limit": limit})
+                out["skaters"][cat] = [_leader_row(x) for x in (r.json().get(cat) or [])]
+            except Exception:
+                out["skaters"][cat] = []
+        gmap = {"wins": "wins", "gaa": "goalsAgainstAverage", "svpct": "savePctg"}
+        for key, cat in gmap.items():
+            try:
+                r = await client.get(f"{BASE}/goalie-stats-leaders/current", params={"categories": cat, "limit": limit})
+                rows = []
+                for x in (r.json().get(cat) or []):
+                    row = _leader_row(x)
+                    v = row.get("value")
+                    if isinstance(v, (int, float)):
+                        row["value"] = round(v, 2) if key != "wins" else int(v)
+                    rows.append(row)
+                out["goalies"][key] = rows
+            except Exception:
+                out["goalies"][key] = []
+    return out

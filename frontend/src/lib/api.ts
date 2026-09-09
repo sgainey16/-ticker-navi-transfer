@@ -115,11 +115,15 @@ export type MyHockeyItem = {
   video?: null;
 };
 
+export type NhlLeader = { id: string; name: string; team_abbr: string; pos?: string; value: number; headshot?: string | null };
+export type NhlLeaders = { skaters: Record<string, NhlLeader[]>; goalies: Record<string, NhlLeader[]> };
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
   nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
   nhlStandings: () => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>("/nhl/standings"),
+  nhlLeaders: () => get<NhlLeaders>("/nhl/leaders"),
   nhlRecaps: () => get<{ games: NhlFinalCard[] }>("/nhl/recaps"),
   nhlGame: (id: string) => get<{ game: any }>(`/nhl/game/${id}`),
   nhlTeam: (tri: string) => get<any>(`/nhl/team/${tri}`),
