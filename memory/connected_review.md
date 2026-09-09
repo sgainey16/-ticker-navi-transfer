@@ -118,3 +118,40 @@ REVIEW-ONLY. Do not start fixing items individually. No features, leagues, Highl
 
 ### NEXT STEP (change of gears)
 Stop hunting individual defects. Define what each surface is supposed to **feel like** — especially what Reggie & Marc are doing on each: Home, Recap, Next, Scores, Reels/Highlights, Stats, Game, Team, Player. Lock that first; then Emergent works down the screens without redesigning mid-build.
+
+---
+
+# THE TICKER — EXPERIENCE SPEC (LOCKED, review direction only)
+Each page has a distinct job; Reggie & Marc make all of them feel like ONE continuous sports desk.
+
+| Surface | Its job | Reggie + Marc's job |
+|---|---|---|
+| **Home / My Ticker** | What's happening in MY hockey world? Personalized command center: followed teams, players, important games/moments, what's next. | Run my personal sports desk. Prioritize what matters to me. |
+| **Recap** | What happened? Postgame show first, then horizontal browsing and game depth. | Open with a ready-to-play recap show, hit the night's stories, then transition naturally into selected games. |
+| **Next** | What's coming? Upcoming games and stories — not merely tonight. | Preview the hockey ahead. Even on an off-day, there's something useful to talk about. |
+| **Scores** | What's happening / what were the results? Fastest factual surface. | Stay present but lighter. React to meaningful results, surprises and slate context without slowing score checking. |
+| **Highlights / Reels** | Show me the hockey. Eventually personalized by team/player/game and provider capability. | Introduce/contextualize packages and moments. Never manufacture video where rights/data don't support it. |
+| **Stats** | Help me understand the numbers. Useful hockey intelligence, not spreadsheet dumping. | Translate numbers into hockey meaning. People first, numbers second. |
+| **Game** | Tell me everything important about this game. | Become the game desk: what happened, why, key people/moments, with deeper recap available. |
+| **Team** | Tell me about this team right now. | Team desk: form, people driving it, story, recent/next. |
+| **Player** | Tell me about this player right now. | Player desk: performance, recent story, team context; eventually individual highlight packages where supported. |
+
+## UNIFYING BEHAVIOR — SHOW → BROWSE → DEPTH → TALK
+- **SHOW:** Reggie and Marc establish context.
+- **BROWSE:** move horizontally through the hockey without constantly navigating away or restarting them.
+- **DEPTH:** deliberately go deeper into a game/team/player/stat/highlight.
+- **TALK:** actively engage Reggie and Marc for anything beyond the prebuilt experience.
+
+## LOCKED PRINCIPLE — FUNCTIONAL SIMPLICITY ≠ ENTERTAINMENT SIMPLICITY
+Underneath, The Ticker can be a very conventional sports app. On top, it should feel like a **living sports network.** Keep Scores fast, Team useful, Player clean, Game factual — WITHOUT removing the desk, personality, horizontal movement, and sense of programming that make them Ticker surfaces.
+
+## PRELIMINARY REMEDIATION ORDER (to be finalized before any build)
+1. Global sports-desk / show behavior
+2. Recap
+3. Home
+4. Next
+5. Remove/convert MARSL surfaces (Reels/Highlights, Stats)
+6. Audio presentation
+7. Scores / Game / Team / Player refinement
+
+Rationale: restore the connective show behavior FIRST; do not polish individual pages before the thing that connects them all is back.
