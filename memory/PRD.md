@@ -109,3 +109,12 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - REAL video we already have (NHL landing feed, per goal): highlightClip (NHL video id), highlightClipSharingUrl (nhl.com/video/...), discreteClip; metadata: playerId, eventId, teamAbbrev, period, timeInPeriod, strength (ev/pp/sh), goalModifier (EN etc), shotType, assists, headshot, gameId.
 - This metadata CAN support building: all-goals-by-player, power-play moments, player moments in a game, player/selected-game highlight rails, eventual personalized packages. CAVEAT: clip URLs are nhl.com/video pages (official player), not raw embeddable streams -> inline in-app playback is UNPROVEN and must be validated; deep-linking is safe.
 - To use Highlightly specifically we need the user's Highlightly API credentials + plan/endpoints.
+
+## Milestone 6b — Highlightly recovery/audit [READ-ONLY, COMPLETE]
+- Checkpoint of approved experience layer: tag ticker-experience-layer @ c1dc2c9.
+- Exhaustive read-only search: the earlier Ticker Highlightly integration is NOT recoverable in this environment.
+  - Not in working tree, ALL git history (root a0a3617 masl-clean-baseline -> HEAD), any branch/tag, MARSL-clean-source-export.zip, /app/memory (no handoff kit html present), frontend/package.json, backend/requirements.txt, or any .env (no highlightly/rapidapi/api-sports keys).
+  - Only "highlights" here = MASL demo: app/highlights/[id].tsx -> api.game(id) (masl_data) -> curated YouTube videoId -> YTPlayer. Not a real highlight API.
+- Reason: this fork was built from the MARSL clean baseline which per user directive intentionally did NOT merge Ticker 1 architecture. The old Highlightly code lives in the separate earlier Ticker codebase, which is not in this container.
+- To perform the real Highlightly audit the user wants, need the earlier Ticker source (zip or GitHub repo) added to the environment.
+- Proven in-hand video source remains NHL official per-goal clip metadata (see Milestone 6 audit).
