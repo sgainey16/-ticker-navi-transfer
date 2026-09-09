@@ -519,6 +519,16 @@ async def nhl_game(game_id: str):
     return {"game": game.model_dump()}
 
 
+@api_router.get("/nhl/player/{pid}")
+async def nhl_player(pid: str):
+    """Verified NHL player snapshot for the Player Page."""
+    try:
+        return await nhl.player_page(pid)
+    except Exception as e:
+        logger.exception("nhl_player failed")
+        raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
+
+
 @api_router.get("/nhl/team/{tri}")
 async def nhl_team(tri: str):
     """Verified NHL team snapshot for the Team Page."""

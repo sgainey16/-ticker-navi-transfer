@@ -183,14 +183,14 @@ export default function GameDetail() {
                 <Text style={styles.kpHNum}>SOG</Text>
               </View>
               {g.top_skaters.map((s: any, i: number) => (
-                <View key={i} style={styles.kpRow}>
+                <Pressable key={i} style={styles.kpRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}`)}>
                   <NhlLogo abbr={s.team_abbr} url={teamByAbbr(s.team_abbr)?.logo} size={20} />
                   <Text style={styles.kpName} numberOfLines={1}>{s.name}</Text>
                   <Text style={styles.kpNum}>{s.goals}</Text>
                   <Text style={styles.kpNum}>{s.assists}</Text>
                   <Text style={styles.kpNumBold}>{s.points}</Text>
                   <Text style={styles.kpNum}>{s.sog ?? "–"}</Text>
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>

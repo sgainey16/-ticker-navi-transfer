@@ -86,7 +86,7 @@ export default function TeamPage() {
             <SectionTitle title="Leading the Way" accent={colors.blue} />
             <View style={styles.card}>
               {scorers.map((s: any, i: number) => (
-                <View key={s.player_id ?? i} style={styles.pRow}>
+                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}`)}>
                   <Text style={styles.pRank}>{i + 1}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pName}>{s.name}</Text>
@@ -94,7 +94,7 @@ export default function TeamPage() {
                   </View>
                   <Text style={styles.pPts}>{s.points}</Text>
                   <Text style={styles.pSub}>{s.goals}G {s.assists}A</Text>
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -105,14 +105,14 @@ export default function TeamPage() {
           <View style={styles.section}>
             <SectionTitle title="In Goal" accent={colors.blue} />
             <View style={styles.card}>
-              <View style={styles.pRow}>
+              <Pressable style={styles.pRow} onPress={() => goalie.player_id && router.push(`/player/${goalie.player_id}`)}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.pName}>{goalie.name}</Text>
                   <Text style={styles.pMeta}>{goalie.record}{goalie.so ? ` · ${goalie.so} SO` : ""}</Text>
                 </View>
                 <Text style={styles.pPts}>{goalie.svpct ?? "–"}</Text>
                 <Text style={styles.pSub}>{goalie.gaa ?? "–"} GAA</Text>
-              </View>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -151,10 +151,10 @@ export default function TeamPage() {
                   <Text style={styles.rosterLabel}>{grp.toUpperCase()}</Text>
                   <View style={styles.rosterWrap}>
                     {roster[grp].map((p: any) => (
-                      <View key={p.player_id} style={styles.chip}>
+                      <Pressable key={p.player_id} style={styles.chip} onPress={() => p.player_id && router.push(`/player/${p.player_id}`)}>
                         <Text style={styles.chipNum}>{p.number ?? "–"}</Text>
                         <Text style={styles.chipName} numberOfLines={1}>{p.name}</Text>
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                 </View>

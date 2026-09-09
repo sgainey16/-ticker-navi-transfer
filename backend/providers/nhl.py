@@ -466,3 +466,85 @@ async def team_page(tri: str) -> dict:
         "recent": recent, "next": nxt,
         "roster": {"forwards": _people("forwards"), "defensemen": _people("defensemen"), "goalies": _people("goalies")},
     }
+
+
+# ---------------------------------------------------------------------------
+# Player Page — verified player snapshot.
+# ---------------------------------------------------------------------------
+
+def _height(inches):
+    if not inches:
+        return None
+    return f"{inches // 12}'{inches % 12}\""
+
+
+async def player_page(pid: str) -> dict:
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+        p = await _get(client, f"player/{pid}/landing")
+        team_abbr = _n(p.get("currentTeamAbbrev"))
+        nxt = None
+        if team_abbr:
+            try:
+                sched = await _get(client, f"club-schedule-season/{team_abbr}/now")
+                upcoming = [g for g in sched.get("games", [])
+                            if g.get("gameState") not in FINAL_STATES
+                            and g.get("gameState") not in ("LIVE", "CRIT")]
+                if upcoming:
+                    nxt = _sched_card(upcoming[0])
+            except Exception:
+                nxt = None
+
+    is_goalie = p.get("position") == "G"
+    fs = (p.get("featuredStats", {}).get("regularSeason", {}) or {}).get("subSeason", {}) or {}
+
+    player = {
+        "id": str(p.get("playerId")),
+        "name": f"{_n(p.get('firstName'))} {_n(p.get('lastName'))}".strip(),
+        "pos": p.get("position"),
+        "is_goalie": is_goalie,
+        "number": p.get("sweaterNumber"),
+        "team_abbr": team_abbr,
+        "team_id": p.get("currentTeamId"),
+        "team_name": _n(p.get("fullTeamName")),
+        "team_logo": p.get("teamLogo"),
+        "headshot": p.get("headshot"),
+        "height": _height(p.get("heightInInches")),
+        "weight": p.get("weightInPounds"),
+        "birth_date": p.get("birthDate"),
+        "birth_city": _n(p.get("birthCity")),
+        "birth_country": p.get("birthCountry"),
+        "shoots": p.get("shootsCatches"),
+    }
+
+    skater = None
+    goalie = None
+    if is_goalie:
+        goalie = {
+            "gp": fs.get("gamesPlayed"), "wins": fs.get("wins"), "losses": fs.get("losses"),
+            "ot": fs.get("otLosses"),
+            "gaa": round(fs["goalsAgainstAvg"], 2) if fs.get("goalsAgainstAvg") is not None else None,
+            "svpct": round(fs["savePctg"], 3) if fs.get("savePctg") is not None else None,
+            "shutouts": fs.get("shutouts"),
+        }
+    else:
+        skater = {
+            "gp": fs.get("gamesPlayed"), "goals": fs.get("goals"), "assists": fs.get("assists"),
+            "points": fs.get("points"), "plus_minus": fs.get("plusMinus"), "pim": fs.get("pim"),
+            "shots": fs.get("shots"),
+            "shooting_pct": round(fs["shootingPctg"] * 100, 1) if fs.get("shootingPctg") is not None else None,
+            "pp_goals": fs.get("powerPlayGoals"), "pp_points": fs.get("powerPlayPoints"),
+        }
+
+    last5 = []
+    for g in p.get("last5Games", []):
+        row = {"game_id": str(g.get("gameId")), "date": g.get("gameDate"),
+               "opp": _n(g.get("opponentAbbrev")), "home_road": g.get("homeRoadFlag"), "toi": g.get("toi")}
+        if is_goalie:
+            row.update({"decision": g.get("decision"), "shots_against": g.get("shotsAgainst"),
+                        "goals_against": g.get("goalsAgainst"),
+                        "svpct": round(g["savePctg"], 3) if g.get("savePctg") is not None else None})
+        else:
+            row.update({"goals": g.get("goals"), "assists": g.get("assists"), "points": g.get("points")})
+        last5.append(row)
+
+    return {"player": player, "skater": skater, "goalie": goalie, "last5": last5, "next": nxt}

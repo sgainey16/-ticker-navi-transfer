@@ -138,3 +138,16 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Frontend app/team/[id].tsx rewritten (people-first, compact); BackBar export preserved. Reserved TEAM HIGHLIGHTS slot (comment, renders nothing). One compact TICKER READ line from verified data (no second host panel). Player rows/roster keep player_id for future Player Page.
 - Entry points wired (minimal): Scores standings rows -> /team/{abbr}; Game Page team columns -> /team/{abbr}. Game links on Team -> /game/{id}.
 - api.nhlTeam added. No architecture changes to Home/Recap/Next/Scores/Game beyond routing taps.
+
+## Milestone 9 - Real NHL Player Page [DONE, awaiting approval]
+- New endpoint GET /api/nhl/player/{id}; provider nhl.player_page() uses NHL player/{id}/landing (featuredStats.regularSeason.subSeason, last5Games, bio, headshot) + club-schedule-season/{teamAbbr}/now for next game. Added _height helper.
+- Skater stats: GP/G/A/PTS/+-/PIM/Shots/Shooting%/PPG/PPP. Goalie stats: GP/W-L-OT/GAA/SV%/SO. last5 per-game (skater G-A-P; goalie decision/SA/GA/SV%). Unsupported fields hidden; nothing fabricated.
+- Frontend app/player/[id].tsx: human-first identity (headshot/name/#/pos/team/bio/age) + one-line verified TICKER read + season grid + next game + last 5. Reserved PLAYER HIGHLIGHTS slot (comment, renders nothing).
+- Routing added: Team scorers/goalie/roster -> /player/{id}; Game key players -> /player/{id}; Player team badge -> /team/{abbr}; Player next game + last5 -> /game/{id}. Real player_id/team_id/game_id relationships preserved.
+- api.nhlPlayer added. No architecture changes to Home/Recap/Next/Scores/Game/Team beyond player-routing taps.
+
+## Ticker-wide architecture rule - CAPABILITY-DRIVEN ENRICHMENT
+- Highlights (and other rich modules) are capability-driven, NOT required. Core pages must work fully without them.
+- When a provider supplies verified linked video/data, the module dynamically appears. When unavailable, it disappears entirely: no empty space, no "Coming Soon", no unavailable message, no fake content.
+- Same page structure across leagues; provider capability determines richness. More data/video = richer; less = clean core.
+- Player Page implements this via `hasHighlights` gate on provider `highlights` (absent today -> nothing renders). Identifiers (player_id/team_id/game_id) preserved to add later.

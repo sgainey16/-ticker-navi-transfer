@@ -100,6 +100,7 @@ export const api = {
   nhlRecaps: () => get<{ games: NhlFinalCard[] }>("/nhl/recaps"),
   nhlGame: (id: string) => get<{ game: any }>(`/nhl/game/${id}`),
   nhlTeam: (tri: string) => get<any>(`/nhl/team/${tri}`),
+  nhlPlayer: (pid: string) => get<any>(`/nhl/player/${pid}`),
   teams: () => get<{ teams: Team[] }>("/teams"),
   team: (id: string) => get<{ team: Team; roster: Player[]; recaps: Game[] }>(`/teams/${id}`),
   player: (id: string) => get<{ player: Player; team: Team }>(`/players/${id}`),
