@@ -140,7 +140,7 @@ export default function GameDetail() {
                         <NhlLogo abbr={t.abbr} url={t.logo} size={22} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.playMain}>
-                            {s.scorer}{tag ? <Text style={styles.tag}>  {tag}</Text> : null}
+                            <Text onPress={s.scorer_id ? () => router.push(`/player/${s.scorer_id}`) : undefined}>{s.scorer}</Text>{tag ? <Text style={styles.tag}>  {tag}</Text> : null}
                           </Text>
                           {s.assists?.length ? <Text style={styles.playSub}>Assists: {s.assists.join(", ")}</Text> : <Text style={styles.playSub}>Unassisted</Text>}
                         </View>
@@ -159,12 +159,12 @@ export default function GameDetail() {
             <SectionTitle title="Three Stars" accent={colors.blue} />
             <View style={styles.card}>
               {g.three_stars.map((s: any) => (
-                <View key={s.star} style={styles.starRow}>
+                <Pressable key={s.star} style={styles.starRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}`)}>
                   <Text style={styles.starNum}>{s.star}</Text>
                   <NhlLogo abbr={s.team_abbr} url={teamByAbbr(s.team_abbr)?.logo} size={22} />
                   <Text style={styles.starName}>{s.name}</Text>
                   {s.note ? <Text style={styles.starNote}>{s.note}</Text> : null}
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -202,11 +202,11 @@ export default function GameDetail() {
             <SectionTitle title="Goaltending" accent={colors.blue} />
             <View style={styles.card}>
               {g.goalies.map((gl: any, i: number) => (
-                <View key={i} style={styles.kpRow}>
+                <Pressable key={i} style={styles.kpRow} onPress={() => gl.player_id && router.push(`/player/${gl.player_id}`)}>
                   <NhlLogo abbr={gl.team_abbr} url={teamByAbbr(gl.team_abbr)?.logo} size={20} />
                   <Text style={styles.kpName} numberOfLines={1}>{gl.name}{gl.decision ? ` (${gl.decision})` : ""}{gl.shutout ? " · SO" : ""}</Text>
                   <Text style={styles.goalieStat}>{gl.saves}/{gl.shots_against} SV</Text>
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>

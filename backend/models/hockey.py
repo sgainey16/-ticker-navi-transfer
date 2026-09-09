@@ -23,6 +23,7 @@ class ScoringPlay(BaseModel):
     time: str
     team_abbr: str
     scorer: str
+    scorer_id: Optional[int] = None
     assists: List[str] = []
     strength: str = "ev"  # ev | pp | sh | en
     empty_net: bool = False
@@ -30,6 +31,7 @@ class ScoringPlay(BaseModel):
 
 class GoalieLine(BaseModel):
     name: str
+    player_id: Optional[int] = None
     team_abbr: str
     shots_against: int = 0
     saves: int = 0
@@ -42,6 +44,7 @@ class GoalieLine(BaseModel):
 class StarLine(BaseModel):
     star: int
     name: str
+    player_id: Optional[int] = None
     team_abbr: str
     note: Optional[str] = None
 

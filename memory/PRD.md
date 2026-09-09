@@ -151,3 +151,7 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - When a provider supplies verified linked video/data, the module dynamically appears. When unavailable, it disappears entirely: no empty space, no "Coming Soon", no unavailable message, no fake content.
 - Same page structure across leagues; provider capability determines richness. More data/video = richer; less = clean core.
 - Player Page implements this via `hasHighlights` gate on provider `highlights` (absent today -> nothing renders). Identifiers (player_id/team_id/game_id) preserved to add later.
+
+## Player routing completion (acceptance)
+- Added scorer_id (ScoringPlay), player_id (StarLine, GoalieLine) to canonical game model; provider populates from NHL landing/boxscore playerId.
+- Game Page now routes to /player/{id} from: Scoring Summary scorer, Three Stars, Goaltending, Key Players. Team routes from leading scorers, goalie, roster. Verified live for skater (Necas) + goalie (Blackwood/Hellebuyck).

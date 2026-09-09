@@ -124,6 +124,7 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
                 period=pnum, period_type=ptype, time=_n(goal.get("timeInPeriod")),
                 team_abbr=_n(goal.get("teamAbbrev")),
                 scorer=name,
+                scorer_id=goal.get("playerId"),
                 assists=[_n(a.get("name")) for a in goal.get("assists", [])],
                 strength=("pp" if "power" in str(strength) else "sh" if "short" in str(strength) else ("en" if en else "ev")),
                 empty_net=en,
@@ -154,6 +155,7 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
         if s.get("savePctg") not in (None, ""):
             bits.append(f"{s.get('savePctg')} SV%")
         stars.append(StarLine(star=s.get("star", 0), name=_n(s.get("name")),
+                              player_id=s.get("playerId"),
                               team_abbr=_n(s.get("teamAbbrev")), note=" ".join(bits) or None))
 
     goalies: list[GoalieLine] = []
@@ -167,6 +169,7 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
             ga = g.get("goalsAgainst") or 0
             goalies.append(GoalieLine(
                 name=_n(g.get("name")), team_abbr=abbr,
+                player_id=g.get("playerId"),
                 shots_against=sa, saves=g.get("saves") or 0, goals_against=ga,
                 toi=toi, decision=g.get("decision"), shutout=(ga == 0 and sa > 0),
             ))
