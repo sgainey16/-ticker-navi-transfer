@@ -217,3 +217,17 @@ New order: Onboarding -> Follow hierarchy (Stars) -> Home rebuilt from real foll
 - **New shared piece:** a small `src/lib/follows` store (context + hook) that both onboarding (write) and Home (read) use — created as part of the onboarding build, not before.
 
 STOP: awaiting approval before building onboarding. Home + Team/Player follow controls remain deferred.
+
+---
+
+# APPROVED & LOCKED — HOME / MY TICKER (do not rebuild before Friends & Family)
+Chain locked: Onboarding -> My Draft Board -> My Ticker -> Reggie & Marc programming the user's hockey world. 1st/2nd/3rd ROUND is the priority language (clearer than Stars; implies ranking, not exclusivity). Key win preserved: browsing adds NO extra desk/LLM/TTS calls (personalization without a generation loop). Do not touch this architecture before F&F unless testing exposes a real problem. Checkpoint: tag `ticker-myticker-home`.
+
+# NEXT REMEDIATION PASS — CONVERT (not delete) MARSL SURFACES
+Principle: convert MARSL-looking surfaces into Ticker surfaces; do not just delete them.
+Order:
+1. **Highlights / Reels -> "My Hockey" moments.** Prioritize Draft Board players/teams, then followed hockey, then broader league. Must feel like things happening to people I follow, NOT a generic TikTok sports feed.
+2. **Stats -> simplified consumer surface.** Basic hockey info stays; deep statistical analysis is deferred to Betting IQ later. People first, data second.
+Then:
+3. **Friends & Family launch freeze:** onboarding, Home, routing, access code/invite, playback, mobile layout. BUG FIXES ONLY. No new concepts.
+4. After freeze: watch real users through the whole flow — especially Draft Board ranking, PLAY, and whether they immediately grasp why Home is different for them.
