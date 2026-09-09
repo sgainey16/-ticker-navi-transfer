@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
 import { colors } from "@/src/theme";
 import { setTabHandler } from "@/src/lib/tabnav";
 import { BroadcastProvider, useBroadcast } from "@/src/lib/broadcast";
+import { useFollows } from "@/src/lib/follows";
 import { TopTabBar } from "@/src/components/TopTabBar";
 import HomeScreen from "@/src/screens/HomeScreen";
 import RecapScreen from "@/src/screens/RecapScreen";
@@ -26,6 +27,9 @@ const TABS = [
 ];
 
 export default function TickerApp() {
+  const { ready, onboarded } = useFollows();
+  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (!onboarded) return <Redirect href="/onboarding" />;
   return (
     <BroadcastProvider>
       <TabsHost />

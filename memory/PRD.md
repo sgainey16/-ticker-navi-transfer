@@ -178,3 +178,11 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Verified on device: desk present on entry; browsing rail = 0 new segment/TTS (no restart/LLM/ElevenLabs); PLAY = 1 TTS + ON AIR/PAUSE; spotlight->Game, rail->depth, Coming Up->Game.
 - THREE distinct programs on one desk confirmed: HOME "YOUR HOCKEY STARTS HERE" (opening) / RECAP "THE TICKER RECAP" (postgame) / NEXT "NEXT ON THE TICKER" (preview).
 - Files: backend ticker_recap.py, server.py; frontend src/screens/HomeScreen.tsx (rebuilt). Reused TickerDesk/GameRail/GameDepth/NhlLogo/TickerStrip. Scores/Game/Team/Player/Reels/Stats untouched.
+
+## Onboarding + shared Follows store [DONE, awaiting approval]
+- NEW src/lib/follows.tsx: FollowsProvider + useFollows() hook. Local-first persistence via storage util (key ticker.follows as JSON string; ticker.onboarded flag). Model: {teams:[{abbr,tier?}], players:[{player_id,team_abbr,tier?}]}, tier 1/2/3 OPTIONAL. No auth/backend/profile.
+- NEW app/onboarding.tsx: fast visual flow NHL -> Teams (official logos grid from /api/nhl/standings, multi-select) -> Players (real rosters from selected teams via /api/nhl/team/{abbr}, compact initials chips) -> My Stars (1ST=MY CORE gold / 2ND=MY REGULARS blue / 3RD=KEEP ME POSTED silver; optional, unranked stay followed) -> Enter The Ticker.
+- app/_layout.tsx wraps app in FollowsProvider + registers onboarding route. app/index.tsx gate: !onboarded -> <Redirect href="/onboarding">.
+- Dev reset: /onboarding?reset=1 or "Start over (dev reset)" on step 0 -> clears follows + onboarded only.
+- Verified on web session: fresh launch->onboarding; team+player select; 1st/2nd/3rd assignment; one UNRANKED follow persisted (player w/o tier); finish->Home; relaunch (same session) skips onboarding & follows survive; reset clears state. Stored model exactly {teams:[{abbr,tier}],players:[{player_id,team_abbr,tier?}]}.
+- Home NOT rebuilt yet; no Team/Player follow controls added. Next: rebuild Home/My Ticker from these real follows.

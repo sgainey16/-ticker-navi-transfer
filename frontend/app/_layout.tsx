@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { FollowsProvider } from "@/src/lib/follows";
 
 // Disable logbox so users see the app cleanly.
 LogBox.ignoreAllLogs(true);
@@ -39,14 +40,17 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <KeyboardProvider>
           <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#05070C" } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="coldopen" options={{ presentation: "fullScreenModal", animation: "fade" }} />
-            <Stack.Screen name="talk" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-            <Stack.Screen name="voices" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-            <Stack.Screen name="highlights/[id]" options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }} />
-            <Stack.Screen name="recap/[id]" options={{ animation: "slide_from_right" }} />
-          </Stack>
+          <FollowsProvider>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#05070C" } }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+              <Stack.Screen name="coldopen" options={{ presentation: "fullScreenModal", animation: "fade" }} />
+              <Stack.Screen name="talk" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+              <Stack.Screen name="voices" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+              <Stack.Screen name="highlights/[id]" options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }} />
+              <Stack.Screen name="recap/[id]" options={{ animation: "slide_from_right" }} />
+            </Stack>
+          </FollowsProvider>
         </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
