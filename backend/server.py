@@ -19,6 +19,12 @@ from elevenlabs import VoiceSettings
 
 import masl_data as data
 
+import asyncio
+import hashlib
+from providers import nhl
+from ticker_recap import build_recap
+from ticker_hosts import host_voice
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -30,6 +36,8 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
 eleven = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
 _tts_cache: dict = {}
+TTS_CACHE_DIR = ROOT_DIR / ".tts_cache"
+TTS_CACHE_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="MASL — Powered by Ticker")
 api_router = APIRouter(prefix="/api")
@@ -374,24 +382,70 @@ async def tts(req: TtsRequest):
         raise HTTPException(status_code=400, detail="text and voice_id required")
     speed = req.speed if req.speed else 1.0
     speed = max(0.7, min(1.2, speed))
-    key = f"{req.voice_id}:{speed}:{hash(text)}"
+    key = hashlib.md5(f"{req.voice_id}:{speed}:{text}".encode()).hexdigest()
     if key in _tts_cache:
         return {"audio": _tts_cache[key]}
-    try:
+    fpath = TTS_CACHE_DIR / f"{key}.mp3"
+    if fpath.exists():
+        uri = f"data:audio/mpeg;base64,{base64.b64encode(fpath.read_bytes()).decode()}"
+        _tts_cache[key] = uri
+        return {"audio": uri}
+
+    def _convert() -> bytes:
         stream = eleven.text_to_speech.convert(
             text=text,
             voice_id=req.voice_id,
             model_id="eleven_multilingual_v2",
             voice_settings=VoiceSettings(speed=speed),
         )
-        audio_bytes = b"".join(stream)
+        return b"".join(stream)
+
+    try:
+        # Run the blocking ElevenLabs SDK call OFF the event loop so it never
+        # freezes other API requests (the Ticker-1 blocking-TTS lesson).
+        audio_bytes = await asyncio.to_thread(_convert)
     except Exception as e:
         logger.exception("TTS error")
         raise HTTPException(status_code=502, detail=f"TTS failed: {getattr(e, 'body', str(e))}")
+    try:
+        fpath.write_bytes(audio_bytes)
+    except Exception:
+        pass
     uri = f"data:audio/mpeg;base64,{base64.b64encode(audio_bytes).decode()}"
     if len(_tts_cache) < 200:
         _tts_cache[key] = uri
     return {"audio": uri}
+
+
+@api_router.get("/recap/{game_id}")
+async def get_recap(game_id: str, refresh: bool = False):
+    """Real NHL game -> Reggie + Marc recap (text). Milestone-1 proof.
+
+    game_id may be a real NHL id or 'latest' (auto-picks the most recent final).
+    The recap is cached in Mongo per game so we don't re-hit the LLM each view.
+    """
+    try:
+        game = await nhl.game_by_id(game_id)
+    except Exception as e:
+        logger.exception("NHL fetch failed")
+        raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
+
+    doc = None if refresh else await db.recaps.find_one({"_id": game.id})
+    if doc and doc.get("beats"):
+        beats = doc["beats"]
+    else:
+        beats = await build_recap(game, EMERGENT_LLM_KEY)
+        await db.recaps.update_one(
+            {"_id": game.id},
+            {"$set": {"beats": beats,
+                      "created_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+    return {
+        "game": game.model_dump(),
+        "beats": beats,
+        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+    }
 
 
 app.include_router(api_router)

@@ -22,7 +22,19 @@ Build a lean, working prototype applying The Ticker broadcast format to the Majo
 ## Knowledge layer (P0 — done)
 Arena-soccer rules/terminology + 2025-26 season context injected into the host system prompt; hard rule forbidding hockey terms. Both hosts answer in strict JSON (Rayo + Casey). Verified clean terminology in testing.
 
-## Implemented (2026-06) — latest updates
+## THE TICKER — Hockey rebuild (Milestone 1 proof, 2026)
+Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
+- **Canonical hockey model** `backend/models/hockey.py` (League/Team/Player/Game + scoring, goalies, stars, series).
+- **NHL provider** `backend/providers/nhl.py` — public NHL API (api-web.nhle.com); auto-picks most recent completed game (weekly schedule scan, offseason fallback). All async (no event-loop blocking).
+- **Hosts** `backend/ticker_hosts.py` — Reggie Banks + Marc Collins persona; voice IDs from env `REGGIE_VOICE_ID`/`MARC_VOICE_ID` (not hardcoded).
+- **Recap engine** `backend/ticker_recap.py` — deterministic verified fact sheet → LLM (claude-sonnet-4-6) writes grounded Reggie/Marc dialogue answering what/why/who/remember/next. People-first. Cached in Mongo `recaps`.
+- **Endpoint** `GET /api/recap/{game_id}` (id or `latest`) → {game, beats, voices}.
+- **Non-blocking TTS**: `/api/tts` now runs the ElevenLabs call via `asyncio.to_thread` + on-disk cache (`backend/.tts_cache`). Verified: a 2.7s TTS did not block `/home` (0.01s); cached hit 3ms.
+- **Proof screen** `frontend/app/recap/[id].tsx` — scoreboard + series + "THE CALL" Reggie/Marc beats + PLAY THE RECAP (sequential per-beat audio; text always shown; audio failure degrades gracefully). Reachable at `/recap/latest`.
+- Proof game (auto): 2025-26 Stanley Cup Final G6 — Carolina 3, Vegas 0 (Bussi 22-save shutout, series 4-2). Verified accurate.
+- Pending: audio confirmation on a real iPhone (web preview can't play it).
+
+
 - **Stars of the League** spotlight (Top 3 on STATS tab, `src/components/StarSpotlight.tsx`, `GET /api/stars`): MVP Rian Marques (gold, 52 G), The Icon Ian Bennett (blue, 41 G), Rookie on the Rise Nikola Vignjevic (green, 28 pts) — each with tag chip, tagline, brand narrative, VIEW PROFILE → player detail. Builds star value for the pitch. [done]
 - **Highlights player hardened**: replaced raw WebView embed with `react-native-youtube-iframe` via a PLATFORM-SPLIT component (`src/components/YTPlayer.tsx` native / `YTPlayer.web.tsx` web fallback) so playback stays INSIDE the app (no more getting kicked to the YouTube app) and the web bundle no longer blanks. Native containment pending on-device user confirmation. [done, device-recheck pending]
 - **Persistent on-air panel** (`src/lib/broadcast.tsx`): slim audio-only ON-AIR pill (mute + close), per-page banter segments that switch on tab change, expanded to 5-6 lines/page, English-led openers. [done]

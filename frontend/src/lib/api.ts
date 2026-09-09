@@ -55,6 +55,13 @@ export type Star = {
   player: Player; team: Team;
 };
 
+export type RecapBeat = { host: "reggie" | "marc"; text: string };
+export type RecapResponse = {
+  game: any;
+  beats: RecapBeat[];
+  voices: { reggie: string | null; marc: string | null };
+};
+
 export type ColdOpenBeat = { id: number; host: "rayo" | "casey" | "system"; kicker: string; text: string };
 
 export const api = {
@@ -69,6 +76,7 @@ export const api = {
   coldOpen: () => get<any>("/coldopen"),
   segment: (page: string) => get<{ page: string; beats: ColdOpenBeat[] }>(`/segments/${page}`),
   stars: () => get<{ stars: Star[] }>("/stars"),
+  recap: (gameId: string) => get<RecapResponse>(`/recap/${gameId}`),
   availability: () => get<{ report: any[] }>("/availability"),
   voicesBriefs: () => get<Record<string, { name: string; description: string; sample: string }>>("/voices/briefs"),
   designVoices: (host: string) => post<{ host: string; previews: { generated_voice_id: string; audio: string; duration: number | null }[] }>("/voices/design", { host }),

@@ -1,0 +1,1 @@
+# hockey canonical models package
