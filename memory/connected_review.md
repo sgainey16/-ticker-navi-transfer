@@ -67,3 +67,27 @@ Voices work, but the game call renders as a large transcript/chat-log feed. Need
 
 ### Bucket 4 — Connected NHL Product 🟢 GREEN (protect)
 Real NHL data, scores, schedules, horizontal browsing, Game → Team → Player connections, logos, and the dark sports-desk chassis are working and worth protecting.
+
+---
+
+## 🟢 CORE PRODUCT DIRECTION — MAXIMIZE THE SPORTS DESK
+Status: PRODUCT DIRECTION ONLY — DO NOT IMPLEMENT YET. Continue the review.
+
+Do not treat Reggie + Marc as something reserved primarily for Home/Recap. They are the **persistent presence** of The Ticker. Their **intensity and behavior change by context; their presence does not.** Do not separate "show surfaces" from "utility surfaces" — that would sand off what makes the product different.
+
+Same sports desk, different depth/behavior by location:
+- **Home** → run the hockey desk
+- **Recap** → host the postgame show
+- **Next** → preview what's coming
+- **Scores** → react / contextualize the slate (short observations, not narrating every score)
+- **Game** → discuss that game
+- **Team** → discuss that team
+- **Player** → discuss that player
+
+Constraints (unchanged):
+- This does NOT mean nonstop audio, duplicate panels, large transcripts, or constant AI generation.
+- Preserve the **one-panel rule** and use **prebuilt/cached contextual segments**. Persistent presence = desk is there + a short prebuilt take is ready + the user decides whether to listen/engage.
+- Long-term direction is to **expand** Reggie + Marc's abilities (more conversation, richer context, highlights, Sportlogiq intelligence, personalized discussion) rather than minimize their presence — without changing the fundamental product experience.
+
+Guiding principle: **MAXIMIZE THE SPORTS DESK VIBE.**
+> Without Reggie and Marc, we can build a very competent hockey app. With them persistently inhabiting the hockey world, we have The Ticker.
