@@ -42,3 +42,28 @@ The current Reggie + Marc visual panel is working and gives the product its spor
 - This is distinct from RED-1: RED-1 is about the missing/too-passive automatic show/segment behavior, NOT the visual desk panel.
 
 Direction: **keep the desk, make the desk come alive.**
+
+---
+
+## REVIEW STANDARD (apply to every screen)
+> Does this screen feel like I just tuned into **The Ticker** — or does it feel like I opened a sports app?
+
+This single question exposes most of what still needs attention. Foundation is healthy; most remaining issues are **presentation & programming-layer** problems sitting on top of a working foundation — not architecture failures.
+
+Discipline: do NOT fix randomly. Finish the walkthrough, build ONE punch list, prioritize, then execute one controlled change at a time.
+
+---
+
+## PUNCH-LIST BUCKETS (working draft)
+
+### Bucket 1 — Core Ticker Show 🔴 RED
+Reggie & Marc must feel alive on entering Recap and Next. The prebuilt/cached show segments are missing. (See RED-1.)
+
+### Bucket 2 — Old MARSL Residue 🔴 RED
+Reels, Stats, Rayo, MASL players/content, and any remaining soccer/demo material must be either properly converted or removed from launch navigation.
+
+### Bucket 3 — Audio Presentation 🟡/🔴 YELLOW→RED
+Voices work, but the game call renders as a large transcript/chat-log feed. Needs sports-show presentation, not chat-log presentation.
+
+### Bucket 4 — Connected NHL Product 🟢 GREEN (protect)
+Real NHL data, scores, schedules, horizontal browsing, Game → Team → Player connections, logos, and the dark sports-desk chassis are working and worth protecting.
