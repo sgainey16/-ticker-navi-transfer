@@ -1,50 +1,36 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo, useState, useEffect } from "react";
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
-import { api, NhlFinalCard } from "@/src/lib/api";
+import { api, NhlGameCard } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
-import { NhlGameCard } from "@/src/components/NhlSlate";
-import { NhlLogo } from "@/src/components/NhlLogo";
+import { TickerLogo } from "@/src/components/TickerLogo";
+import { GameRail } from "@/src/components/GameRail";
+import { GameDepth } from "@/src/components/GameDepth";
 
-function niceDate(iso?: string | null) {
-  if (!iso) return "";
-  try {
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  } catch {
-    return iso;
-  }
-}
+const HERO = require("../../assets/images/broadcast-desk.png");
 
 export default function Recap() {
   const router = useRouter();
   const q = useApi(() => api.nhlRecaps());
 
-  const games = useMemo(() => q.data?.games || [], [q.data]);
-  const featured = games[0];
+  const games = useMemo(() => (q.data?.games || []) as NhlGameCard[], [q.data]);
 
-  // Group finals by date, preserving most-recent-first order.
-  const byDate = useMemo(() => {
-    const order: string[] = [];
-    const map: Record<string, NhlFinalCard[]> = {};
-    games.forEach((g) => {
-      if (!map[g.date]) { map[g.date] = []; order.push(g.date); }
-      map[g.date].push(g);
-    });
-    return order.map((d) => ({ date: d, items: map[d] }));
-  }, [games]);
-
-  const open = (id: string) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/recap/${id}`); };
-  const openGame = (id: string) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/game/${id}`); };
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (selectedId) return;
+    if (games.length) setSelectedId(games[0].id);
+  }, [games, selectedId]);
+  const selectedGame = useMemo(() => games.find((g) => g.id === selectedId), [games, selectedId]);
 
   return (
     <TabScreen>
       {q.loading ? (
-        <Loader label="Pulling the real games…" />
+        <Loader label="Rolling the postgame show…" />
       ) : q.error ? (
         <ErrorState message="Couldn't load recaps" onRetry={() => q.reload()} />
       ) : (
@@ -53,46 +39,32 @@ export default function Recap() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl tintColor={colors.blue} refreshing={false} onRefresh={() => q.reload()} />}
         >
-          <View style={styles.head}>
-            <Text style={styles.h1}>THE TICKER RECAP</Text>
-            <Text style={styles.sub}>Every final — called by Reggie &amp; Marc, grounded in real NHL data.</Text>
+          {/* SHOW — Reggie + Marc host the postgame */}
+          <View style={styles.show}>
+            <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <LinearGradient colors={["rgba(5,7,12,0.45)", "rgba(5,7,12,0.86)"]} style={StyleSheet.absoluteFill} />
+            <View style={styles.showTop}>
+              <TickerLogo width={104} />
+              <View style={styles.badge}><Text style={styles.badgeText}>POSTGAME</Text></View>
+            </View>
+            <View>
+              <Text style={styles.showTitle}>THE TICKER RECAP</Text>
+              <Text style={styles.showSub}>What happened across your hockey world — with Reggie &amp; Marc.</Text>
+            </View>
           </View>
 
-          {featured ? (
-            <Pressable style={styles.feature} onPress={() => open(featured.id)} testID="recap-featured">
-              <Text style={styles.featureKicker}>LATEST FINAL · {niceDate(featured.date)}</Text>
-              <View style={styles.featureRow}>
-                <View style={styles.featSide}>
-                  <NhlLogo abbr={featured.away.abbr} url={featured.away.logo} size={40} />
-                  <Text style={styles.featAbbr}>{featured.away.abbr}</Text>
-                </View>
-                <View style={styles.featScoreBox}>
-                  <Text style={styles.featScore}>{featured.away.score} – {featured.home.score}</Text>
-                  <Text style={styles.featFinal}>FINAL{featured.period_type && featured.period_type !== "REG" ? `/${featured.period_type}` : ""}</Text>
-                </View>
-                <View style={styles.featSide}>
-                  <NhlLogo abbr={featured.home.abbr} url={featured.home.logo} size={40} />
-                  <Text style={styles.featAbbr}>{featured.home.abbr}</Text>
-                </View>
-              </View>
-              <View style={styles.playBtn}>
-                <Ionicons name="play" size={15} color={colors.white} />
-                <Text style={styles.playText}>PLAY THE CALL</Text>
-              </View>
-            </Pressable>
-          ) : null}
-
-          {byDate.length ? (
-            byDate.map((grp) => (
-              <View key={grp.date} style={styles.section}>
-                <SectionTitle title={niceDate(grp.date)} accent={colors.blue} />
-                <View style={{ gap: spacing.sm }}>
-                  {grp.items.map((g) => (
-                    <NhlGameCard key={g.id} g={g} onPress={() => openGame(g.id)} />
-                  ))}
-                </View>
-              </View>
-            ))
+          {games.length ? (
+            <View style={styles.section}>
+              <SectionTitle title="Recent Finals" accent={colors.blue} />
+              {/* BROWSE — swipe completed games; selecting only changes the depth below */}
+              <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} />
+              {/* DEPTH — the selected game, people-first, with a deliberate Hear the Recap */}
+              <GameDepth
+                summary={selectedGame}
+                deep
+                onHearRecap={(id) => router.push(`/recap/${id}`)}
+              />
+            </View>
           ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>No completed NHL games yet.</Text>
@@ -107,20 +79,13 @@ export default function Recap() {
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: 110, gap: spacing.lg },
-  head: { gap: 4 },
-  h1: { color: colors.white, fontFamily: fonts.display, fontSize: 28, fontWeight: "800", letterSpacing: 0.5 },
-  sub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
 
-  feature: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.blueDim, padding: spacing.lg, gap: spacing.md },
-  featureKicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
-  featureRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  featSide: { alignItems: "center", gap: 6, width: 84 },
-  featAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", letterSpacing: 0.4 },
-  featScoreBox: { alignItems: "center", gap: 2 },
-  featScore: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800", letterSpacing: 1 },
-  featFinal: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
-  playBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.blue, paddingVertical: 12, borderRadius: radius.pill },
-  playText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 0.8 },
+  show: { minHeight: 138, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, padding: spacing.lg, justifyContent: "space-between", gap: spacing.md },
+  showTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  badge: { backgroundColor: colors.blueDim, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  showTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 24, fontWeight: "800", letterSpacing: 0.5 },
+  showSub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, marginTop: 2 },
 
   section: { gap: spacing.sm },
   empty: { alignItems: "center", paddingVertical: spacing.xxxl, gap: 6 },

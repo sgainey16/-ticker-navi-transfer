@@ -118,3 +118,11 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Reason: this fork was built from the MARSL clean baseline which per user directive intentionally did NOT merge Ticker 1 architecture. The old Highlightly code lives in the separate earlier Ticker codebase, which is not in this container.
 - To perform the real Highlightly audit the user wants, need the earlier Ticker source (zip or GitHub repo) added to the environment.
 - Proven in-hand video source remains NHL official per-goal clip metadata (see Milestone 6 audit).
+
+## Milestone 7 — RECAP SHOW (SHOW->BROWSE->DEPTH) [DONE, awaiting approval]
+- RecapScreen rebuilt: compact Reggie+Marc SHOW banner (desk art, reduced dead space) + RECENT FINALS horizontal GameRail + deep GameDepth. No new page/route.
+- Reused Home components: GameRail, GameDepth (extended, not duplicated).
+- GameDepth extended (opt-in, Home unchanged): deep prop -> adds Hits/Blocks/PIM stats + GOALTENDING line; onHearRecap prop -> HEAR THE RECAP button (-> /recap/{id}, existing cached grounded engine); OPEN GAME -> /game/{id}. Reserved HIGHLIGHTS slot as code comment in natural order (GAME STORY -> HIGHLIGHTS -> KEY MOMENTS -> STATS); renders nothing until a real source exists (no placeholders/MASL YouTube).
+- Browsing rail = setSelectedId only; NO audio triggered/restarted (no broadcast/tts calls in GameRail/GameDepth). HEAR THE RECAP + OPEN GAME are the only deliberate actions.
+- Default selected = most recent final. Empty state if no finals.
+- Untouched: Home, Next, Scores, Game Page, broadcast/audio, Reels; no Team/Player/Highlightly.

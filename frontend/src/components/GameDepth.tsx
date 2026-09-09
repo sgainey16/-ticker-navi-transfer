@@ -25,7 +25,7 @@ function fmtStat(k: string, v: any): string {
 }
 
 // BROWSE -> DEPTH: contextual detail for the selected game, without leaving the show.
-export function GameDepth({ summary }: { summary?: NhlGameCard }) {
+export function GameDepth({ summary, onHearRecap, deep }: { summary?: NhlGameCard; onHearRecap?: (id: string) => void; deep?: boolean }) {
   const router = useRouter();
   const [game, setGame] = useState<any>(summary ? cache[summary.id] : null);
   const [loading, setLoading] = useState(false);
@@ -55,9 +55,11 @@ export function GameDepth({ summary }: { summary?: NhlGameCard }) {
   const detail = game && game.id === summary.id ? game : null;
   const isFinal = FINAL.includes(summary.group === "final" ? "FINAL" : (detail?.status || summary.state || ""));
   const scoring = (detail?.scoring || []).slice(0, 4);
-  const statRows: [string, string][] = [
-    ["SOG", "sog"], ["PP", "powerPlay"], ["FO%", "faceoffWinningPctg"],
-  ].filter(([, k]) => detail?.team_stats?.[k]) as [string, string][];
+  const baseStats: [string, string][] = [["SOG", "sog"], ["PP", "powerPlay"], ["FO%", "faceoffWinningPctg"]];
+  const deepStats: [string, string][] = [["Hits", "hits"], ["Blocks", "blockedShots"], ["PIM", "pim"]];
+  const statRows = (deep ? [...baseStats, ...deepStats] : baseStats)
+    .filter(([, k]) => detail?.team_stats?.[k]) as [string, string][];
+  const goalies = deep ? (detail?.goalies || []) : [];
   const teamByAbbr = (abbr: string) => {
     if (!detail) return summary.away.abbr === abbr ? summary.away : summary.home;
     return detail.home.abbr === abbr ? detail.home : detail.away;
@@ -94,6 +96,9 @@ export function GameDepth({ summary }: { summary?: NhlGameCard }) {
         <Text style={styles.series}>{detail.series.round_label}{detail.series.game_number ? ` · Game ${detail.series.game_number}` : ""}</Text>
       ) : null}
 
+      {/* HIGHLIGHTS — reserved natural position (GAME STORY -> HIGHLIGHTS -> KEY MOMENTS -> STATS).
+          Renders nothing until a legitimate highlight source is connected. No placeholders. */}
+
       {/* DEPTH */}
       {isFinal && scoring.length ? (
         <View style={styles.block}>
@@ -124,6 +129,19 @@ export function GameDepth({ summary }: { summary?: NhlGameCard }) {
         </View>
       ) : null}
 
+      {isFinal && goalies.length ? (
+        <View style={styles.block}>
+          <Text style={styles.blockLabel}>GOALTENDING</Text>
+          {goalies.map((gl: any, i: number) => (
+            <View key={i} style={styles.momentRow}>
+              <NhlLogo abbr={gl.team_abbr} url={teamByAbbr(gl.team_abbr)?.logo} size={18} />
+              <Text style={styles.momentName} numberOfLines={1}>{gl.name}{gl.decision ? ` (${gl.decision})` : ""}{gl.shutout ? " · SO" : ""}</Text>
+              <Text style={styles.goalieStat}>{gl.saves}/{gl.shots_against} SV</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       {!isFinal ? (
         <Text style={styles.note}>
           {summary.away.record && summary.home.record ? `${summary.away.abbr} ${summary.away.record}  ·  ${summary.home.abbr} ${summary.home.record}\n` : ""}
@@ -131,14 +149,25 @@ export function GameDepth({ summary }: { summary?: NhlGameCard }) {
         </Text>
       ) : null}
 
-      {/* deliberate deeper action -> full canonical Game Page */}
+      {/* deliberate deeper actions */}
+      {isFinal && onHearRecap ? (
+        <Pressable
+          style={styles.hearBtn}
+          testID="hear-recap"
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onHearRecap(summary.id); }}
+        >
+          <Ionicons name="mic" size={15} color={colors.white} />
+          <Text style={styles.hearText}>HEAR THE RECAP</Text>
+        </Pressable>
+      ) : null}
+
       <Pressable
-        style={styles.openBtn}
+        style={[styles.openBtn, onHearRecap && styles.openBtnAlt]}
         testID="open-game"
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/game/${summary.id}`); }}
       >
-        <Text style={styles.openText}>OPEN GAME</Text>
-        <Ionicons name="arrow-forward" size={15} color={colors.white} />
+        <Text style={[styles.openText, onHearRecap && styles.openTextAlt]}>OPEN GAME</Text>
+        <Ionicons name="arrow-forward" size={15} color={onHearRecap ? colors.blue : colors.white} />
       </Pressable>
     </View>
   );
@@ -163,13 +192,18 @@ const styles = StyleSheet.create({
   momentTime: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", width: 62 },
   momentName: { color: colors.text, fontFamily: fonts.display, fontSize: 14, fontWeight: "700", flex: 1 },
 
-  statsRow: { flexDirection: "row", gap: spacing.sm, marginTop: 2 },
-  statCell: { flex: 1, backgroundColor: colors.surfaceHi, borderRadius: radius.sm, paddingVertical: 8, alignItems: "center", gap: 2 },
+  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: 2 },
+  statCell: { flexGrow: 1, flexBasis: "30%", backgroundColor: colors.surfaceHi, borderRadius: radius.sm, paddingVertical: 8, alignItems: "center", gap: 2 },
   statLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "700", letterSpacing: 1 },
   statVals: { color: colors.text, fontFamily: fonts.display, fontSize: 13, fontWeight: "700" },
+  goalieStat: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "700" },
 
   note: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
 
+  hearBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingVertical: 12, marginTop: spacing.xs },
+  hearText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 1 },
   openBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingVertical: 12, marginTop: spacing.xs },
+  openBtnAlt: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.blueDim, paddingVertical: 11 },
   openText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 1 },
+  openTextAlt: { color: colors.blue },
 });
