@@ -15,10 +15,6 @@ import { TickerLogo } from "@/src/components/TickerLogo";
 import { NhlLogo } from "@/src/components/NhlLogo";
 
 const HERO = require("../../assets/images/broadcast-desk.png");
-const REGGIE = require("../../assets/images/rayo.jpg");
-const MARC = require("../../assets/images/casey.jpg");
-
-const HOST_IMG: Record<string, any> = { reggie: REGGIE, marc: MARC };
 
 function fmtTime(utc?: string | null) {
   if (!utc) return "";
@@ -117,17 +113,6 @@ export default function Home() {
                   <Text style={styles.heroTeam}>{hg.home.abbr}</Text>
                   <NhlLogo abbr={hg.home.abbr} url={hg.home.logo} size={34} />
                 </View>
-
-                {/* Reggie + Marc grounded take */}
-                {(hero?.context || []).map((b, i) => (
-                  <View key={i} style={styles.takeRow}>
-                    <Image source={HOST_IMG[b.host]} style={styles.takeAvatar} contentFit="cover" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.takeName}>{b.host === "reggie" ? "REGGIE" : "MARC"}</Text>
-                      <Text style={styles.takeText} numberOfLines={2}>{b.text}</Text>
-                    </View>
-                  </View>
-                ))}
 
                 <View style={styles.playBtn}>
                   <Ionicons name="play" size={15} color={colors.white} />
@@ -236,11 +221,6 @@ const styles = StyleSheet.create({
   heroTeam: { color: colors.text, fontFamily: fonts.display, fontSize: fontSize.lg, fontWeight: "700", letterSpacing: 0.5 },
   heroScore: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800", lineHeight: 32 },
   heroDash: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 22, fontWeight: "700" },
-
-  takeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 2 },
-  takeAvatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: colors.blue, backgroundColor: colors.surfaceAlt },
-  takeName: { color: colors.blue, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  takeText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17 },
 
   playBtn: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: colors.blue, paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.pill, marginTop: spacing.sm },
   playText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 0.8 },
