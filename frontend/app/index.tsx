@@ -7,7 +7,6 @@ import * as Haptics from "expo-haptics";
 
 import { colors } from "@/src/theme";
 import { setTabHandler } from "@/src/lib/tabnav";
-import { BroadcastProvider, useBroadcast } from "@/src/lib/broadcast";
 import { useFollows } from "@/src/lib/follows";
 import { TopTabBar } from "@/src/components/TopTabBar";
 import HomeScreen from "@/src/screens/HomeScreen";
@@ -30,30 +29,23 @@ export default function TickerApp() {
   const { ready, onboarded } = useFollows();
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   if (!onboarded) return <Redirect href="/onboarding" />;
-  return (
-    <BroadcastProvider>
-      <TabsHost />
-    </BroadcastProvider>
-  );
+  return <TabsHost />;
 }
 
 function TabsHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const broadcast = useBroadcast();
   const [active, setActive] = useState("home");
   const [visited, setVisited] = useState<Set<string>>(new Set(["home"]));
 
   const select = (key: string) => {
     setActive(key);
     setVisited((v) => (v.has(key) ? v : new Set(v).add(key)));
-    broadcast.onPage(key);
   };
 
   useEffect(() => {
     setTabHandler(select);
     return () => setTabHandler(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const tabs = useMemo(() => TABS.map(({ key, label }) => ({ key, label })), []);

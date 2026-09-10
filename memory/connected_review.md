@@ -288,3 +288,34 @@ SIMPLIFY:
 MISSING (to feel like The Ticker):
 - Reggie+Marc must be FELT while browsing, not only on a PLAY tap — a short, ambient, cached host beat on surface entry (still no generation loop, still one-panel), and/or a light visible personality cue. This is the #1 gap.
 - A deliberate highlights DECISION before launch: connect a verified video source OR ship with no highlight pretense (remove MASL highlights).
+
+
+---
+
+## CONTROLLED CUT #1 — DONE (awaiting approval to proceed to Cut #2)
+
+**Scope:** Remove the legacy MASL BroadcastProvider host engine only. No visual/nav/onboarding/Stats/highlights/host-redesign changes.
+
+**What was disconnected/deleted:**
+- Deleted file `src/lib/broadcast.tsx` (the MASL Rayo/Casey engine + green ON AIR bar).
+- `app/index.tsx`: removed import, removed `<BroadcastProvider>` wrapper, removed `useBroadcast()` and the `broadcast.onPage(key)` call on tab switch.
+- Result: the legacy `/api/segment` endpoint has ZERO frontend callers; Rayo/Casey voices + green broadcast bar are gone from the runtime.
+
+**Preserved:** New shared system TickerDesk → `/api/ticker/segment` (+ `/api/ticker/home_segment`) → Reggie+Marc → cached playback behind deliberate PLAY.
+
+**Verification (testing_agent iteration_6.json — PASS):**
+- 0 calls to legacy `/api/segment` across onboarding + all 6 tabs + PLAY + /talk. Only new endpoints hit (`home_segment`, `segment?surface=next/recap`).
+- 0 `onair-bar` (old green bar gone).
+- TickerDesk PLAY→PAUSE works; single host system; no double audio.
+- 0 `navigator.permissions.query`, 0 `getUserMedia` (iOS Safari audio-crash fix intact).
+- Floating mic → /talk OK; onboarding end-to-end OK.
+
+**Dead code left intentionally (not in this cut's scope):** `api.segment()` method + `ColdOpenBeat` type in `src/lib/api.ts` (now uncalled); `app/coldopen.tsx`, `app/voices.tsx`. To be handled in later cuts per user's ordered plan.
+
+**Remaining ordered cuts (per user, each stop-for-approval):**
+1. Merge/remove My Hockey tab into Home.
+2. Simplify onboarding toward Search/Select/Enter.
+3. Remove fake MASL highlights (`highlights/[id]`, YTPlayer/ArenaBoard/MASLtv).
+4. Simplify Stats (drop standings dup).
+5. Deliberately design Reggie/Marc "alive" presence (NOT autoplay-on-entry — user explicitly rejected autoplay).
+

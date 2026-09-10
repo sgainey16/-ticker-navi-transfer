@@ -1,0 +1,35 @@
+{
+  "summary": "PASS. Controlled Cut #1 regression verification is CLEAN. Instrumented window.fetch + XMLHttpRequest.open before any app JS ran; across a full session (fresh onboarding via /onboarding?reset=1 → complete flow → land on Home → navigate all 6 tabs RECAP/NEXT/HOME/MY HOCKEY/SCORES/STATS → return to HOME → tap PLAY THE DESK → navigate /talk) recorded 17 fetch + 5 XHR requests. Legacy bare '/api/segment' calls = 0. Only new endpoints containing 'segment' are hit: /api/ticker/home_segment, /api/ticker/segment?surface=next, /api/ticker/segment?surface=recap. Zero elements with testID='onair-bar' at any point (checked after each of the 6 tab switches). navigator.permissions.query calls = 0 and navigator.mediaDevices.getUserMedia calls = 0 across load, onboarding, tab navigation and PLAY (expo-audio web crash regression not reintroduced). TickerDesk PLAY control on HOME transitions correctly PLAY THE DESK → PAUSE and shows the in-desk 'ON AIR' pill; only one host system active (no double audio). Floating mic (testID='floating-mic') navigates to /talk and renders 'The Booth' screen. Onboarding flow works end-to-end with NHL preselected → Get started → team-BOS → Continue → Continue (players optional skipped) → Enter The Ticker. Only benign RN-Web warnings remain ('shadow*' deprecated, 'props.pointerEvents' deprecated) — carried over from iteration 5. No pageerrors, no red screen.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Non-blocking; migrate for RN Web 0.20+ readiness."},
+      {"component": "app/index.tsx tab body views", "issue": "RN-Web warning: props.pointerEvents is deprecated. Use style.pointerEvents. Reference: /app/frontend/app/index.tsx:60"},
+      {"component": "TickerDesk testID duplication", "issue": "Multiple TickerDesk instances across visited tabs share testID='desk-play' / 'ticker-desk'. Hidden (display:none) tabs still render, so playwright's .first can land on an off-screen instance. Iteration 6 worked around by iterating and picking the visible one; consider namespacing per surface (e.g., testID={`desk-play-${surface}`}). Reference: /app/frontend/src/components/TickerDesk.tsx:108,140"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_6.json"],
+  "action_items": [
+    "OPTIONAL housekeeping: replace deprecated shadow* style props with boxShadow, and prop pointerEvents with style.pointerEvents to silence RN-Web warnings.",
+    "OPTIONAL: Namespace TickerDesk testIDs by surface (testID={`desk-play-${surface}`}) so E2E can uniquely target the desk on the active tab without visibility filtering.",
+    "OPTIONAL: api.segment(page) method in /app/frontend/src/lib/api.ts:139 (hitting /api/segments/{page}) is now dead code (grep shows no callers in frontend). Safe to delete alongside the ColdOpenBeat type used only there, if the /api/segments/{page} backend endpoint is also being retired."
+  ],
+  "critical_code_review_comments": [
+    "app/index.tsx has no BroadcastProvider wrapper and no import of a broadcast/host engine — cut is clean.",
+    "Grep confirms only two remaining 'broadcast' string references and both are the asset path require('../../assets/images/broadcast-desk.png') for TickerDesk background image (correct, unrelated to the removed host engine).",
+    "TickerDesk fetches segments via api.tickerSegment → /api/ticker/segment (new endpoint), caches in module-level segCache per surface|subject, and generates TTS only on deliberate PLAY tap. Passive tab-switching therefore never re-triggers audio.",
+    "TickerDesk stops audio on unmount and increments a runRef guard to cancel any in-flight beat loop, preventing overlapping playback if the user leaves the surface.",
+    "api.ts still exports the unused api.segment(page) method — dead code but harmless (frontend has zero callers).",
+    "No expo-av imports anywhere; audio.web.ts uses only HTMLAudioElement; audio.ts uses expo-audio only on native. Web bundle stays free of expo-audio's permission-query crash path."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (frontend-only per request)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Instrumentation pattern: use page.context.add_init_script BEFORE page.goto to wrap window.fetch and XMLHttpRequest.open into window.__fetchUrls / window.__xhrUrls, plus navigator.permissions.query and navigator.mediaDevices.getUserMedia. Onboarding is local-first with a dev reset at /onboarding?reset=1; complete via testIDs: onboard-next → team-BOS → onboard-next → onboard-next → onboard-finish. TickerDesk renders in ALL visited tabs simultaneously (display:none swap), so testID='desk-play' resolves to multiple locators — iterate .count() and pick the .is_visible() one, or wait for backend LLM segment (may take 6–20s) before clicking. PLAY state transitions text 'PLAY THE DESK' ↔ 'PAUSE' and toggles the in-desk 'ON AIR' pill (which is NOT the removed legacy 'onair-bar' testID — that stays at zero).",
+  "rca_of_issue": "No regression from Controlled Cut #1. Legacy MASL BroadcastProvider (src/lib/broadcast.tsx) and its /api/segment endpoint calls, and the top-of-screen green 'ON AIR' bar (testID='onair-bar') are fully removed from the runtime and confirmed absent under network instrumentation. New shared TickerDesk system (/api/ticker/segment + deliberate PLAY) works and is the only host layer active."
+}
