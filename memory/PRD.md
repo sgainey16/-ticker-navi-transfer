@@ -219,3 +219,27 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Fix: Metro platform-split. NEW /app/frontend/src/lib/audio.web.ts = pure HTMLAudioElement playback (new Audio()), NO expo-audio import, graceful play()-rejection + 25s safety. Native /app/frontend/src/lib/audio.ts (expo-audio) unchanged, used only on native. expo-audio fully excluded from web bundle.
 - testing_agent (iteration_5): instrumented navigator.permissions.query + getUserMedia BEFORE app code -> across fresh load, onboarding, Home, PLAY, all 6 tabs = ZERO mic queries, ZERO getUserMedia, ZERO page/expo-audio errors, no crash. PLAY works. Recommend final check on real iPhone Safari (Chromium can't reproduce the throw).
 - Non-blocking polish noted: TickerDesk shares testID desk-play/ticker-desk across tab instances (namespacing would help E2E); RN-Web shadow*/pointerEvents deprecation warnings.
+
+
+## TICKER LAUNCH FOUNDATION — universal hockey chassis [DONE, awaiting approval + checkpoint `ticker-universal-hockey-launch`]
+Goal: make the existing Ticker architecture able to house any league/team/player/game through one canonical model + provider seam, without touching the working NHL experience.
+
+FRONTEND
+- Universal primary nav reduced to EXACTLY 4 tabs: HOME · RECAP · NEXT · STATS (app/index.tsx). Default landing = HOME.
+- Removed from primary nav: MY HOCKEY (reels) — capability-gated, only where verified video exists; SCORES — its standings now live inside STATS. (ReelsScreen.tsx / ScoresScreen.tsx remain on disk, unimported, dead — intentional.)
+- Deleted legacy MASL routes: app/highlights/[id].tsx (MASL/MASLtv YouTube fake video) and app/coldopen.tsx (legacy cold open). Removed their Stack.Screen registrations in app/_layout.tsx. Both now resolve to Expo "Unmatched Route".
+- (Cut #1 earlier removed the legacy BroadcastProvider/Rayo-Casey engine + all /api/segment calls.)
+
+BACKEND — provider chassis (the plug point for a 2nd league)
+- NEW providers/base.py: HockeyProvider ABC — canonical surface (latest_game, game_by_id, recent_finals_now, scoreboard_now, standings_now, leaders_now, team_page, player_page) + `capabilities` dict incl. `media` (gates REELS) + describe().
+- NEW providers/registry.py: _PROVIDERS = {"nhl": NHLProvider()}; get_provider(code="nhl"), list_providers(). Adding a league = one line here, zero page rewrites.
+- providers/nhl.py: added NHLProvider(HockeyProvider) delegating to existing verified async fns; capabilities.media=False (no verified NHL video wired -> no fake). Game model gained `has_video: bool=False`; NHL adapter sets has_video=False explicitly.
+- server.py: all /api/nhl/* routes now resolve through get_provider("nhl") (behavior identical). NEW GET /api/leagues -> registered providers + capabilities.
+- No international leagues added (chassis only). NHL still the sole working provider.
+
+VERIFIED — testing_agent iteration_7.json: PASS
+- Backend 9/9 pytest (tests/test_launch_foundation.py): /api/leagues=[nhl, media:false]; /api/nhl/game/latest has_video=false league=NHL; standings 16/16; leaders skaters+goalies; scoreboard/home/recaps/ticker.segment OK.
+- Frontend: onboarding->Home; nav EXACTLY [HOME,RECAP,NEXT,STATS], MY HOCKEY & SCORES absent; STATS shows WHERE MY TEAMS SIT + LEADERS + full 16+16 STANDINGS (real data); /game /player /team depth routes render + back nav; /highlights & /coldopen -> Unmatched Route; floating mic->/talk; TickerDesk PLAY->PAUSE single audio.
+- Guarantees held: 0 legacy /api/segment, 0 /api/segments/, 0 permissions.query, 0 getUserMedia. Only 'segment' URL = /api/ticker/home_segment.
+
+BEHIND LAUNCH (not started; do not begin without approval): Highlightly -> AI Play-by-Play -> Multilingual/Global.

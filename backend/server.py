@@ -22,6 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
+from providers.registry import get_provider, list_providers
 from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker
 from ticker_hosts import host_voice
 
@@ -800,6 +801,16 @@ async def get_recap(game_id: str, refresh: bool = False):
     }
 
 
+@api_router.get("/leagues")
+async def leagues():
+    """Registered leagues + the universal modules each provider can fill.
+
+    This is the plug point: a second league appears here automatically once its
+    adapter is registered, and every screen reads it through the same contract.
+    """
+    return {"leagues": [p.describe() for p in list_providers()]}
+
+
 @api_router.get("/nhl/home")
 async def nhl_home():
     """THE TICKER Home feed — real NHL data only.
@@ -808,9 +819,10 @@ async def nhl_home():
     slate : the current-day NHL slate (live / upcoming / final), simplified.
     Any module with no real data is returned empty so the client can hide it.
     """
+    prov = get_provider("nhl")
     hero = None
     try:
-        game = await nhl.latest_game()
+        game = await prov.latest_game()
         beats = await _recap_beats(game)
         reggie = next((b for b in beats if b.get("host") == "reggie"), None)
         marc = next((b for b in beats if b.get("host") == "marc"), None)
@@ -821,7 +833,7 @@ async def nhl_home():
         hero = None
 
     try:
-        slate = await nhl.scoreboard_now()
+        slate = await prov.scoreboard_now()
     except Exception:
         logger.exception("nhl_home slate failed")
         slate = {"date": None, "games": []}
@@ -835,9 +847,9 @@ async def nhl_home():
 
 @api_router.get("/nhl/scoreboard")
 async def nhl_scoreboard():
-    """Current-day NHL slate (Tonight/Scores)."""
+    """Current-day NHL slate (NEXT / Home slate)."""
     try:
-        return await nhl.scoreboard_now()
+        return await get_provider("nhl").scoreboard_now()
     except Exception:
         logger.exception("nhl_scoreboard failed")
         return {"date": None, "games": []}
@@ -845,9 +857,9 @@ async def nhl_scoreboard():
 
 @api_router.get("/nhl/standings")
 async def nhl_standings():
-    """Real NHL standings by conference (Scores)."""
+    """Real NHL standings by conference (Stats)."""
     try:
-        return await nhl.standings_now()
+        return await get_provider("nhl").standings_now()
     except Exception:
         logger.exception("nhl_standings failed")
         return {"Eastern": [], "Western": []}
@@ -861,7 +873,7 @@ async def nhl_game(game_id: str):
     /recap/{id} which runs the grounded Reggie+Marc engine separately.
     """
     try:
-        game = await nhl.game_by_id(game_id)
+        game = await get_provider("nhl").game_by_id(game_id)
     except Exception as e:
         logger.exception("nhl_game fetch failed")
         raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
@@ -871,7 +883,7 @@ async def nhl_game(game_id: str):
 @api_router.get("/nhl/leaders")
 async def nhl_leaders():
     try:
-        return await nhl.leaders_now(limit=8)
+        return await get_provider("nhl").leaders_now(limit=8)
     except Exception as e:
         logger.exception("nhl_leaders failed")
         raise HTTPException(status_code=502, detail=f"Leaders unavailable: {e}")
@@ -881,7 +893,7 @@ async def nhl_leaders():
 async def nhl_player(pid: str):
     """Verified NHL player snapshot for the Player Page."""
     try:
-        return await nhl.player_page(pid)
+        return await get_provider("nhl").player_page(pid)
     except Exception as e:
         logger.exception("nhl_player failed")
         raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
@@ -891,7 +903,7 @@ async def nhl_player(pid: str):
 async def nhl_team(tri: str):
     """Verified NHL team snapshot for the Team Page."""
     try:
-        return await nhl.team_page(tri)
+        return await get_provider("nhl").team_page(tri)
     except Exception as e:
         logger.exception("nhl_team failed")
         raise HTTPException(status_code=502, detail=f"Team data unavailable: {e}")
@@ -901,7 +913,7 @@ async def nhl_team(tri: str):
 async def nhl_recaps():
     """Recent completed NHL games for the Recap screen (real data only)."""
     try:
-        games = await nhl.recent_finals_now()
+        games = await get_provider("nhl").recent_finals_now()
     except Exception:
         logger.exception("nhl_recaps failed")
         games = []

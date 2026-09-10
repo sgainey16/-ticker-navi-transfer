@@ -222,6 +222,7 @@ async def fetch_game(client: httpx.AsyncClient, game_id: str) -> Game:
         scoring=scoring, penalties=penalties, goalies=goalies,
         top_skaters=top_skaters, three_stars=stars,
         team_stats=team_stats, series=series,
+        has_video=False,  # NHL adapter has no verified clip source wired yet — no fake video.
     )
 
 
@@ -598,3 +599,51 @@ async def leaders_now(limit: int = 8) -> dict:
             except Exception:
                 out["goalies"][key] = []
     return out
+
+
+
+# ---------------------------------------------------------------------------
+# Provider adapter — the NHL implementation of the universal HockeyProvider.
+# Delegates to the verified async functions above; the registry exposes it to
+# the API layer so every screen reads NHL through the same contract a future
+# league will implement.
+# ---------------------------------------------------------------------------
+from providers.base import HockeyProvider  # noqa: E402
+
+
+class NHLProvider(HockeyProvider):
+    code = "nhl"
+    name = "National Hockey League"
+    capabilities = {
+        "standings": True,
+        "leaders": True,
+        "recaps": True,
+        "schedule": True,
+        "team_page": True,
+        "player_page": True,
+        "media": False,  # no verified NHL video source wired yet — REELS stays gated.
+    }
+
+    async def latest_game(self):
+        return await latest_game()
+
+    async def game_by_id(self, game_id: str):
+        return await game_by_id(game_id)
+
+    async def recent_finals_now(self, limit: int = 15):
+        return await recent_finals_now(limit)
+
+    async def scoreboard_now(self):
+        return await scoreboard_now()
+
+    async def standings_now(self):
+        return await standings_now()
+
+    async def leaders_now(self, limit: int = 8):
+        return await leaders_now(limit)
+
+    async def team_page(self, tri: str):
+        return await team_page(tri)
+
+    async def player_page(self, pid: str):
+        return await player_page(pid)

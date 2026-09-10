@@ -1,0 +1,38 @@
+{
+  "summary": "PASS. Launch foundation + regression verified. BACKEND (9/9 pytest): GET /api/leagues -> [{code:'nhl', name:'National Hockey League', capabilities.media:false}]; GET /api/nhl/game/latest -> game.has_video=false, league='NHL'; GET /api/nhl/standings -> Eastern=16, Western=16; GET /api/nhl/leaders -> skaters+goalies present; depth /api/nhl/scoreboard, /api/nhl/home, /api/nhl/recaps 200 OK; new /api/ticker/segment?surface=home ready with voices. FRONTEND (mobile 390x844, fetch/XHR/permissions/getUserMedia instrumented via add_init_script BEFORE app JS): fresh onboarding via /onboarding?reset=1 -> onboard-next -> team-BOS -> onboard-next x2 -> onboard-finish -> Home. Primary nav = EXACTLY 4 tabs [HOME, RECAP, NEXT, STATS] via [data-testid=toptab-*]; MY HOCKEY and SCORES absent (confirmed by full-DOM label sweep). All 4 tabs render content: HOME shows Reggie+Marc TickerDesk + LIVE ticker + Draft Board + Around My Hockey; RECAP and NEXT switch without error; STATS renders 'WHERE MY TEAMS SIT' (Boston Bruins 45-27-10, 100 PTS) + 'LEAGUE LEADERS' (Points/Goals/Assists/Wins/GAA/SV%) + full 16+16 STANDINGS. Depth routes work: /game/latest, /player/8478402 (Connor McDavid 48G/90A/138 PTS), /team/BOS (Bruins record + splits + next game) all render with Back navigation. TickerDesk PLAY: 'PLAY THE DESK' -> tapped -> 'PAUSE' after ~12s (single audio system, no double audio). Removed routes: /highlights/anything and /coldopen both correctly show Expo Router 'Unmatched Route / Page could not be found' (legacy MASL screens gone). Floating mic (data-testid='floating-mic') navigates to /talk. NETWORK GUARANTEES (across onboarding + all 4 tabs + depth routes + PLAY + /talk): only 1 unique 'segment' URL was ever hit -> /api/ticker/home_segment. Legacy '/api/segment' (bare) calls = 0, legacy '/api/segments/' calls = 0. MIC GUARANTEES: navigator.permissions.query calls = 0, navigator.mediaDevices.getUserMedia calls = 0. No red screen, no pageerrors. Only benign carryover RN-Web warnings remain (shadow*, props.pointerEvents, Image style.resizeMode).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web warning: 'shadow*' style props are deprecated. Use 'boxShadow' for RN Web 0.20+ readiness. Non-blocking."},
+      {"component": "app/index.tsx tab body views", "issue": "RN-Web warning: props.pointerEvents is deprecated. Use style.pointerEvents. Reference: /app/frontend/app/index.tsx:59"},
+      {"component": "Image resizeMode style", "issue": "RN-Web warning: Image style.resizeMode is deprecated. Please use props.resizeMode. Appears on team/player/game depth screens."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_launch_foundation.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL housekeeping: replace deprecated shadow* style props with boxShadow, prop pointerEvents with style.pointerEvents, and Image style.resizeMode with props.resizeMode to silence RN-Web warnings.",
+    "OPTIONAL: /app/backend/server.py still exposes the legacy GET /api/segments/{page} endpoint (server.py:189) and GET /api/coldopen (server.py:180). Frontend confirmed to never call them. Safe to delete server-side when convenient, since the routes are gone from the UI."
+  ],
+  "critical_code_review_comments": [
+    "app/index.tsx TABS array is exactly [HOME, RECAP, NEXT, STATS] — matches spec; ReelsScreen.tsx and ScoresScreen.tsx still on disk but no longer imported anywhere in the nav shell (grep-clean).",
+    "backend/providers/registry.py registers only NHLProvider; base.py enforces capabilities dict with media default False — describe() surfaces this in /api/leagues correctly.",
+    "backend/models/hockey.py Game.has_video defaults to False and providers/nhl.py never flips it (no verified video source yet), so every /api/nhl/game/* payload safely reports has_video=false.",
+    "All /api/nhl/* endpoints in server.py resolve through get_provider('nhl') from registry — swap point is clean for a second provider.",
+    "app/highlights/[id] and app/coldopen are absent from /app/frontend/app; Expo Router correctly returns 'Unmatched Route' at runtime.",
+    "Floating mic wired to router.push('/talk') and Haptics.impactAsync — no getUserMedia during navigation (confirmed by instrumentation)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_launch_foundation.py (new pytest suite)"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Instrumentation pattern to reuse: page.context.add_init_script BEFORE page.goto wraps window.fetch, XMLHttpRequest.open, navigator.permissions.query, navigator.mediaDevices.getUserMedia. Onboarding reset via /onboarding?reset=1 then testIDs onboard-next -> team-BOS -> onboard-next x2 -> onboard-finish. Primary nav uses testID=toptab-{key} where keys are home|recap|tonight|stats (NOTE: label 'NEXT' maps to testID toptab-tonight). TickerDesk still renders in every visited tab (display:none swap) so [data-testid=desk-play] returns multiple locators — iterate .count() and pick the .is_visible() one before clicking; PLAY -> PAUSE transition takes ~10-12s while /api/ticker/home_segment resolves then ElevenLabs TTS runs. Legacy MASL routes /highlights/[id] and /coldopen are deleted from app/, so Expo Router shows 'Unmatched Route' — that is the correct (expected) result, NOT a bug."
+}

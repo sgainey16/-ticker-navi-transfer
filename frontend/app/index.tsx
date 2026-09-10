@@ -12,16 +12,15 @@ import { TopTabBar } from "@/src/components/TopTabBar";
 import HomeScreen from "@/src/screens/HomeScreen";
 import RecapScreen from "@/src/screens/RecapScreen";
 import TonightScreen from "@/src/screens/TonightScreen";
-import ReelsScreen from "@/src/screens/ReelsScreen";
-import ScoresScreen from "@/src/screens/ScoresScreen";
 import StatsScreen from "@/src/screens/StatsScreen";
 
+// Universal primary navigation for launch: HOME · RECAP · NEXT · STATS.
+// REELS is capability-gated (added only where verified video exists) and SCORES'
+// standings now live inside STATS — so neither is a universal tab.
 const TABS = [
+  { key: "home", label: "HOME", C: HomeScreen },
   { key: "recap", label: "RECAP", C: RecapScreen },
   { key: "tonight", label: "NEXT", C: TonightScreen },
-  { key: "home", label: "HOME", C: HomeScreen },
-  { key: "reels", label: "MY HOCKEY", C: ReelsScreen },
-  { key: "scores", label: "SCORES", C: ScoresScreen },
   { key: "stats", label: "STATS", C: StatsScreen },
 ];
 

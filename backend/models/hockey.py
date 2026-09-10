@@ -98,3 +98,7 @@ class Game(BaseModel):
     three_stars: List[StarLine] = []
     team_stats: dict = {}
     series: Optional[SeriesContext] = None
+    # Media capability — True only when a verified video clip exists for this game.
+    # Providers without a verified video source leave this False; the UI then shows
+    # no video module at all (never a fake / "coming soon" experience).
+    has_video: bool = False
