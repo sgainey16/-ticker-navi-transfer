@@ -1,0 +1,36 @@
+{
+  "summary": "PASS. Reggie+Marc conversational onboarding rebuild verified end-to-end. Phase 1 WELCOME renders with 'WELCOME TO / THE TICKER', desk hero, both host lines, and testID welcome-go. Phase 2 CHAT: persistent 'REGGIE + MARC' desk strip + 4 progress dots + per-question animated host line all present. Q0 REGGIE 'Alright, first one. Who's your team?' -> typing 'boston' surfaces result-team-BOS -> tap -> gold-star BOS chip in picks rail AND ~480ms AUTO-ADVANCE to Q1 MARC 'Anybody else you keep an eye on?'. Q1 -> typing 'toronto' surfaces result-team-TOR -> tap adds TOR chip (no star) -> onboard-next advances to Q2 REGGIE 'Who's your player?'. Q2 -> typing 'mcdavid' surfaces result-player-8478402 (Connor McDavid, subtitle 'NHL · C · EDM', headshot url) -> tap -> gold-star player chip + AUTO-ADVANCE to Q3 MARC 'Anyone else coming with us?'. Q3 -> typing 'matthews' surfaces result-player-8479318 (Auston Matthews) -> tap adds chip -> onboard-finish navigates to '/' without crash. HOME reflects picks: after ~3s Home renders 'MY DRAFT BOARD' section with FOLLOWING sub-row showing BOS, TOR, McDavid, Matthews (unranked → FollowingRow mini-chips; correct since new onboarding doesn't set tier). HONEST EMPTY STATE: typing 'kamloops' on Q1 -> zero result rows + 'Not connected yet' card echoing the query, no fabrication. SKIP PATHS: Q1 onboard-skip -> Q2. Q2 onboard-skip labelled 'No player' and tapping it jumps straight to Home (intentional, matches spec). PROBES (instrumented BEFORE app JS via add_init_script): navigator.permissions.query = 0, navigator.mediaDevices.getUserMedia = 0, bare '/api/segment' calls = 0 across entire onboarding + Home. BACKEND re-confirm: GET /api/search?q=mcdavid -> Connor McDavid, id/player_id 8478402, team_abbr EDM, subtitle 'NHL · C · EDM', headshot https://assets.nhle.com/mugs/…; q=toronto -> team TOR 'Toronto Maple Leafs', subtitle 'NHL'; q=kamloops -> results:[] (honest empty). Note: request-provided McDavid player_id '8477934' was incorrect; backend returns the true NHL ID 8478402 — treated as a request typo, not a bug. Wrong-type hint on player step was NOT triggered by 'boston' because backend legitimately returned a real player named 'Boston Buckberger' (NHL · D · CBJ); wrongType branch only fires when raw.length>0 AND shown.length===0, so this is correct honest behavior. RN-Web deprecation warnings ('shadow*' and 'props.pointerEvents') remain as carryover — non-blocking.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web deprecation warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Carryover, non-blocking. Reference: multiple StyleSheet.create blocks."},
+      {"component": "tab body views", "issue": "RN-Web deprecation warning: props.pointerEvents is deprecated. Use style.pointerEvents. Carryover, non-blocking. Reference: /app/frontend/app/index.tsx"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_search.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None required — every acceptance criterion for the conversational onboarding rebuild passes.",
+    "OPTIONAL housekeeping (unchanged from prior iters): replace deprecated shadow* style props with boxShadow and prop pointerEvents with style.pointerEvents to silence RN-Web console warnings."
+  ],
+  "critical_code_review_comments": [
+    "onboarding.tsx STEPS array cleanly encodes the 4-question conversation with kind/fav/host/line/skippable per step; skip() short-circuits to finish() on si===2 (No player) — matches spec.",
+    "pick() correctly sets fav=true only when step.fav is true AND no favorite already exists (hasFavTeam / hasFavPlayer). advTimer of 480ms cleanup handled on unmount via useEffect return.",
+    "runId race guard around debounced (250ms) /api/search prevents stale responses from overwriting newer results.",
+    "wrongType branch (query>=2, !searching, raw.length>0, shown.length===0) provides the soft hint; noneConnected uses raw.length===0 for the honest empty card. Two branches are mutually exclusive as required.",
+    "completeOnboarding() persists follows + onboarded=true to storage before router.replace('/'), so Home always sees the picks immediately.",
+    "New Follows type adds optional fav flag; HomeScreen ignores unknown fields and continues to render tier-less follows through FollowingRow — additive/non-breaking as intended.",
+    "process.env.EXPO_PUBLIC_BACKEND_URL used consistently; no hardcoded host."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (re-confirmed 3 endpoints inline)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarding is now a single-screen Reggie+Marc conversation with 4 steps (STEPS in /app/frontend/app/onboarding.tsx). testIDs: welcome-go -> onboard-search -> result-team-{ABBR} / result-player-{PID} -> onboard-next (on non-fav steps) OR onboard-skip (on skippable steps) -> onboard-finish (last step only). Q0 (fav team, non-skippable) and Q2 (fav player) AUTO-ADVANCE ~480ms after picking. Q2's onboard-skip label reads 'No player' and jumps straight to Home (bypasses Q3). McDavid's real player_id is 8478402 (NOT 8477934 — that ID belongs to Aaron Ekblad). New picks are unranked (no tier) so on Home they appear under 'FOLLOWING' mini-chips inside MY DRAFT BOARD, not under 1ST/2ND/3RD ROUND rails; board-team-{ABBR} / board-player-{PID} testIDs are only rendered when tier is set. Home is behind a Loader ('Tuning in your hockey…') until nhlHome resolves — allow up to ~12s post-finish. Storage persists follows across sessions in the SAME browser context; each new mcp_browser_automation call is a fresh context so run onboarding + Home checks in ONE script. Instrumentation pattern unchanged: page.context.add_init_script BEFORE page.goto to count fetch URLs + permissions/getUserMedia."
+}
