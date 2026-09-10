@@ -213,3 +213,9 @@ Foundation: MASL chassis, checkpointed at git tag `masl-clean-baseline`.
 - Backend: providers/nhl.leaders_now() via NHL skater-stats-leaders/current + goalie-stats-leaders/current (follow_redirects); GET /api/nhl/leaders. Verified only; unavailable -> omitted, never manufactured.
 - Verified on device: My teams (BOS 5th East 100pts, EDM 5th West 93pts); leaders McDavid 138 / Kucherov 130 / MacKinnon 127...; SV% chip -> Wedgewood .921; standings both confs; leader/team taps route to Player/Team pages. No MASL, no fabricated data.
 - LAST product-surface change before Friends & Family freeze. Scope held: Home/My Hockey/Recap/Next/Scores/Game/Team/Player/leagues/integrations untouched.
+
+## LAUNCH BLOCKER FIXED - iOS Safari expo-audio microphone-permission crash [VERIFIED by testing_agent]
+- Root cause: expo-audio's web module (AudioModule.web.js getPermissionWithQueryAsync) calls navigator.permissions.query({name:'microphone'}) which THROWS on iOS Safari -> uncaught crash on the audio playback path. App only needs TTS OUTPUT, never recording.
+- Fix: Metro platform-split. NEW /app/frontend/src/lib/audio.web.ts = pure HTMLAudioElement playback (new Audio()), NO expo-audio import, graceful play()-rejection + 25s safety. Native /app/frontend/src/lib/audio.ts (expo-audio) unchanged, used only on native. expo-audio fully excluded from web bundle.
+- testing_agent (iteration_5): instrumented navigator.permissions.query + getUserMedia BEFORE app code -> across fresh load, onboarding, Home, PLAY, all 6 tabs = ZERO mic queries, ZERO getUserMedia, ZERO page/expo-audio errors, no crash. PLAY works. Recommend final check on real iPhone Safari (Chromium can't reproduce the throw).
+- Non-blocking polish noted: TickerDesk shares testID desk-play/ticker-desk across tab instances (namespacing would help E2E); RN-Web shadow*/pointerEvents deprecation warnings.

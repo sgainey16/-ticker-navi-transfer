@@ -1,0 +1,33 @@
+{
+  "summary": "PASS. Primary bug (iOS Safari crash from expo-audio's web AudioModule calling navigator.permissions.query({name:'microphone'})) is FIXED. Instrumented navigator.permissions.query + navigator.mediaDevices.getUserMedia before any app script ran; across full session (fresh load → onboarding → Home → PLAY → navigating all 6 tabs), ZERO microphone permission queries and ZERO getUserMedia calls were recorded. No page errors, no expo-audio/RecordingConstants/AudioModule.web errors in console. Only benign RN-web warnings ('shadow*' style props deprecated, 'props.pointerEvents' deprecated). Onboarding flow works end-to-end: /onboarding?reset=1 → Get started (onboard-next) → team-BOS + Continue → players Continue → tier-1 + onboard-finish → lands on Home with TickerDesk rendered ('PLAY THE DESK' button visible in screenshot). PLAY control is visible and interactive. All top tabs (HOME, RECAP, NEXT, SCORES, STATS, MY HOCKEY) navigate without crashing. Confirmed via source: only /app/frontend/src/lib/audio.web.ts is bundled on web (uses HTMLAudioElement, does NOT import expo-audio); /app/frontend/src/lib/audio.ts (expo-audio) is only used on native. Metro platform-split fix is correctly applied.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Non-blocking; migrate for RN Web 0.20+ readiness."},
+      {"component": "app/index.tsx tab body views", "issue": "RN-Web warning: props.pointerEvents is deprecated. Use style.pointerEvents. Reference: /app/frontend/app/index.tsx:68"},
+      {"component": "TickerDesk testID duplication", "issue": "Multiple TickerDesk instances across tabs share testID='desk-play' / 'ticker-desk'. Playwright's is_visible/first-match can hit a hidden (display:none) tab's element and report False even when the active tab shows the button. Consider scoping testIDs per-surface (e.g., 'desk-play-home', 'desk-play-recap') to make E2E targeting deterministic. Reference: /app/frontend/src/components/TickerDesk.tsx:108,140"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "OPTIONAL: Namespace TickerDesk testIDs by surface (e.g., testID={`desk-play-${surface}`}) so E2E can uniquely target the desk on the currently-active tab.",
+    "OPTIONAL housekeeping: replace deprecated shadow* style props with boxShadow, and prop pointerEvents with style.pointerEvents to silence RN-Web warnings."
+  ],
+  "critical_code_review_comments": [
+    "Fix is correctly implemented via Metro platform-split: /app/frontend/src/lib/audio.web.ts uses only new Audio() (HTMLAudioElement) and does NOT import expo-audio, so expo-audio's web AudioModule (which calls getPermissionWithQueryAsync → navigator.permissions.query({name:'microphone'})) is fully excluded from the web bundle.",
+    "TickerDesk imports @/src/lib/audio (module-level). Metro resolves audio.web.ts on web and audio.ts on native automatically; no runtime Platform.OS guard is needed for import correctness — good.",
+    "audio.web.ts handles autoplay rejection (audio.play() may throw due to no user gesture) with .catch(finish), and error/ended events both resolve the promise — the desk can never hang if a beat's audio fails.",
+    "audio.web.ts safety timeout (25s) guarantees each beat resolves, preventing the multi-beat loop in TickerDesk.play() from stalling.",
+    "No microphone/recording APIs are used anywhere in app code; app is playback-only on web, matching the requirement."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped per request)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The iOS-Safari-specific crash cannot be reproduced on Playwright's Chromium (its navigator.permissions.query('microphone') does not throw). The strongest validation here is the interception script (navigator.permissions.query + getUserMedia hooks installed via add_init_script) which confirmed ZERO microphone-related calls happen anywhere in the session — meaning the offending expo-audio web module is not even loaded. For device-level validation, open the preview URL on an actual iPhone in Safari and confirm no crash and no microphone permission prompt on load or when tapping PLAY THE DESK.",
+  "rca_of_issue": "Root cause: expo-audio's web build imports AudioModule.web.js which eagerly calls navigator.permissions.query({name:'microphone'}) from getPermissionWithQueryAsync at RecordingConstants load time. On iOS Safari, querying an unsupported permission name throws synchronously, crashing the app on fresh load. Fix: Metro platform-split. audio.web.ts is a pure HTMLAudioElement implementation and never imports expo-audio, so on web Metro bundles only that file — the offending expo-audio web module is entirely absent from the web bundle. Native (audio.ts) still uses expo-audio, unchanged. Validated by (a) grep showing app-code expo-audio imports only in audio.ts (native-only), (b) runtime instrumentation showing zero navigator.permissions.query and zero getUserMedia calls throughout the session, (c) no expo-audio/RecordingConstants/AudioModule errors in console, (d) full onboarding→Home→PLAY→tabs flow completes without crash."
+}
