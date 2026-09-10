@@ -34,6 +34,7 @@ class HockeyProvider(ABC):
         "schedule": False,
         "team_page": False,
         "player_page": False,
+        "search": False,
         "media": False,
     }
 
@@ -67,3 +68,10 @@ class HockeyProvider(ABC):
 
     @abstractmethod
     async def player_page(self, pid: str) -> dict: ...
+
+    # --- universal search (onboarding doorway) -----------------------------
+    # Returns verified teams/players/leagues for a free-text query. Providers
+    # that can't answer return [] — the UI then shows an honest "not connected
+    # yet" state and never fabricates a result. Default: no search support.
+    async def search(self, q: str, limit: int = 12) -> list[dict]:
+        return []

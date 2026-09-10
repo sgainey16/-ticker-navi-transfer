@@ -1,28 +1,32 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
-import { api } from "@/src/lib/api";
-import { useFollows, Tier, Follows } from "@/src/lib/follows";
+import { api, SearchResult } from "@/src/lib/api";
+import { useFollows, Follows } from "@/src/lib/follows";
 import { NhlLogo } from "@/src/components/NhlLogo";
-import { TickerLogo } from "@/src/components/TickerLogo";
+import { TickerMark } from "@/src/components/TickerLogo";
 
-type TeamLite = { abbr: string; name: string; logo?: string | null };
-type PlayerLite = { player_id: string; team_abbr: string; name: string; pos?: string; number?: number };
+const DESK = require("../assets/images/broadcast-desk.png");
 
-const ROUND: Record<Tier, { label: string; short: string; sub: string; color: string }> = {
-  1: { label: "1ST ROUND", short: "1ST", sub: "CAN'T-MISS", color: colors.gold },
-  2: { label: "2ND ROUND", short: "2ND", sub: "REGULARS", color: colors.blue },
-  3: { label: "3RD ROUND", short: "3RD", sub: "KEEP ME POSTED", color: "#9AA6B8" },
-};
+type TeamPick = { abbr: string; name: string; logo?: string | null };
+type PlayerPick = { player_id: string; team_abbr: string; name: string; pos?: string; headshot?: string | null };
 
+const SUGGESTIONS = ["Montréal Canadiens", "Connor Bedard", "WHL", "Kamloops", "Swiss National League"];
+
+function lastName(name: string) {
+  const p = name.trim().split(/\s+/);
+  return p[p.length - 1] || name;
+}
 function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] || "") + (parts[parts.length - 1]?.[0] || "")).toUpperCase();
+  const p = name.trim().split(/\s+/);
+  return ((p[0]?.[0] || "") + (p[p.length - 1]?.[0] || "")).toUpperCase();
 }
 
 export default function Onboarding() {
@@ -31,299 +35,335 @@ export default function Onboarding() {
   const { reset } = useLocalSearchParams<{ reset?: string }>();
   const { completeOnboarding, resetOnboarding } = useFollows();
 
-  const [step, setStep] = useState(0); // 0 NHL, 1 Teams, 2 Players, 3 Stars
-  const [teams, setTeams] = useState<Record<string, TeamLite>>({});      // selected teams
-  const [players, setPlayers] = useState<Record<string, PlayerLite>>({}); // selected players
-  const [tiers, setTiers] = useState<Record<string, Tier>>({});           // key -> tier
+  const [phase, setPhase] = useState<"welcome" | "build">("welcome");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [teams, setTeams] = useState<Record<string, TeamPick>>({});
+  const [players, setPlayers] = useState<Record<string, PlayerPick>>({});
 
-  // Dev reset entry: /onboarding?reset=1 clears any saved follows on mount.
+  const runId = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => { if (reset === "1") resetOnboarding(); }, [reset, resetOnboarding]);
 
-  // --- team catalog ---
-  const standings = useApiLocal(() => api.nhlStandings());
-  const teamCatalog: TeamLite[] = useMemo(() => {
-    const d = standings.data;
-    if (!d) return [];
-    const all = [...(d.Eastern || []), ...(d.Western || [])].map((r: any) => ({ abbr: r.abbr, name: r.name, logo: r.logo }));
-    return all.sort((a, b) => a.name.localeCompare(b.name));
-  }, [standings.data]);
-
-  // --- rosters for selected teams (loaded when entering Players step) ---
-  const [rosters, setRosters] = useState<Record<string, PlayerLite[]>>({});
-  const [rosterLoading, setRosterLoading] = useState(false);
+  // Debounced universal search — verified providers only, never fabricated.
   useEffect(() => {
-    if (step !== 2) return;
-    const need = Object.keys(teams).filter((abbr) => !rosters[abbr]);
-    if (!need.length) return;
-    setRosterLoading(true);
-    Promise.all(need.map(async (abbr) => {
+    if (timer.current) clearTimeout(timer.current);
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    const id = ++runId.current;
+    timer.current = setTimeout(async () => {
       try {
-        const data = await api.nhlTeam(abbr);
-        const r = data.roster || {};
-        const list: PlayerLite[] = [...(r.forwards || []), ...(r.defensemen || []), ...(r.goalies || [])]
-          .map((p: any) => ({ player_id: String(p.player_id), team_abbr: abbr, name: p.name, pos: p.pos, number: p.number }));
-        return [abbr, list] as const;
+        const r = await api.search(q);
+        if (runId.current === id) setResults(r.results);
       } catch {
-        return [abbr, []] as const;
+        if (runId.current === id) setResults([]);
+      } finally {
+        if (runId.current === id) setSearching(false);
       }
-    })).then((pairs) => {
-      setRosters((prev) => { const next = { ...prev }; pairs.forEach(([a, l]) => (next[a] = l)); return next; });
-      setRosterLoading(false);
-    });
-  }, [step, teams]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, 250);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [query]);
 
-  const toggleTeam = (t: TeamLite) => {
+  const isSel = (r: SearchResult) =>
+    r.type === "team" ? !!teams[r.team_abbr || ""] : !!players[r.player_id || ""];
+
+  const toggle = (r: SearchResult) => {
     Haptics.selectionAsync();
-    setTeams((prev) => {
-      const next = { ...prev };
-      if (next[t.abbr]) { delete next[t.abbr]; setTiers((ti) => { const n = { ...ti }; delete n[`team:${t.abbr}`]; return n; }); }
-      else next[t.abbr] = t;
-      return next;
-    });
-  };
-  const togglePlayer = (p: PlayerLite) => {
-    Haptics.selectionAsync();
-    setPlayers((prev) => {
-      const next = { ...prev };
-      if (next[p.player_id]) { delete next[p.player_id]; setTiers((ti) => { const n = { ...ti }; delete n[`player:${p.player_id}`]; return n; }); }
-      else next[p.player_id] = p;
-      return next;
-    });
-  };
-  const setTier = (key: string, tier: Tier) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTiers((prev) => { const n = { ...prev }; if (n[key] === tier) delete n[key]; else n[key] = tier; return n; });
+    if (r.type === "team" && r.team_abbr) {
+      setTeams((prev) => {
+        const n = { ...prev };
+        if (n[r.team_abbr!]) delete n[r.team_abbr!];
+        else n[r.team_abbr!] = { abbr: r.team_abbr!, name: r.name, logo: r.logo };
+        return n;
+      });
+    } else if (r.type === "player" && r.player_id) {
+      setPlayers((prev) => {
+        const n = { ...prev };
+        if (n[r.player_id!]) delete n[r.player_id!];
+        else n[r.player_id!] = { player_id: r.player_id!, team_abbr: r.team_abbr || "", name: r.name, pos: r.pos, headshot: r.headshot };
+        return n;
+      });
+    }
   };
 
-  const selectedTeamList = useMemo(() => Object.values(teams), [teams]);
-  const selectedPlayerList = useMemo(() => Object.values(players), [players]);
+  const removeTeam = (abbr: string) => { Haptics.selectionAsync(); setTeams((p) => { const n = { ...p }; delete n[abbr]; return n; }); };
+  const removePlayer = (pid: string) => { Haptics.selectionAsync(); setPlayers((p) => { const n = { ...p }; delete n[pid]; return n; }); };
+
+  const teamList = useMemo(() => Object.values(teams), [teams]);
+  const playerList = useMemo(() => Object.values(players), [players]);
+  const count = teamList.length + playerList.length;
 
   const finish = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const follows: Follows = {
-      teams: selectedTeamList.map((t) => ({ abbr: t.abbr, name: t.name, tier: tiers[`team:${t.abbr}`] })),
-      players: selectedPlayerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, tier: tiers[`player:${p.player_id}`] })),
+      teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name })),
+      players: playerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos })),
     };
     await completeOnboarding(follows);
     router.replace("/");
   };
 
-  const canGoPlayers = selectedTeamList.length > 0;
+  // ---------- WELCOME ----------
+  if (phase === "welcome") {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.brandRow}>
+          <TickerMark size={26} />
+          <Text style={styles.brand}>THE TICKER</Text>
+        </View>
+
+        <View style={styles.welcomeBody}>
+          <View style={styles.desk}>
+            <Image source={DESK} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <LinearGradient
+              colors={["rgba(5,7,12,0.15)", "rgba(5,7,12,0.62)", "rgba(5,7,12,0.98)"]}
+              locations={[0, 0.5, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.deskTop}>
+              <View style={styles.deskTag}>
+                <Ionicons name="mic" size={11} color={colors.blue} />
+                <Text style={styles.deskTagText}>REGGIE + MARC</Text>
+              </View>
+            </View>
+            <View style={styles.deskBottom}>
+              <Text style={styles.kicker}>WELCOME TO</Text>
+              <Text style={styles.deskTitle}>THE TICKER</Text>
+              <View style={styles.hostLine}>
+                <Text style={[styles.hostName, { color: colors.gold }]}>REGGIE</Text>
+                <Text style={styles.hostText}>Alright. Let&apos;s build your hockey world.</Text>
+              </View>
+              <View style={styles.hostLine}>
+                <Text style={[styles.hostName, { color: "#9AA6B8" }]}>MARC</Text>
+                <Text style={styles.hostText}>Teams, players, leagues — start wherever you want.</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.pitch}>
+            The Ticker knows the hockey you care about — then Reggie and Marc bring that world to life.
+          </Text>
+        </View>
+
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <View />
+          <Pressable style={styles.cta} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPhase("build"); }} testID="welcome-go">
+            <Text style={styles.ctaText}>Let&apos;s go</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.white} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ---------- BUILD (search) ----------
+  const showSuggestions = query.trim().length < 2;
+  const emptyMatch = query.trim().length >= 2 && !searching && results.length === 0;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
-      {/* header */}
-      <View style={styles.header}>
-        <TickerLogo width={96} />
-        <View style={styles.dots}>
-          {[0, 1, 2, 3].map((i) => <View key={i} style={[styles.dot, i === step && styles.dotOn, i < step && styles.dotDone]} />)}
-        </View>
+      <View style={styles.brandRow}>
+        <TickerMark size={22} />
+        <Text style={[styles.brand, { fontSize: 15 }]}>THE TICKER</Text>
       </View>
 
-      {step === 0 && (
-        <View style={styles.centerStep}>
-          <Text style={styles.big}>What hockey do you{"\n"}care about?</Text>
-          <Text style={styles.lead}>The Ticker learns your world, then Reggie & Marc program around it. Takes a few taps.</Text>
-          <View style={styles.leagueCard}>
-            <View style={styles.leagueBadge}><Text style={styles.leagueBadgeText}>NHL</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.leagueName}>National Hockey League</Text>
-              <Text style={styles.leagueSub}>The only league on The Ticker right now.</Text>
-            </View>
-            <Ionicons name="checkmark-circle" size={22} color={colors.blue} />
-          </View>
-          <Pressable style={styles.devReset} onPress={() => resetOnboarding()}>
-            <Text style={styles.devResetText}>Start over (dev reset)</Text>
+      <Text style={styles.title}>What hockey do{"\n"}you care about?</Text>
+
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={colors.textDim} />
+        <TextInput
+          testID="onboard-search"
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search any league, team or player…"
+          placeholderTextColor={colors.textFaint}
+          style={styles.searchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {query.length > 0 ? (
+          <Pressable hitSlop={10} onPress={() => setQuery("")}>
+            <Ionicons name="close-circle" size={18} color={colors.textDim} />
           </Pressable>
-        </View>
-      )}
+        ) : null}
+      </View>
 
-      {step === 1 && (
-        <View style={styles.flexStep}>
-          <Text style={styles.stepTitle}>Pick your teams</Text>
-          <Text style={styles.stepSub}>Tap every team you follow. {selectedTeamList.length} selected.</Text>
-          {standings.loading ? (
-            <ActivityIndicator color={colors.blue} style={{ marginTop: spacing.xl }} />
-          ) : (
-            <ScrollView contentContainerStyle={styles.teamGrid} showsVerticalScrollIndicator={false}>
-              {teamCatalog.map((t) => {
-                const on = !!teams[t.abbr];
-                return (
-                  <Pressable key={t.abbr} style={[styles.teamCell, on && styles.teamCellOn]} onPress={() => toggleTeam(t)} testID={`team-${t.abbr}`}>
-                    <NhlLogo abbr={t.abbr} url={t.logo} size={40} />
-                    <Text style={[styles.teamAbbr, on && { color: colors.white }]}>{t.abbr}</Text>
-                    {on ? <View style={styles.checkDot}><Ionicons name="checkmark" size={11} color={colors.white} /></View> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
-      )}
-
-      {step === 2 && (
-        <View style={styles.flexStep}>
-          <Text style={styles.stepTitle}>Pick your players</Text>
-          <Text style={styles.stepSub}>{selectedPlayerList.length} selected · optional</Text>
-          {rosterLoading ? (
-            <ActivityIndicator color={colors.blue} style={{ marginTop: spacing.xl }} />
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
-              {selectedTeamList.map((t) => (
-                <View key={t.abbr} style={styles.rosterBlock}>
-                  <View style={styles.rosterHead}>
-                    <NhlLogo abbr={t.abbr} url={t.logo} size={22} />
-                    <Text style={styles.rosterTeam}>{t.name}</Text>
-                  </View>
-                  <View style={styles.chipWrap}>
-                    {(rosters[t.abbr] || []).map((p) => {
-                      const on = !!players[p.player_id];
-                      return (
-                        <Pressable key={p.player_id} style={[styles.pChip, on && styles.pChipOn]} onPress={() => togglePlayer(p)} testID={`player-${p.player_id}`}>
-                          <View style={[styles.pAvatar, on && { borderColor: colors.blue }]}><Text style={styles.pInit}>{initials(p.name)}</Text></View>
-                          <Text style={[styles.pName, on && { color: colors.white }]} numberOfLines={1}>{p.name}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      )}
-
-      {step === 3 && (
-        <View style={styles.flexStep}>
-          <Text style={styles.stepTitle}>Build your Draft Board</Text>
-          <Text style={styles.stepSub}>Optional. Draft the few that matter most into a round — the rest stay followed.</Text>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.sm }}>
-            {selectedTeamList.map((t) => (
-              <StarRow key={`t${t.abbr}`} title={t.name} sub={t.abbr} logo={<NhlLogo abbr={t.abbr} url={t.logo} size={30} />}
-                tier={tiers[`team:${t.abbr}`]} onSet={(tr) => setTier(`team:${t.abbr}`, tr)} />
+      {/* selected follows */}
+      {count > 0 ? (
+        <View style={styles.followWrap}>
+          <Text style={styles.followLabel}>FOLLOWING · {count}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.followRail} keyboardShouldPersistTaps="handled">
+            {teamList.map((t) => (
+              <Pressable key={`t${t.abbr}`} style={styles.followChip} onPress={() => removeTeam(t.abbr)}>
+                <NhlLogo abbr={t.abbr} url={t.logo} size={18} />
+                <Text style={styles.followChipText}>{t.abbr}</Text>
+                <Ionicons name="close" size={13} color={colors.textDim} />
+              </Pressable>
             ))}
-            {selectedPlayerList.map((p) => (
-              <StarRow key={`p${p.player_id}`} title={p.name} sub={`${p.pos || ""} · ${p.team_abbr}`}
-                logo={<View style={styles.pAvatarSm}><Text style={styles.pInit}>{initials(p.name)}</Text></View>}
-                tier={tiers[`player:${p.player_id}`]} onSet={(tr) => setTier(`player:${p.player_id}`, tr)} />
+            {playerList.map((p) => (
+              <Pressable key={`p${p.player_id}`} style={styles.followChip} onPress={() => removePlayer(p.player_id)}>
+                <Avatar headshot={p.headshot} name={p.name} size={18} />
+                <Text style={styles.followChipText}>{lastName(p.name)}</Text>
+                <Ionicons name="close" size={13} color={colors.textDim} />
+              </Pressable>
             ))}
-            {!selectedTeamList.length && !selectedPlayerList.length ? (
-              <Text style={styles.stepSub}>No follows yet — that&apos;s fine. You can add them anytime.</Text>
-            ) : null}
           </ScrollView>
         </View>
-      )}
+      ) : null}
 
-      {/* footer nav */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        {step > 0 ? (
-          <Pressable style={styles.backBtn} onPress={() => setStep((s) => s - 1)}>
-            <Ionicons name="chevron-back" size={18} color={colors.textDim} />
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        ) : <View />}
-        {step < 3 ? (
-          <Pressable
-            style={[styles.nextBtn, step === 1 && !canGoPlayers && styles.nextBtnDim]}
-            disabled={step === 1 && !canGoPlayers}
-            onPress={() => setStep((s) => s + 1)}
-            testID="onboard-next"
-          >
-            <Text style={styles.nextText}>{step === 0 ? "Get started" : "Continue"}</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.white} />
-          </Pressable>
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+        {showSuggestions ? (
+          <View style={styles.suggestBlock}>
+            <Text style={styles.suggestHint}>Try a team, a player, or a league</Text>
+            <View style={styles.suggestWrap}>
+              {SUGGESTIONS.map((s) => (
+                <Pressable key={s} style={styles.suggestChip} onPress={() => setQuery(s)} testID={`suggest-${s}`}>
+                  <Ionicons name="sparkles-outline" size={12} color={colors.blue} />
+                  <Text style={styles.suggestText}>{s}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.expanding}>
+              The Ticker is being built for the entire hockey world. NHL is live today — more leagues are on the way.
+            </Text>
+          </View>
+        ) : searching ? (
+          <View style={styles.searchingRow}>
+            <ActivityIndicator size="small" color={colors.blue} />
+            <Text style={styles.searchingText}>Searching The Ticker…</Text>
+          </View>
+        ) : emptyMatch ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="planet-outline" size={26} color={colors.blue} />
+            <Text style={styles.emptyTitle}>Not connected yet</Text>
+            <Text style={styles.emptyText}>
+              We don&apos;t cover “{query.trim()}” on The Ticker yet — but the hockey world is expanding. NHL is live right now.
+            </Text>
+          </View>
         ) : (
-          <Pressable style={styles.nextBtn} onPress={finish} testID="onboard-finish">
-            <Text style={styles.nextText}>Enter The Ticker</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.white} />
-          </Pressable>
+          <View style={styles.results}>
+            {results.map((r) => {
+              const on = isSel(r);
+              return (
+                <Pressable
+                  key={`${r.type}-${r.id}`}
+                  style={[styles.resultRow, on && styles.resultRowOn]}
+                  onPress={() => toggle(r)}
+                  testID={`result-${r.type}-${r.id}`}
+                >
+                  {r.type === "team"
+                    ? <NhlLogo abbr={r.team_abbr} url={r.logo} size={38} />
+                    : <Avatar headshot={r.headshot} name={r.name} size={38} />}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.resultName} numberOfLines={1}>{r.name}</Text>
+                    <Text style={styles.resultSub}>{r.subtitle}</Text>
+                  </View>
+                  <View style={[styles.followBtn, on && styles.followBtnOn]}>
+                    <Ionicons name={on ? "checkmark" : "add"} size={16} color={on ? colors.bg : colors.blue} />
+                    <Text style={[styles.followBtnText, on && { color: colors.bg }]}>{on ? "FOLLOWING" : "FOLLOW"}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         )}
+      </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        <Pressable style={styles.backBtn} onPress={() => setPhase("welcome")}>
+          <Ionicons name="chevron-back" size={18} color={colors.textDim} />
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
+        <Pressable style={[styles.cta, count === 0 && styles.ctaDim]} onPress={finish} testID="onboard-finish">
+          <Text style={styles.ctaText}>{count > 0 ? "Enter My Ticker" : "Enter The Ticker"}</Text>
+          <Ionicons name="arrow-forward" size={16} color={colors.white} />
+        </Pressable>
       </View>
     </View>
   );
 }
 
-function StarRow({ title, sub, logo, tier, onSet }: { title: string; sub: string; logo: React.ReactNode; tier?: Tier; onSet: (t: Tier) => void }) {
+function Avatar({ headshot, name, size }: { headshot?: string | null; name: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (headshot && !failed) {
+    return (
+      <Image
+        source={headshot}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.surfaceHi }}
+        contentFit="cover"
+        transition={150}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   return (
-    <View style={styles.starRow}>
-      {logo}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.starName} numberOfLines={1}>{title}</Text>
-        <Text style={styles.starSub}>{sub}</Text>
-      </View>
-      <View style={styles.starPicks}>
-        {([1, 2, 3] as Tier[]).map((tr) => {
-          const on = tier === tr;
-          return (
-            <Pressable key={tr} style={[styles.starChip, on && { backgroundColor: ROUND[tr].color, borderColor: ROUND[tr].color }]} onPress={() => onSet(tr)} testID={`tier-${tr}`}>
-              <Ionicons name={on ? "ribbon" : "ribbon-outline"} size={11} color={on ? colors.bg : ROUND[tr].color} />
-              <Text style={[styles.starChipText, { color: on ? colors.bg : ROUND[tr].color }]}>{ROUND[tr].short}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.surfaceHi, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }}>
+      <Text style={{ color: colors.white, fontFamily: fonts.display, fontSize: size * 0.34, fontWeight: "800" }}>{initials(name)}</Text>
     </View>
   );
-}
-
-// tiny local copy of useApi to avoid import cycle surprises
-function useApiLocal<T>(fn: () => Promise<T>) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => { let a = true; fn().then((d) => a && setData(d)).catch(() => {}).finally(() => a && setLoading(false)); return () => { a = false; }; }, []); // eslint-disable-line
-  return { data, loading };
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: spacing.lg },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg },
-  dots: { flexDirection: "row", gap: 6 },
-  dot: { width: 22, height: 4, borderRadius: 2, backgroundColor: colors.surfaceHi },
-  dotOn: { backgroundColor: colors.blue },
-  dotDone: { backgroundColor: colors.blueDim },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.md },
+  brand: { color: colors.white, fontFamily: fonts.display, fontSize: 17, fontWeight: "800", letterSpacing: 1 },
 
-  centerStep: { flex: 1, justifyContent: "center", gap: spacing.lg },
-  big: { color: colors.white, fontFamily: fonts.display, fontSize: 34, fontWeight: "800", lineHeight: 38, letterSpacing: 0.3 },
-  lead: { color: colors.textDim, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
-  leagueCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.blueDim, borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.sm },
-  leagueBadge: { backgroundColor: colors.blue, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 6 },
-  leagueBadgeText: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 1 },
-  leagueName: { color: colors.white, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
-  leagueSub: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
-  devReset: { alignSelf: "center", marginTop: spacing.md, padding: spacing.sm },
-  devResetText: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 12, textDecorationLine: "underline" },
+  // welcome
+  welcomeBody: { flex: 1, justifyContent: "center", gap: spacing.lg },
+  desk: { height: 300, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
+  deskTop: { flexDirection: "row", padding: spacing.md },
+  deskTag: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  deskTagText: { color: colors.white, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
+  deskBottom: { padding: spacing.lg, gap: 6 },
+  kicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 12, fontWeight: "700", letterSpacing: 3 },
+  deskTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 32, fontWeight: "800", letterSpacing: 0.5, marginBottom: spacing.sm },
+  hostLine: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  hostName: { fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1, width: 52, paddingTop: 2 },
+  hostText: { flex: 1, color: colors.text, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19 },
+  pitch: { color: colors.textDim, fontFamily: fonts.body, fontSize: 15, lineHeight: 22 },
 
-  flexStep: { flex: 1 },
-  stepTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", letterSpacing: 0.3 },
-  stepSub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, marginTop: 2, marginBottom: spacing.md },
+  // build / search
+  title: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800", lineHeight: 34, letterSpacing: 0.3, marginBottom: spacing.lg },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.lg, paddingHorizontal: spacing.md, height: 52 },
+  searchInput: { flex: 1, color: colors.white, fontFamily: fonts.body, fontSize: 16, ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}) },
 
-  teamGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingBottom: spacing.xl },
-  teamCell: { width: "22%", flexGrow: 1, aspectRatio: 1, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 4 },
-  teamCellOn: { borderColor: colors.blue, backgroundColor: colors.surfaceHi },
-  teamAbbr: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
-  checkDot: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" },
+  followWrap: { marginTop: spacing.md },
+  followLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5, marginBottom: 8 },
+  followRail: { gap: 8, paddingRight: spacing.lg },
+  followChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surfaceHi, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.blueDim, paddingLeft: 6, paddingRight: 10, paddingVertical: 5 },
+  followChipText: { color: colors.white, fontFamily: fonts.display, fontSize: 12, fontWeight: "700" },
 
-  rosterBlock: { marginBottom: spacing.lg },
-  rosterHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.sm },
-  rosterTeam: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
-  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  pChip: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingRight: spacing.md, paddingLeft: 4, paddingVertical: 4 },
-  pChipOn: { borderColor: colors.blue, backgroundColor: colors.surfaceHi },
-  pAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceHi, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  pAvatarSm: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  pInit: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800" },
-  pName: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, maxWidth: 120 },
+  suggestBlock: { marginTop: spacing.lg, gap: spacing.md },
+  suggestHint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13 },
+  suggestWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  suggestChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 9 },
+  suggestText: { color: colors.text, fontFamily: fonts.body, fontSize: 13.5 },
+  expanding: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 12, lineHeight: 18, marginTop: spacing.sm },
 
-  starRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
-  starName: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
-  starSub: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 11, marginTop: 1 },
-  starPicks: { flexDirection: "row", gap: 5 },
-  starChip: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 5 },
-  starChipText: { fontFamily: fonts.display, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  searchingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: spacing.xl },
+  searchingText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 14 },
+
+  emptyCard: { alignItems: "center", gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.xl, marginTop: spacing.lg },
+  emptyTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 18, fontWeight: "800", letterSpacing: 0.3 },
+  emptyText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 20, textAlign: "center" },
+
+  results: { marginTop: spacing.md, gap: spacing.sm },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md },
+  resultRowOn: { borderColor: colors.blue, backgroundColor: colors.surfaceHi },
+  resultName: { color: colors.white, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
+  resultSub: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 0.8, marginTop: 2 },
+  followBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.blue, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 },
+  followBtnOn: { backgroundColor: colors.blue, borderColor: colors.blue },
+  followBtnText: { color: colors.blue, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
 
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 2, padding: spacing.sm },
   backText: { color: colors.textDim, fontFamily: fonts.display, fontSize: 14, fontWeight: "700" },
-  nextBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingHorizontal: spacing.xl, paddingVertical: 12 },
-  nextBtnDim: { opacity: 0.4 },
-  nextText: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  cta: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingHorizontal: spacing.xl, paddingVertical: 13 },
+  ctaDim: { opacity: 0.55 },
+  ctaText: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
 });

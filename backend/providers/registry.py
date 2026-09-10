@@ -27,3 +27,21 @@ def get_provider(code: str | None = None) -> HockeyProvider:
 
 def list_providers() -> list[HockeyProvider]:
     return list(_PROVIDERS.values())
+
+
+async def search_all(q: str, limit: int = 16) -> list[dict]:
+    """Aggregate verified search results across every provider that supports it.
+
+    A future league becomes searchable here automatically once registered — the
+    onboarding doorway then spans the whole connected hockey world, with zero
+    fabricated results (providers return only what they can verify).
+    """
+    out: list[dict] = []
+    for p in list_providers():
+        if not p.capabilities.get("search"):
+            continue
+        try:
+            out.extend(await p.search(q, limit=limit))
+        except Exception:
+            pass
+    return out[:limit]

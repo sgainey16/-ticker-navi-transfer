@@ -1,0 +1,37 @@
+{
+  "summary": "PASS. Search-first ONBOARDING doorway + new GET /api/search verified end-to-end. BACKEND (12/12 pytest): GET /api/search?q=bedard -> Connor Bedard player row (team_abbr=CHI, subtitle starts 'NHL', headshot https://assets.nhle.com/mugs/..., league=NHL); q=canadiens -> team MTL 'Montréal Canadiens' (id=MTL, subtitle='NHL'); q=edmonton -> team EDM 'Edmonton Oilers'; q=kamloops and q='swiss national league' -> results=[] (honest empty — no fabrication); q='' and q='a' -> [] (min-length gate). Regression greens: /api/leagues includes nhl, /api/nhl/home, /api/nhl/scoreboard, /api/nhl/standings 200 with expected shape; legacy /api/segment (bare) not routed (404/405). FRONTEND (mobile 390x844, fetch + navigator.permissions.query + navigator.mediaDevices.getUserMedia instrumented BEFORE app JS via add_init_script): /onboarding?reset=1 renders Phase 1 WELCOME with 'WELCOME TO / THE TICKER', REGGIE and MARC host lines, and testID welcome-go. Tap -> Phase 2 BUILD with testID onboard-search. Typing 'bedard' surfaces testID result-player-8484144 ('Connor Bedard' / 'NHL · C · CHI' / FOLLOW). Typing 'canadiens' surfaces result-team-MTL ('Montréal Canadiens' / 'NHL'). Typing 'edmonton' surfaces result-team-EDM. Tapping player + team rows switches FOLLOW->FOLLOWING and renders 'FOLLOWING · 2' chip rail with MTL + Bedard chips. Tapping the MTL chip removes it -> 'FOLLOWING · 1'. Typing 'kamloops' -> zero result rows and 'Not connected yet' card echoing the query; same for 'swiss national league'. testID onboard-finish navigates to '/' (Home) — no crash — with MY DRAFT BOARD showing FOLLOWING MTL + CB Bedard and AROUND MY HOCKEY populated with MTL finals. NETWORK PROBES over entire onboarding + Home load: navigator.permissions.query = 0, navigator.mediaDevices.getUserMedia = 0, bare '/api/segment' calls = 0. /api/search hit exactly once per keystroke burst (bedard, canadiens, edmonton, kamloops, swiss...); on Home only /api/nhl/home, /api/nhl/recaps, /api/ticker/home_segment, /api/nhl/game/{id} were used. Back button returns to Welcome phase. Only benign prior RN-Web warnings ('shadow*', 'props.pointerEvents') remain.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web deprecation warning still present: 'shadow*' style props are deprecated. Use 'boxShadow'. Carryover, non-blocking. Reference: multiple StyleSheet.create blocks."},
+      {"component": "tab body views", "issue": "RN-Web deprecation warning: props.pointerEvents is deprecated. Use style.pointerEvents. Carryover, non-blocking. Reference: /app/frontend/app/index.tsx"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_search.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None required for this iteration — onboarding rebuild passes all acceptance criteria (backend search endpoint, search-first UI, follow chip rail, honest empty state, no mic/permissions calls, Enter My Ticker lands on Home with followed picks reflected).",
+    "OPTIONAL housekeeping (unchanged from iter_7): replace deprecated shadow* style props with boxShadow and prop pointerEvents with style.pointerEvents to silence RN-Web console warnings."
+  ],
+  "critical_code_review_comments": [
+    "backend/providers/nhl.py search() aggregates verified NHL teams (via standings cache w/ 1h TTL) + real player search (https://search.d3.nhle.com/api/v1/search/player) — no fabricated results paths; unknown providers simply omit rows.",
+    "backend/providers/registry.py search_all() iterates every provider whose capabilities.search=True; adding a future league (e.g. CHL) automatically extends onboarding coverage.",
+    "server.py /api/search wraps search_all in try/except and always returns {query, results:[]} on failure — matches the 'honest empty state' contract.",
+    "frontend/app/onboarding.tsx uses debounced (250ms) universal search with a run-id race guard (runId.current) so late responses cannot overwrite newer results.",
+    "frontend follow state is client-local until completeOnboarding() persists via storage; shape matches follows.tsx type (teams[abbr,name], players[player_id,team_abbr,name,pos]). Tier was intentionally removed and follows.tsx still exposes it as optional — non-breaking.",
+    "frontend/src/lib/api.ts search() uses process.env.EXPO_PUBLIC_BACKEND_URL — no hardcoded host."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_onboarding_search.py (new pytest suite — 12 tests)"
+  ],
+  "success_rate": { "backend": "100% (12/12)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarding is now search-first (Phase 1 welcome + Phase 2 build). Reset via /onboarding?reset=1. Keys: testID welcome-go -> onboard-search -> result-team-{ABBR} / result-player-{PID} -> onboard-finish. Follow chip rail rows are Pressable Views labelled by team ABBR or player last name; to click a chip use JS evaluate to find the element whose textContent equals the label. Provider search returns team.id = team_abbr (e.g. 'MTL'), player.id = playerId (e.g. '8484144'). Non-NHL queries (WHL, Kamloops, Swiss) MUST return [] — do not treat that as a bug. Instrumentation pattern (unchanged from iter_7): page.context.add_init_script BEFORE page.goto to count fetch URLs + permission/getUserMedia. New probe key: window.__probe.searchCalls captures every /api/search hit. Backend NHL player search hits an external NHL service (search.d3.nhle.com) — allow up to ~2.5s per query in Playwright."
+}

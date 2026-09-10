@@ -9,6 +9,7 @@ All network I/O is async (httpx) so it never blocks the FastAPI event loop.
 from __future__ import annotations
 import asyncio
 import logging
+import time
 from datetime import date, timedelta
 from typing import Optional
 
@@ -601,6 +602,73 @@ async def leaders_now(limit: int = 8) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# UNIVERSAL SEARCH — verified NHL teams + players for the onboarding doorway.
+# Team list is cached in-memory (standings) so per-keystroke search is cheap;
+# players hit the official NHL search service. Real data only — never faked.
+# ---------------------------------------------------------------------------
+
+_TEAM_CACHE: dict = {"ts": 0.0, "teams": []}
+PLAYER_SEARCH = "https://search.d3.nhle.com/api/v1/search/player"
+
+
+async def _team_index(client: httpx.AsyncClient) -> list[dict]:
+    if _TEAM_CACHE["teams"] and (time.time() - _TEAM_CACHE["ts"] < 3600):
+        return _TEAM_CACHE["teams"]
+    st = await _get(client, "standings/now")
+    teams = []
+    for r in st.get("standings", []):
+        teams.append({
+            "abbr": _n(r.get("teamAbbrev")),
+            "name": _n(r.get("teamName")),
+            "common": _n(r.get("teamCommonName")),
+            "place": _n(r.get("placeName")),
+            "logo": r.get("teamLogo"),
+        })
+    if teams:
+        _TEAM_CACHE.update(ts=time.time(), teams=teams)
+    return teams
+
+
+async def search(q: str, limit: int = 12) -> list[dict]:
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    ql = q.lower()
+    teams_out: list[dict] = []
+    players_out: list[dict] = []
+    async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}, follow_redirects=True, timeout=15) as client:
+        try:
+            for t in await _team_index(client):
+                hay = f"{t['name']} {t['common']} {t['place']} {t['abbr']}".lower()
+                if ql in hay:
+                    teams_out.append({
+                        "type": "team", "id": t["abbr"], "team_abbr": t["abbr"],
+                        "name": t["name"], "subtitle": "NHL", "logo": t["logo"],
+                        "league": "NHL", "league_code": "nhl",
+                    })
+        except Exception:
+            logger.exception("team search failed")
+        try:
+            r = await client.get(PLAYER_SEARCH, params={"culture": "en-us", "limit": 8, "q": q, "active": "true"})
+            for p in (r.json() or []):
+                pid = str(p.get("playerId"))
+                abbr = p.get("teamAbbrev") or p.get("lastTeamAbbrev") or ""
+                season = p.get("lastSeasonId") or "20252026"
+                pos = p.get("positionCode") or ""
+                headshot = f"https://assets.nhle.com/mugs/nhl/{season}/{abbr}/{pid}.png" if abbr else None
+                sub = "NHL" + (f" · {pos}" if pos else "") + (f" · {abbr}" if abbr else "")
+                players_out.append({
+                    "type": "player", "id": pid, "player_id": pid, "team_abbr": abbr,
+                    "name": p.get("name"), "pos": pos, "subtitle": sub,
+                    "headshot": headshot, "logo": (f"https://assets.nhle.com/logos/nhl/svg/{abbr}_light.svg" if abbr else None),
+                    "league": "NHL", "league_code": "nhl",
+                })
+        except Exception:
+            logger.exception("player search failed")
+    return (teams_out + players_out)[:limit]
+
+
 
 # ---------------------------------------------------------------------------
 # Provider adapter — the NHL implementation of the universal HockeyProvider.
@@ -621,6 +689,7 @@ class NHLProvider(HockeyProvider):
         "schedule": True,
         "team_page": True,
         "player_page": True,
+        "search": True,
         "media": False,  # no verified NHL video source wired yet — REELS stays gated.
     }
 
@@ -647,3 +716,6 @@ class NHLProvider(HockeyProvider):
 
     async def player_page(self, pid: str):
         return await player_page(pid)
+
+    async def search(self, q: str, limit: int = 12):
+        return await search(q, limit=limit)

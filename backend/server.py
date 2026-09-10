@@ -22,7 +22,7 @@ import masl_data as data
 import asyncio
 import hashlib
 from providers import nhl
-from providers.registry import get_provider, list_providers
+from providers.registry import get_provider, list_providers, search_all
 from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker
 from ticker_hosts import host_voice
 
@@ -809,6 +809,21 @@ async def leagues():
     adapter is registered, and every screen reads it through the same contract.
     """
     return {"leagues": [p.describe() for p in list_providers()]}
+
+
+@api_router.get("/search")
+async def search(q: str = ""):
+    """Universal onboarding search across every connected provider (verified only).
+
+    Returns [] for queries we don't cover yet — the client shows an honest
+    'not connected yet' state and never fabricates results.
+    """
+    try:
+        results = await search_all(q, limit=16)
+    except Exception:
+        logger.exception("search failed")
+        results = []
+    return {"query": q, "results": results}
 
 
 @api_router.get("/nhl/home")
