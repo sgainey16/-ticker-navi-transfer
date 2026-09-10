@@ -8,6 +8,7 @@ import { api } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { TickerDesk } from "@/src/components/TickerDesk";
 
 function niceDate(iso?: string) {
   if (!iso) return "";
@@ -46,6 +47,9 @@ export default function TeamPage() {
           <Text style={styles.meta}>#{record.div_rank} {team.division} · #{record.conf_rank} {team.conference}</Text>
           <Text style={styles.record}>{record.wins}-{record.losses}-{record.ot}  ·  {record.points} PTS</Text>
         </View>
+
+        {/* Reggie + Marc — present on the team, speak only on deliberate Play */}
+        <TickerDesk surface="team" subject={id} league={lg} fallbackTitle={`${team.name.toUpperCase()} · ON THE DESK`} />
 
         {/* TICKER READ — verified data restated, one line (no second host panel) */}
         <View style={styles.read}>

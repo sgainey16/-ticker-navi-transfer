@@ -7,7 +7,7 @@ import * as Haptics from "expo-haptics";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, DeskSegment } from "@/src/lib/api";
-import { playDataUri, stopAudio } from "@/src/lib/audio";
+import { playDataUri, stopAudio, beginSession, endSession, currentSession, subscribeSession } from "@/src/lib/audio";
 
 const DESK = require("../../assets/images/broadcast-desk.png");
 
@@ -47,7 +47,12 @@ export function TickerDesk({
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const runRef = useRef(0); // increments to cancel any in-flight play loop
+  const tokenRef = useRef(0); // this desk's global play-session token
+
+  // If another desk starts (supersedes our session), reset our UI immediately.
+  useEffect(() => subscribeSession(() => {
+    if (currentSession() !== tokenRef.current) { setSpeaking(false); setPlaying(false); }
+  }), []);
 
   // Fetch the prepared segment once per surface/subject (deliberate presence, no autoplay).
   useEffect(() => {
@@ -69,37 +74,36 @@ export function TickerDesk({
   }, [key, surface, subject, league]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(() => {
-    runRef.current += 1;
-    stopAudio();
+    endSession();          // bumps the global session (cancels our loop) + stops audio
     setSpeaking(false);
     setPlaying(false);
   }, []);
 
-  // Stop audio if the desk unmounts (leaving the surface).
-  useEffect(() => () => { runRef.current += 1; stopAudio(); }, []);
+  // Stop audio on unmount ONLY if this desk currently owns the global session.
+  useEffect(() => () => { if (currentSession() === tokenRef.current) endSession(); }, []);
 
   const play = useCallback(async () => {
     if (!seg || !seg.beats.length) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const myRun = runRef.current + 1;
-    runRef.current = myRun;
+    const token = beginSession();   // stops any other desk anywhere + claims the session
+    tokenRef.current = token;
     setPlaying(true);
     for (const beat of seg.beats) {
-      if (runRef.current !== myRun) return; // cancelled
+      if (currentSession() !== token) return; // superseded/stopped
       const voiceId = beat.host === "reggie" ? seg.voices.reggie : seg.voices.marc;
       if (muted || !voiceId) continue;
       setSpeaking(true);
       try {
         const res = await api.tts(beat.text, voiceId, beat.host === "marc" ? 1.08 : 1.0);
-        if (runRef.current !== myRun) return;
+        if (currentSession() !== token) return;
         await playDataUri(res.audio);
       } catch {
         // Audio failure never blocks the page — the desk simply falls silent.
       }
-      if (runRef.current !== myRun) return;
+      if (currentSession() !== token) return;
       setSpeaking(false);
     }
-    if (runRef.current === myRun) { setSpeaking(false); setPlaying(false); }
+    if (currentSession() === token) { setSpeaking(false); setPlaying(false); }
   }, [seg, muted]);
 
   const title = seg?.title || fallbackTitle || "THE TICKER";

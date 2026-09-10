@@ -1,0 +1,32 @@
+{
+  "summary": "PASS — THE TICKER · LIVE REGGIE + MARC on Team + Game pages (NHL + WHL). BACKEND (pytest 10/10 in /app/backend/tests/test_ticker_desk_surfaces.py): GET /api/ticker/segment surface=team&subject=BOS&league=nhl → state ready, beats grounded in BOS record (points/wins appear); surface=team&subject=REG&league=whl → state ready, beats grounded (5-0-0 / Regina / East / +11); surface=game&subject=latest&league=nhl → state ready with rich Stanley Cup Final CAR/VGK beats; surface=game&subject=1023059&league=whl (upcoming RD @ LET) → state ready with matchup-set-up beats and ZERO score/scorer/assist fabrication (regex \\d+[-–]\\d+ absent; forbidden verbs 'goal by / scored / scorer / assist / power play goal / empty net' all absent). Mongo cache reuse verified (identical beats on 2nd call). NHL depth regression: /api/nhl/team/BOS 200 with scorers/roster intact; /api/nhl/game/latest 200. FRONTEND (Playwright, mobile 390x844, add_init_script BEFORE app JS): all four surfaces show TickerDesk (testID=ticker-desk) with a deliberate PLAY control (testID=desk-play). No autoplay on any entry (playCalls=0 before user tap on every page). After each PLAY tap, HTMLMediaElement.play is invoked exactly once and maxConcurrent audio elements stays ≤ 1 across NHL Team → NHL Game → WHL Team → WHL Game flow. PAUSE toggles pauseCalls>0 immediately. NHL REGRESSION verified: /game/latest still shows PLAY THE CALL (testID=game-play-the-call). WHL Game regression verified: PLAY THE CALL absent, 'Scoring Summary' absent, 'Three Stars' absent. Reliability probes across the whole flow: navigator.permissions.query=0, navigator.mediaDevices.getUserMedia=0, legacy '/api/segment' calls=0, /api/ticker/segment fetched once per page, /api/tts called only after deliberate PLAY. Global-audio-session cross-page supersede is guaranteed by expo-router unmount (TickerDesk unmount effect calls endSession when it currently owns the session) — direct concurrent-audio counter <= 1 throughout the automated flow.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ticker_desk_surfaces.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — all acceptance criteria pass (persistent desk on all 4 surfaces, deliberate play only, grounded beats, no WHL upcoming score fabrication, one global session, NHL regression clean, reliability probes all zero)."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/lib/audio.web.ts implements global session via module-level `session` counter with beginSession()/endSession()/currentSession()/subscribeSession(); beginSession also calls stopAudio() so any prior HTMLAudioElement is paused + released before a new one starts — guaranteeing at most one audio element on the page at a time.",
+    "/app/frontend/src/components/TickerDesk.tsx correctly claims/relinquishes the global session via tokenRef and subscribes to session changes to reset UI when superseded; unmount effect (line 83) only ends the session if THIS desk currently owns it — safe when other desks have already taken over.",
+    "/app/backend/server.py ticker_segment (line 689) is league-aware: for surface=game NHL still uses the rich _recap_beats path, WHL/other leagues use build_game_desk with Mongo cache keyed on status (so FUT→FINAL invalidates); surface=team caches by wins-losses-ot + next.id which invalidates on any real change.",
+    "/app/backend/ticker_recap.py build_game_desk (line 580) branches on FINAL vs upcoming: for upcoming games the task prompt explicitly says 'Do NOT predict a score, goals, or player performances — just frame who's meeting and when', and HARD RULES forbid inventing goals/plays/scorers/momentum/predictions — verified empirically by regex + forbidden-word scan of the WHL upcoming beats."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ticker_desk_surfaces.py (new — 10 pytest tests covering both surfaces × both leagues, grounding, no-fabrication for WHL upcoming, cache reuse, NHL regression)"
+  ],
+  "success_rate": { "backend": "100% (10/10)", "frontend": "100% on all acceptance criteria (persistent desk on all 4 surfaces, deliberate play only, one audio at a time, NHL PLAY THE CALL intact, WHL scoring/stars hidden, reliability probes all zero)" },
+  "seed_data_creation": "None — real NHL + real HockeyTech WHL data only. Mongo `segments` collection populated by cache-through in normal flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "TickerDesk is now the persistent Reggie+Marc desk on Team + Game pages for BOTH leagues. Surfaces to hit for tests: /team/BOS, /game/latest (NHL), /team/REG?league=whl, /game/<whl_id>?league=whl (whl id: /api/league/whl/scoreboard → games[0].id for upcoming, /api/league/whl/recaps → games[0].id for final). Backend endpoint: GET /api/ticker/segment?surface={team|game}&subject={abbr|id|'latest'}&league={nhl|whl}. Global one-session audio is enforced in /app/frontend/src/lib/audio.web.ts (web) and audio.ts (native): beginSession() bumps a module-level counter and calls stopAudio() before returning a token; TickerDesk consults currentSession() at every await point and bails if superseded. NHL 'PLAY THE CALL' → /recap is a separate button gated by isFinal && isNhl on /game/[id].tsx line 116 — must remain visible for NHL finals. WHL Game/Player hidden modules (scoring/stars/roster/goalie/PLAY THE CALL) are REQUIRED, not bugs. To validate no-fabrication on upcoming WHL, scan beats for `\\b\\d+\\s*[-–]\\s*\\d+\\b` (should not match) and for words 'goal by / scored / scorer / assist / power play goal / empty net' (should be absent). Reliability probes to install BEFORE app JS via page.context.add_init_script: navigator.permissions.query, navigator.mediaDevices.getUserMedia, HTMLMediaElement.prototype.play/pause, and window.fetch (for '/api/segment' legacy detection and '/api/ticker/segment' + '/api/tts' counts).",
+  "rca_of_issue": "N/A — no bugs found."
+}

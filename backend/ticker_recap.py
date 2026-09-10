@@ -480,3 +480,107 @@ async def build_my_ticker(facts_text: str, has_follows: bool, llm_key: str) -> l
     except Exception as e:
         logger.exception("my ticker LLM failed: %s", e)
         return _myticker_fallback(has_follows)
+
+
+
+# ---------------------------------------------------------------------------
+# TEAM + GAME desks — page-context Reggie + Marc, grounded strictly in the
+# verified data already on that page. WHL simply has less to say than NHL.
+# ---------------------------------------------------------------------------
+
+async def _run_two_hosts(session_id: str, facts: str, task: str, fallback: list[dict], llm_key: str) -> list[dict]:
+    if not llm_key:
+        return fallback
+    prompt = (
+        f"{task}\n\n"
+        "HARD RULES:\n"
+        "- People first, numbers support. Reggie opens, then alternate.\n"
+        "- 4 to 6 total lines, each 1-2 sentences, TV-paced.\n"
+        "- GROUNDING: use ONLY the verified facts below. Do NOT invent goals, plays, scorers, "
+        "momentum, shot totals, injuries, trades, biographies, predictions or any number/detail "
+        "not present. If a detail is not in the sheet, omit it.\n\n"
+        'Return STRICT JSON only: {"beats":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}]}\n\n'
+        "VERIFIED FACTS (the only truth you may use):\n---\n" + facts + "\n---"
+    )
+    try:
+        chat = LlmChat(api_key=llm_key, session_id=session_id, system_message=HOST_BIBLE).with_model("anthropic", "claude-sonnet-4-6")
+        reply = await chat.send_message(UserMessage(text=prompt))
+        raw = reply if isinstance(reply, str) else str(reply)
+        data = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+        beats = [{"host": ("reggie" if b.get("host", "").lower().startswith("reg") else "marc"),
+                  "text": (b.get("text") or "").strip()}
+                 for b in data.get("beats", []) if (b.get("text") or "").strip()]
+        return beats or fallback
+    except Exception as e:
+        logger.exception("desk LLM failed: %s", e)
+        return fallback
+
+
+def _team_fact_sheet(t: dict, league_name: str) -> str:
+    team = t.get("team", {}); rec = t.get("record", {}); goals = t.get("goals", {})
+    lines = [f"{league_name} team: {team.get('name')} ({team.get('abbr')})."]
+    if team.get("division") or team.get("conference"):
+        lines.append(f"Division: {team.get('division') or 'n/a'}. Conference: {team.get('conference') or 'n/a'}.")
+    if rec:
+        lines.append(f"Record: {rec.get('wins')}-{rec.get('losses')}-{rec.get('ot')}, {rec.get('points')} points.")
+        if rec.get("conf_rank"):
+            lines.append(f"Conference rank: #{rec.get('conf_rank')}. Division rank: #{rec.get('div_rank')}.")
+    if goals and goals.get("gf") is not None:
+        lines.append(f"Goals for: {goals.get('gf')}, goals against: {goals.get('ga')} (diff {goals.get('diff')}).")
+    for g in (t.get("recent") or [])[:4]:
+        a, h = g.get("away", {}), g.get("home", {})
+        if a.get("score") is not None:
+            lines.append(f"Recent: {a.get('abbr')} {a.get('score')} at {h.get('abbr')} {h.get('score')} ({g.get('date')}).")
+    nx = t.get("next")
+    if nx:
+        a, h = nx.get("away", {}), nx.get("home", {})
+        lines.append(f"Next game: {a.get('abbr')} at {h.get('abbr')} ({nx.get('date')}).")
+    return "\n".join(lines)
+
+
+def _team_fallback(t: dict) -> list[dict]:
+    team = t.get("team", {}); rec = t.get("record", {})
+    return [
+        {"host": "reggie", "text": f"Let's talk {team.get('name')} — {rec.get('wins')}-{rec.get('losses')}-{rec.get('ot')}, {rec.get('points')} in the bank."},
+        {"host": "marc", "text": "The record tells you where they stand; the schedule ahead tells you where they're headed."},
+    ]
+
+
+async def build_team_desk(t: dict, llm_key: str, league_name: str = "NHL") -> list[dict]:
+    if not t or not t.get("team"):
+        return []
+    task = "Give a SHORT desk read on where this team stands right now and what's next, as a Reggie + Marc back-and-forth."
+    return await _run_two_hosts(f"team-{t.get('team', {}).get('abbr')}", _team_fact_sheet(t, league_name), task, _team_fallback(t), llm_key)
+
+
+def _game_desk_fact_sheet(g: Game, league_name: str) -> str:
+    is_final = g.status in ("FINAL", "OFF")
+    if is_final:
+        return f"League: {league_name}.\n" + build_fact_sheet(g)
+    lines = [f"UPCOMING {league_name} game (not yet played — no result, no stats exist yet)."]
+    lines.append(f"{g.away.name} ({g.away.abbr}) at {g.home.name} ({g.home.abbr}).")
+    if g.date:
+        lines.append(f"Date/time: {g.date}. Venue: {g.venue or 'n/a'}.")
+    return "\n".join(lines)
+
+
+def _game_fallback(g: Game, league_name: str) -> list[dict]:
+    if g.status in ("FINAL", "OFF"):
+        w = g.home if (g.home.score or 0) > (g.away.score or 0) else g.away
+        return [
+            {"host": "reggie", "text": f"Final from the {league_name}: {w.name} get it done, {max(g.home.score or 0, g.away.score or 0)}-{min(g.home.score or 0, g.away.score or 0)}."},
+            {"host": "marc", "text": "Two points is two points. You bank it and you move on to the next one."},
+        ]
+    return [
+        {"host": "reggie", "text": f"Coming up in the {league_name}: {g.away.name} and {g.home.name}."},
+        {"host": "marc", "text": "We'll have the full call once the puck drops — for now, just circle it."},
+    ]
+
+
+async def build_game_desk(g: Game, llm_key: str, league_name: str = "NHL") -> list[dict]:
+    is_final = g.status in ("FINAL", "OFF")
+    task = ("Recap this completed game as a Reggie + Marc back-and-forth."
+            if is_final else
+            "Set up this UPCOMING matchup as a Reggie + Marc back-and-forth. Do NOT predict a score, "
+            "goals, or player performances — just frame who's meeting and when.")
+    return await _run_two_hosts(f"game-{g.id}", _game_desk_fact_sheet(g, league_name), task, _game_fallback(g, league_name), llm_key)

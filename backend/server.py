@@ -23,7 +23,7 @@ import asyncio
 import hashlib
 from providers import nhl
 from providers.registry import get_provider, list_providers, search_all
-from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker
+from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -697,11 +697,22 @@ async def ticker_segment(surface: str, subject: str | None = None, league: str =
     """
     voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
 
-    # GAME-level context: reuse the grounded, Mongo-cached game recap beats.
+    # GAME-level context: grounded desk for that exact matchup (league-aware).
     if surface == "game" and subject:
         try:
-            game = await nhl.game_by_id(subject)
-            beats = await _recap_beats(game)
+            prov = get_provider(league)
+            game = await prov.game_by_id(subject)
+            lname = getattr(prov, "name", "NHL")
+            if league == "nhl":
+                beats = await _recap_beats(game)          # existing rich NHL path
+            else:
+                key = f"gamedesk:{league}:{subject}:{game.status}"
+                doc = await db.segments.find_one({"_id": key})
+                if doc and doc.get("beats"):
+                    beats = doc["beats"]
+                else:
+                    beats = await build_game_desk(game, EMERGENT_LLM_KEY, league_name=lname)
+                    await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
             return {"surface": surface, "segment_type": "game", "subject": subject,
                     "title": f"{game.away.abbr} @ {game.home.abbr} · GAME DESK",
                     "state": "ready" if beats else "unavailable",
@@ -709,6 +720,30 @@ async def ticker_segment(surface: str, subject: str | None = None, league: str =
         except Exception:
             logger.exception("ticker_segment game failed")
             return {"surface": surface, "segment_type": "game", "subject": subject,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # TEAM-level context: grounded desk about that team (league-aware).
+    if surface == "team" and subject:
+        try:
+            prov = get_provider(league)
+            lname = getattr(prov, "name", "NHL")
+            tp = await prov.team_page(subject)
+            tname = tp.get("team", {}).get("name") or subject
+            rec = tp.get("record", {})
+            key = f"teamdesk:{league}:{subject}:{rec.get('wins')}-{rec.get('losses')}-{rec.get('ot')}:{(tp.get('next') or {}).get('id')}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_team_desk(tp, EMERGENT_LLM_KEY, league_name=lname)
+                await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            return {"surface": "team", "segment_type": "opening", "subject": subject,
+                    "title": f"{tname.upper()} · ON THE DESK",
+                    "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment team failed")
+            return {"surface": "team", "segment_type": "opening", "subject": subject,
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     # LEAGUE-level NEXT context: prepared upcoming-slate preview (league-aware).

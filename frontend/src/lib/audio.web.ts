@@ -17,6 +17,14 @@ export function stopAudio() {
   current = null;
 }
 
+// --- Global play session: only ONE Reggie+Marc segment can play anywhere. ---
+let session = 0;
+const subs = new Set<() => void>();
+export function beginSession(): number { session += 1; stopAudio(); const tok = session; subs.forEach((f) => f()); return tok; }
+export function endSession(): void { session += 1; stopAudio(); subs.forEach((f) => f()); }
+export function currentSession(): number { return session; }
+export function subscribeSession(cb: () => void): () => void { subs.add(cb); return () => { subs.delete(cb); }; }
+
 // Plays an mp3 data URI and resolves when playback finishes (or times out).
 export async function playDataUri(dataUri: string): Promise<void> {
   stopAudio();

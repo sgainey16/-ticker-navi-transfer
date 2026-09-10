@@ -286,3 +286,22 @@ DEFERRED to the IMMEDIATE NEXT sub-cut (not built; depth links gated OFF for WHL
 
 VERIFIED — testing_agent iteration_11.json PASS: backend 20/20 (test_whl_league_surfaces.py + test_whl_provider.py); frontend all switchers real WHL data, desk grounded, HEAR THE RECAP gated off for WHL, WHL depth taps don't navigate; NHL fully unregressed; 0 permissions.query, 0 getUserMedia, 1 play only on deliberate desk-play, 0 legacy /api/segment.
 
+
+## LIVE REGGIE + MARC — proof on TEAM + GAME (NHL + WHL) [DONE, awaiting approval to expand]
+Rule: hosts present everywhere, speak ONLY on deliberate Play; ONE segment globally; no autoplay; capability-honest (say less when data is thinner); no fabrication.
+
+BACKEND (ticker_recap.py + server.py):
+- New grounded builders: build_team_desk(team_page, league_name) and build_game_desk(Game, league_name) — LLM writes Reggie/Marc dialogue from a deterministic verified fact sheet only; fallbacks if no LLM. Upcoming/no-scoring games are set up WITHOUT inventing score/goals/plays.
+- /api/ticker/segment: added surface=team (fetch provider.team_page → build_team_desk); surface=game now league-aware (NHL keeps rich _recap_beats path; other leagues → build_game_desk). Both Mongo-cached (key includes league + status/record).
+
+FRONTEND:
+- Global audio session in src/lib/audio.ts + audio.web.ts: beginSession()/endSession()/currentSession()/subscribeSession(). beginSession stops any current audio + bumps session + notifies; only ONE segment can ever play.
+- TickerDesk: replaced per-instance runRef with the global session token; other mounted desks reset their PLAY/ON-AIR UI when superseded; unmount stops audio only if it owns the session. Still one-panel, deliberate Play, no autoplay.
+- TickerDesk embedded on app/team/[id].tsx (surface=team) and app/game/[id].tsx (surface=game), both league-aware via the ?league= param already threaded.
+
+VERIFIED — testing_agent iteration_13.json PASS:
+- Backend 10/10 (test_ticker_desk_surfaces.py): BOS/REG team desks grounded; NHL game rich; WHL upcoming game desk has NO score/goal/scorer language (regex-checked) → no fabrication; cache reuse; NHL regression clean.
+- Frontend: all 4 (NHL Team/Game, WHL Team/Game) show ticker-desk + desk-play; 0 autoplay; maxConcurrent audio ≤ 1 across NHL Team→NHL Game→WHL Team→WHL Game (starting one stops the others); PAUSE immediate; NHL PLAY THE CALL + scoring/stars intact; WHL scoring/stars/PLAY THE CALL still hidden; 0 permissions.query, 0 getUserMedia, 0 legacy /api/segment.
+
+NOT expanded yet (await approval): Home · Recap · Next · Stats · Player. No Highlightly/Sportlogiq/autoplay/new leagues.
+
