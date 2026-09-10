@@ -91,8 +91,8 @@ class WHLProvider(HockeyProvider):
         "leaders": True,         # scoring + goalie leaders
         "recaps": True,          # finals available via scorebar
         "schedule": True,        # NEXT
-        "team_page": False,      # depth pages arrive in the next sub-cut
-        "player_page": False,
+        "team_page": True,       # identity + record + schedule (verified)
+        "player_page": False,    # HockeyTech player stats not reliably available yet — link stays gated
         "search": True,
         "media": False,
     }
@@ -275,15 +275,70 @@ class WHLProvider(HockeyProvider):
                 logger.exception("WHL topgoalies failed")
         return out
 
-    # --- depth pages (Team/Player/Game) arrive in the next sub-cut --------
+    # --- depth pages ------------------------------------------------------
+    def _card(self, c: dict) -> dict:
+        return {"id": str(c.get("ID")), "date": c.get("Date"), "start_utc": c.get("GameDateISO8601"),
+                "away": _side(c, "away"), "home": _side(c, "home")}
+
     async def game_by_id(self, game_id: str) -> Game:
-        raise ValueError("WHL game page not wired yet")
+        """Verified WHL game from the schedule (teams/score/status/date).
+        Scoring plays / stars / team stats are not exposed by HockeyTech here,
+        so those modules simply don't render — never fabricated."""
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 45, "numberofdaysback": 45})
+        rows = data.get("Scorebar", []) if isinstance(data, dict) else []
+        c = next((x for x in rows if str(x.get("ID")) == str(game_id)), None)
+        if not c:
+            raise ValueError("WHL game not found")
+        st = c.get("GameStatus")
+        status = "FINAL" if st == "4" else ("LIVE" if st in ("2", "3") else "FUT")
+        a, h = _side(c, "away"), _side(c, "home")
+        return Game(
+            id=str(c.get("ID")), league="WHL", date=c.get("Date") or "", start_utc=c.get("GameDateISO8601"),
+            status=status, venue=c.get("venue_name") or None,
+            away=TeamRef(id=a["abbr"] or "??", abbr=a["abbr"] or "??", name=a["name"] or a["abbr"] or "", logo=a["logo"], score=a["score"]),
+            home=TeamRef(id=h["abbr"] or "??", abbr=h["abbr"] or "??", name=h["name"] or h["abbr"] or "", logo=h["logo"], score=h["score"]),
+            has_video=False,
+        )
 
     async def latest_game(self) -> Game:
-        raise ValueError("WHL latest game not wired yet")
+        finals = await self.recent_finals_now(limit=1)
+        if not finals:
+            raise ValueError("no completed WHL game")
+        return await self.game_by_id(finals[0]["id"])
 
     async def team_page(self, tri: str) -> dict:
-        raise ValueError("WHL team page not wired yet")
+        """Verified WHL team: identity + standings record + recent/next schedule.
+        Scorers / goalie / roster are omitted (not reliably provided) so those
+        modules disappear on the shared Team page — no fabrication."""
+        tri = (tri or "").upper()
+        stand = await self.standings_now()
+        allrows = stand["Eastern"] + stand["Western"]
+        row = next((r for r in allrows if r["abbr"] == tri), None)
+        if not row:
+            raise ValueError("unknown WHL team")
+        divteams = sorted([r for r in allrows if r.get("division") == row.get("division")],
+                          key=lambda x: -(x["points"] or 0))
+        div_rank = divteams.index(row) + 1
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 30, "numberofdaysback": 30})
+        rows = data.get("Scorebar", []) if isinstance(data, dict) else []
+        mine = [c for c in rows if tri in (c.get("HomeCode"), c.get("VisitorCode"))]
+        finals = sorted([c for c in mine if c.get("GameStatus") == "4"], key=lambda c: c.get("GameDateISO8601") or "", reverse=True)
+        upcoming = sorted([c for c in mine if c.get("GameStatus") == "1"], key=lambda c: c.get("GameDateISO8601") or "")
+        gf, ga = row["gf"], row["ga"]
+        return {
+            "team": {"abbr": tri, "name": row["name"], "short": row["short"], "logo": row["logo"],
+                     "division": row["division"], "conference": row["conference"]},
+            "record": {"wins": row["wins"], "losses": row["losses"], "ot": row["ot"],
+                       "points": row["points"], "conf_rank": row["conf_rank"], "div_rank": div_rank},
+            "goals": {"gf": gf, "ga": ga, "diff": (gf - ga) if (gf is not None and ga is not None) else 0},
+            "form": {"l10": "–", "streak": row.get("streak") or "–", "home": "–", "road": "–"},
+            "scorers": [], "goalie": None,
+            "recent": [self._card(c) for c in finals[:5]],
+            "next": self._card(upcoming[0]) if upcoming else None,
+            "roster": None,
+        }
 
     async def player_page(self, pid: str) -> dict:
-        raise ValueError("WHL player page not wired yet")
+        raise ValueError("WHL player page not available yet")

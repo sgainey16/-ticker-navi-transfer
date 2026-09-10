@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { storage } from "@/src/utils/storage";
 
 export type Tier = 1 | 2 | 3;
-export type TeamFollow = { abbr: string; name?: string; tier?: Tier; fav?: boolean; league?: string };
+export type TeamFollow = { abbr: string; name?: string; tier?: Tier; fav?: boolean; league?: string; logo?: string | null };
 export type PlayerFollow = { player_id: string; team_abbr: string; name?: string; pos?: string; tier?: Tier; fav?: boolean; league?: string };
 export type Follows = { teams: TeamFollow[]; players: PlayerFollow[] };
 

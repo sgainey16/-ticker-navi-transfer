@@ -869,6 +869,34 @@ async def league_recaps(code: str):
     return {"games": games}
 
 
+@api_router.get("/league/{code}/team/{tri}")
+async def league_team(code: str, tri: str):
+    try:
+        return await get_provider(code).team_page(tri)
+    except Exception as e:
+        logger.exception("league_team failed")
+        raise HTTPException(status_code=502, detail=f"Team data unavailable: {e}")
+
+
+@api_router.get("/league/{code}/game/{gid}")
+async def league_game(code: str, gid: str):
+    try:
+        game = await get_provider(code).game_by_id(gid)
+        return {"game": game.model_dump()}
+    except Exception as e:
+        logger.exception("league_game failed")
+        raise HTTPException(status_code=502, detail=f"Game data unavailable: {e}")
+
+
+@api_router.get("/league/{code}/player/{pid}")
+async def league_player(code: str, pid: str):
+    try:
+        return await get_provider(code).player_page(pid)
+    except Exception as e:
+        logger.exception("league_player failed")
+        raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
+
+
 @api_router.get("/nhl/home")
 async def nhl_home():
     """THE TICKER Home feed — real NHL data only.

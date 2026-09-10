@@ -101,7 +101,7 @@ export default function Next() {
               isNhl ? (
                 <View style={styles.section}><GameDepth summary={selected} /></View>
               ) : (
-                <View style={styles.section}><LiteMatchup game={selected} /></View>
+                <View style={styles.section}><LiteMatchup game={selected} onOpen={() => router.push(`/game/${selected.id}?league=${league}`)} /></View>
               )
             ) : null}
           </>
@@ -113,14 +113,14 @@ export default function Next() {
   );
 }
 
-function LiteMatchup({ game }: { game: any }) {
+function LiteMatchup({ game, onOpen }: { game: any; onOpen: () => void }) {
   const upcoming = game.group === "upcoming";
   const when = game.start_utc
     ? new Date(game.start_utc).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : "";
   return (
-    <View style={styles.lite} testID="lite-matchup">
-      <Text style={styles.liteKicker}>SELECTED GAME</Text>
+    <Pressable style={styles.lite} testID="lite-matchup" onPress={onOpen}>
+      <Text style={styles.liteKicker}>SELECTED GAME · TAP FOR DETAILS</Text>
       <View style={styles.liteBoard}>
         <View style={styles.liteSide}>
           <NhlLogo abbr={game.away.abbr} url={game.away.logo} size={34} />
@@ -139,7 +139,7 @@ function LiteMatchup({ game }: { game: any }) {
         {game.away.record && game.home.record ? `${game.away.abbr} ${game.away.record}  ·  ${game.home.abbr} ${game.home.record}\n` : ""}
         {when ? `${when}. ` : ""}Reggie &amp; Marc have the WHL desk up top.
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

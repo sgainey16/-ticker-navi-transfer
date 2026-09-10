@@ -91,8 +91,8 @@ export default function Home() {
   const unranked = { teams: follows.teams.filter((t) => !t.tier), players: follows.players.filter((p) => !p.tier) };
   const hasFollows = follows.teams.length > 0 || follows.players.length > 0;
 
-  const goTeam = (abbr: string) => { Haptics.selectionAsync(); router.push(`/team/${abbr}`); };
-  const goPlayer = (id: string) => { Haptics.selectionAsync(); router.push(`/player/${id}`); };
+  const goTeam = (abbr: string, lg?: string) => { Haptics.selectionAsync(); router.push(`/team/${abbr}${lg && lg !== "nhl" ? `?league=${lg}` : ""}`); };
+  const goPlayer = (id: string, lg?: string) => { if (lg && lg !== "nhl") return; Haptics.selectionAsync(); router.push(`/player/${id}`); };
 
   return (
     <TabScreen>
@@ -175,7 +175,7 @@ export default function Home() {
 
 function RoundRail({ tier, data, big, onTeam, onPlayer }: {
   tier: Tier; data: { teams: TeamFollow[]; players: PlayerFollow[] };
-  big?: boolean; onTeam: (a: string) => void; onPlayer: (id: string) => void;
+  big?: boolean; onTeam: (a: string, lg?: string) => void; onPlayer: (id: string, lg?: string) => void;
 }) {
   const r = ROUND[tier];
   const logo = big ? 52 : 38;
@@ -189,13 +189,13 @@ function RoundRail({ tier, data, big, onTeam, onPlayer }: {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railRow}>
         {data.teams.map((t) => (
-          <Pressable key={`t${t.abbr}`} style={[styles.tile, big && styles.tileBig, { borderColor: r.color + "55" }]} onPress={() => onTeam(t.abbr)} testID={`board-team-${t.abbr}`}>
-            <NhlLogo abbr={t.abbr} size={logo} />
+          <Pressable key={`t${t.abbr}`} style={[styles.tile, big && styles.tileBig, { borderColor: r.color + "55" }]} onPress={() => onTeam(t.abbr, t.league)} testID={`board-team-${t.abbr}`}>
+            <NhlLogo abbr={t.abbr} url={t.logo} size={logo} />
             <Text style={[styles.tileName, big && { fontSize: 12 }]} numberOfLines={1}>{t.name || t.abbr}</Text>
           </Pressable>
         ))}
         {data.players.map((p) => (
-          <Pressable key={`p${p.player_id}`} style={[styles.tile, big && styles.tileBig, { borderColor: r.color + "55" }]} onPress={() => onPlayer(p.player_id)} testID={`board-player-${p.player_id}`}>
+          <Pressable key={`p${p.player_id}`} style={[styles.tile, big && styles.tileBig, { borderColor: r.color + "55" }]} onPress={() => onPlayer(p.player_id, p.league)} testID={`board-player-${p.player_id}`}>
             <View style={[styles.avatar, { width: av, height: av, borderRadius: av / 2, borderColor: r.color }]}>
               <Text style={[styles.avInit, big && { fontSize: 17 }]}>{initials(p.name)}</Text>
             </View>
@@ -209,7 +209,7 @@ function RoundRail({ tier, data, big, onTeam, onPlayer }: {
 }
 
 function FollowingRow({ data, onTeam, onPlayer }: {
-  data: { teams: TeamFollow[]; players: PlayerFollow[] }; onTeam: (a: string) => void; onPlayer: (id: string) => void;
+  data: { teams: TeamFollow[]; players: PlayerFollow[] }; onTeam: (a: string, lg?: string) => void; onPlayer: (id: string, lg?: string) => void;
 }) {
   return (
     <View style={styles.round}>
@@ -219,13 +219,13 @@ function FollowingRow({ data, onTeam, onPlayer }: {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railRow}>
         {data.teams.map((t) => (
-          <Pressable key={`ft${t.abbr}`} style={styles.miniChip} onPress={() => onTeam(t.abbr)}>
-            <NhlLogo abbr={t.abbr} size={22} />
+          <Pressable key={`ft${t.abbr}`} style={styles.miniChip} onPress={() => onTeam(t.abbr, t.league)}>
+            <NhlLogo abbr={t.abbr} url={t.logo} size={22} />
             <Text style={styles.miniText}>{t.abbr}</Text>
           </Pressable>
         ))}
         {data.players.map((p) => (
-          <Pressable key={`fp${p.player_id}`} style={styles.miniChip} onPress={() => onPlayer(p.player_id)}>
+          <Pressable key={`fp${p.player_id}`} style={styles.miniChip} onPress={() => onPlayer(p.player_id, p.league)}>
             <View style={styles.miniAv}><Text style={styles.miniInit}>{initials(p.name)}</Text></View>
             <Text style={styles.miniText} numberOfLines={1}>{p.name?.split(" ").slice(-1)[0] || p.team_abbr}</Text>
           </Pressable>

@@ -43,7 +43,7 @@ export default function Stats() {
   const leaders = useApi(() => (isNhl ? api.nhlLeaders() : api.leagueLeaders(league)), [league]);
   const standings = useApi(() => (isNhl ? api.nhlStandings() : api.leagueStandings(league)), [league]);
 
-  const openTeam = (abbr: string) => { if (isNhl) router.push(`/team/${abbr}`); };
+  const openTeam = (abbr: string) => router.push(`/team/${abbr}${isNhl ? "" : `?league=${league}`}`);
   const openPlayer = (pid: string) => { if (isNhl) router.push(`/player/${pid}`); };
 
   const followTeams = useMemo(() => new Set(follows.teams.map((t) => t.abbr)), [follows]);

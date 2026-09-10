@@ -70,9 +70,12 @@ function fmtStat(k: string, v: any): string {
 }
 
 export default function GameDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, league } = useLocalSearchParams<{ id: string; league?: string }>();
+  const lg = league || "nhl";
+  const isNhl = lg === "nhl";
+  const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
-  const q = useApi(() => api.nhlGame(id), [id]);
+  const q = useApi(() => (isNhl ? api.nhlGame(id) : api.leagueGame(lg, id)), [id, lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the game…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load game" onRetry={q.reload} /></Screen>;
@@ -96,21 +99,21 @@ export default function GameDetail() {
           <Text style={styles.seriesKicker}>{g.series.round_label}{g.series.game_number ? ` · GAME ${g.series.game_number}` : ""}</Text>
         ) : null}
         <View style={styles.board}>
-          <TeamCol abbr={g.away.abbr} name={g.away.name} logo={g.away.logo} score={g.away.score} isFinal={isFinal} win={awayWin} onPress={() => router.push(`/team/${g.away.abbr}`)} />
+          <TeamCol abbr={g.away.abbr} name={g.away.name} logo={g.away.logo} score={g.away.score} isFinal={isFinal} win={awayWin} onPress={() => router.push(`/team/${g.away.abbr}${lq}`)} />
           <View style={styles.center}>
             <Text style={[styles.status, !isFinal && { color: colors.blue }]}>
               {isFinal ? "FINAL" : isFuture ? "UPCOMING" : (g.status || "").toUpperCase()}
             </Text>
             {!isFinal && isFuture ? <Text style={styles.puck}>{fmtTime(g.start_utc)}</Text> : <Text style={styles.dash}>—</Text>}
           </View>
-          <TeamCol abbr={g.home.abbr} name={g.home.name} logo={g.home.logo} score={g.home.score} isFinal={isFinal} win={homeWin} onPress={() => router.push(`/team/${g.home.abbr}`)} />
+          <TeamCol abbr={g.home.abbr} name={g.home.name} logo={g.home.logo} score={g.home.score} isFinal={isFinal} win={homeWin} onPress={() => router.push(`/team/${g.home.abbr}${lq}`)} />
         </View>
 
         <Text style={styles.subMeta}>{fmtDate(g.date)}{g.venue ? ` · ${g.venue}` : ""}</Text>
         {seriesLine(g) ? <Text style={styles.seriesLine}>{seriesLine(g)}</Text> : null}
 
-        {/* PLAY THE CALL -> existing Reggie + Marc recap engine (finals only) */}
-        {isFinal ? (
+        {/* PLAY THE CALL -> Reggie + Marc recap engine (NHL finals only; WHL desk lives on the Recap tab) */}
+        {isFinal && isNhl ? (
           <Pressable
             style={styles.playBtn}
             testID="game-play-the-call"

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
@@ -49,7 +49,7 @@ export default function Recap() {
             {isNhl ? (
               <GameDepth summary={selectedGame} deep onHearRecap={(id) => router.push(`/recap/${id}`)} />
             ) : selectedGame ? (
-              <FinalCard game={selectedGame} />
+              <FinalCard game={selectedGame} onOpen={() => router.push(`/game/${selectedGame.id}?league=${league}`)} />
             ) : null}
           </View>
         ) : (
@@ -63,17 +63,17 @@ export default function Recap() {
   );
 }
 
-function FinalCard({ game }: { game: NhlGameCard }) {
+function FinalCard({ game, onOpen }: { game: NhlGameCard; onOpen: () => void }) {
   return (
-    <View style={styles.final} testID="final-card">
-      <Text style={styles.finalKicker}>SELECTED FINAL</Text>
+    <Pressable style={styles.final} testID="final-card" onPress={onOpen}>
+      <Text style={styles.finalKicker}>SELECTED FINAL · TAP FOR GAME</Text>
       <View style={styles.finalBoard}>
         <View style={styles.finalSide}><NhlLogo abbr={game.away.abbr} url={game.away.logo} size={32} /><Text style={styles.finalAbbr}>{game.away.abbr}</Text></View>
         <Text style={styles.finalScore}>{game.away.score} – {game.home.score}</Text>
         <View style={styles.finalSide}><NhlLogo abbr={game.home.abbr} url={game.home.logo} size={32} /><Text style={styles.finalAbbr}>{game.home.abbr}</Text></View>
       </View>
       <Text style={styles.finalNote}>Final{(game as any).date ? ` · ${(game as any).date}` : ""}. Reggie &amp; Marc have the recap up top.</Text>
-    </View>
+    </Pressable>
   );
 }
 

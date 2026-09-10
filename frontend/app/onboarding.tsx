@@ -121,7 +121,7 @@ export default function Onboarding() {
   const finish = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const follows: Follows = {
-      teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name, fav: t.fav, league: t.league })),
+      teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name, fav: t.fav, league: t.league, logo: t.logo })),
       players: playerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, fav: p.fav, league: p.league })),
     };
     await completeOnboarding(follows);

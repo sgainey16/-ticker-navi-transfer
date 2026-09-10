@@ -22,9 +22,12 @@ function fmtTime(utc?: string) {
 }
 
 export default function TeamPage() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, league } = useLocalSearchParams<{ id: string; league?: string }>();
+  const lg = league || "nhl";
+  const isNhl = lg === "nhl";
+  const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
-  const q = useApi(() => api.nhlTeam(id), [id]);
+  const q = useApi(() => (isNhl ? api.nhlTeam(id) : api.leagueTeam(lg, id)), [id, lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the team…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load team" onRetry={q.reload} /></Screen>;
@@ -66,7 +69,7 @@ export default function TeamPage() {
         {nextGame ? (
           <View style={styles.section}>
             <SectionTitle title="Next Game" accent={colors.blue} />
-            <Pressable style={styles.card} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}`)}>
+            <Pressable style={styles.card} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}${lq}`)}>
               <View style={styles.gRow}>
                 <NhlLogo abbr={nextGame.away.abbr} url={nextGame.away.logo} size={26} />
                 <Text style={styles.gAbbr}>{nextGame.away.abbr}</Text>
@@ -86,7 +89,7 @@ export default function TeamPage() {
             <SectionTitle title="Leading the Way" accent={colors.blue} />
             <View style={styles.card}>
               {scorers.map((s: any, i: number) => (
-                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}`)}>
+                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}${lq}`)}>
                   <Text style={styles.pRank}>{i + 1}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pName}>{s.name}</Text>
@@ -105,7 +108,7 @@ export default function TeamPage() {
           <View style={styles.section}>
             <SectionTitle title="In Goal" accent={colors.blue} />
             <View style={styles.card}>
-              <Pressable style={styles.pRow} onPress={() => goalie.player_id && router.push(`/player/${goalie.player_id}`)}>
+              <Pressable style={styles.pRow} onPress={() => goalie.player_id && router.push(`/player/${goalie.player_id}${lq}`)}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.pName}>{goalie.name}</Text>
                   <Text style={styles.pMeta}>{goalie.record}{goalie.so ? ` · ${goalie.so} SO` : ""}</Text>
@@ -125,7 +128,7 @@ export default function TeamPage() {
             <SectionTitle title="Recent Results" accent={colors.blue} />
             <View style={{ gap: spacing.sm }}>
               {recent.map((g: any) => (
-                <Pressable key={g.id} style={styles.card} onPress={() => router.push(`/game/${g.id}`)}>
+                <Pressable key={g.id} style={styles.card} onPress={() => router.push(`/game/${g.id}${lq}`)}>
                   <View style={styles.gRow}>
                     <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={24} />
                     <Text style={styles.gAbbr}>{g.away.abbr} {g.away.score}</Text>
@@ -151,7 +154,7 @@ export default function TeamPage() {
                   <Text style={styles.rosterLabel}>{grp.toUpperCase()}</Text>
                   <View style={styles.rosterWrap}>
                     {roster[grp].map((p: any) => (
-                      <Pressable key={p.player_id} style={styles.chip} onPress={() => p.player_id && router.push(`/player/${p.player_id}`)}>
+                      <Pressable key={p.player_id} style={styles.chip} onPress={() => p.player_id && router.push(`/player/${p.player_id}${lq}`)}>
                         <Text style={styles.chipNum}>{p.number ?? "–"}</Text>
                         <Text style={styles.chipName} numberOfLines={1}>{p.name}</Text>
                       </Pressable>
