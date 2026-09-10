@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
@@ -22,6 +23,7 @@ function niceDate(iso?: string | null) {
 }
 
 export default function Next() {
+  const router = useRouter();
   // Available leagues (NHL always; WHL etc. appear once registered on the backend).
   const leaguesQ = useApi(() => api.leagues());
   const leagues = leaguesQ.data?.leagues || [{ code: "nhl", name: "National Hockey League", capabilities: {} }];
