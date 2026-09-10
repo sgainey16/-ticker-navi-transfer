@@ -4,17 +4,19 @@
 // iOS Safari and crashed the preview. The Ticker only needs TTS playback
 // on web, so there is zero recording/microphone dependency here.
 
-let current: HTMLAudioElement | null = null;
+// Every element we create is tracked here. Primary tabs stay mounted, so more
+// than one TickerDesk can hold a live <audio>; a single pointer is not enough.
+// stopAudio() must silence EVERY element to guarantee one audio session.
+const live = new Set<HTMLAudioElement>();
+
+function kill(el: HTMLAudioElement) {
+  try { el.pause(); el.src = ""; el.load(); } catch {}
+  live.delete(el);
+}
 
 export function stopAudio() {
-  try {
-    if (current) {
-      current.pause();
-      current.src = "";
-      current.load();
-    }
-  } catch {}
-  current = null;
+  live.forEach(kill);
+  live.clear();
 }
 
 // --- Global play session: only ONE Reggie+Marc segment can play anywhere. ---
@@ -37,13 +39,14 @@ export async function playDataUri(dataUri: string): Promise<void> {
     };
     try {
       const audio = new Audio(dataUri);
-      current = audio;
-      audio.addEventListener("ended", finish, { once: true });
-      audio.addEventListener("error", finish, { once: true });
+      live.add(audio);
+      const cleanup = () => { live.delete(audio); finish(); };
+      audio.addEventListener("ended", cleanup, { once: true });
+      audio.addEventListener("error", cleanup, { once: true });
       // play() may reject if autoplay is blocked / not user-gesture — fail gracefully.
       const p = audio.play();
-      if (p && typeof p.catch === "function") p.catch(() => finish());
-      setTimeout(finish, 25000); // safety
+      if (p && typeof p.catch === "function") p.catch(() => cleanup());
+      setTimeout(cleanup, 25000); // safety
     } catch {
       finish();
     }

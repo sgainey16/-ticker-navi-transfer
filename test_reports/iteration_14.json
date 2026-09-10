@@ -1,0 +1,39 @@
+{
+  "summary": "PARTIAL PASS. Backend 27/27: new stats surface + full regression /app/backend/tests/test_ticker_stats_surface.py (17/17) and prior /app/backend/tests/test_ticker_desk_surfaces.py (10/10) all pass. GET /api/ticker/segment?surface=stats&league=nhl returns state=ready with grounded interpretation (blob references real leaders like McDavid/MacKinnon/Vasilevskiy and top teams Colorado/Dallas/Carolina/Buffalo — no fabricated stats). WHL stats desk returns ready and mentions real WHL teams/leaders (Regina/East). NHL beats are richer, WHL appropriately shorter. Cache reuse verified on both leagues. No compact score fragments in any league-level desk. Legacy /api/segment absent, TTS only after deliberate play. FRONTEND: HOME, RECAP (NHL+WHL), NEXT (NHL+WHL), STATS (NHL+WHL) all render <TickerDesk testID='ticker-desk'> with a deliberate PLAY control (testID='desk-play'). Zero autoplay on entering, scrolling, returning to a tab, or switching leagues (playCalls==0 across all traversals, getUserMedia==0, permQuery==0, legacy '/api/segment'==0). STATS play triggers TTS + audio (playCalls>=1, maxConcurrent==1). GLOBAL ONE-AUDIO-SESSION IS **BROKEN** for the four in-app tabs. After STATS PLAY, switching to HOME and pressing PLAY there produced playCalls=2 but only pauseCalls=1, and the concurrency counter reached maxConcurrent=2 — TWO HTMLAudioElements playing simultaneously. Root cause: /app/frontend/app/index.tsx lines 56–63 keep every visited tab mounted (display: 'none'|'flex') so the STATS TickerDesk never unmounts when the user moves to HOME. beginSession()/stopAudio() in /app/frontend/src/lib/audio.web.ts (or the TickerDesk supersede subscription) does not pause the still-mounted STATS TickerDesk's audio element before HOME starts its own — the two Audio() instances co-exist. Iteration 13's cross-page supersede worked ONLY because Team/Game pages are Expo-router deep routes that fully unmount on navigation; the four in-app tabs do NOT unmount, so the unmount-based endSession path never fires.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Global one-audio-session across HOME/RECAP/NEXT/STATS tabs",
+        "issue": "Concurrent audio exceeded 1 (maxConcurrent=2, playCalls=2, pauseCalls=1) after STATS PLAY then HOME PLAY. TickerDesk from the previously-active tab keeps playing because tabs stay mounted; beginSession()/stopAudio() does not pause the other desk's Audio() instance. Violates the core acceptance rule 'never more than one audio stream at once'.",
+        "affected_testIDs": ["ticker-desk", "desk-play", "toptab-home", "toptab-recap", "toptab-tonight", "toptab-stats"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ticker_stats_surface.py",
+    "/app/backend/tests/test_ticker_desk_surfaces.py",
+    "/app/test_reports/pytest/pytest_stats_surface.xml"
+  ],
+  "action_items": [
+    "Fix the global one-audio-session bug for the four in-app tabs. Options: (a) in /app/frontend/src/lib/audio.web.ts, make stopAudio() truly stop the module-level currentAudio reference AND pause any playing HTMLAudioElement on the page (document.querySelectorAll('audio')) — this guarantees the previous tab's audio is silenced before the new one starts; (b) in TickerDesk, subscribeSession() must pause the local HTMLAudioElement (not just reset UI) when the desk is superseded; (c) alternatively, mount only the active tab's TickerDesk (unmount others) — but that regresses tab-switch latency. Recommend option (a)+(b) so the module-level session state actually enforces the invariant.",
+    "Re-run frontend concurrency test after fix: expect maxConcurrent<=1 across STATS→HOME→RECAP→NEXT plays."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/index.tsx uses `visited` set to keep every entered tab mounted (line 38, 56–63). This is fine for scroll-state preservation but breaks the unmount-driven endSession() cleanup in /app/frontend/src/components/TickerDesk.tsx that iteration_13 relied on for cross-page supersede. The audio session invariant must therefore be enforced via subscribeSession() (imperative pause) — not via unmount.",
+    "Backend /app/backend/server.py line 790–812 stats branch is clean: signature-based cache key (top-East team + top scorer), Mongo cache_reuse verified, exception-safe fallback returns state=unavailable rather than throwing.",
+    "Backend /app/backend/ticker_recap.py build_stats_desk (line 641) task prompt correctly constrains hosts to interpret the numbers only — verified empirically: no goal/scored/scorer/empty-net language leaked into stats beats."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ticker_stats_surface.py (new — 17 pytest tests: stats surface NHL+WHL readiness, grounded on real leaders/teams, no fabrication, cache reuse, regression on home/recap/next surfaces)"
+  ],
+  "success_rate": { "backend": "100% (27/27 pytest)", "frontend": "Presence + no-autoplay 100% on all four tabs (NHL+WHL); GLOBAL ONE-AUDIO-SESSION FAILS for tab-to-tab supersede (maxConcurrent=2 after cross-tab Play)" },
+  "seed_data_creation": "Frontend onboarding completed via UI (picked Boston Bruins as fav team; other steps auto-skipped). Mongo `segments` collection populated by cache-through for stats:nhl and stats:whl.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reproduce the concurrent-audio bug with this sequence on the running preview: (1) install add_init_script that hooks HTMLMediaElement.prototype.play/pause into a counter BEFORE app boots; (2) complete onboarding by picking any NHL team; (3) navigate STATS tab, tap testID='desk-play', wait 6s; (4) tap testID='toptab-home', wait 2s, tap testID='desk-play', wait 6s; (5) read window.__probe — expect maxConcurrent<=1 after fix; currently observes maxConcurrent=2. NOTE: RecapScreen, TonightScreen, StatsScreen all use LeagueSwitcher which renders duplicate data-testid='league-nhl'/'league-whl' — Playwright's default `.click` fails with 'not visible' on hidden-tab duplicates; use a JS-based click that walks up the ancestor chain and checks computed display/visibility. Backend endpoint is fully working; no further backend work needed.",
+  "rca_of_issue": "TickerDesk relies on its unmount effect to endSession() and (via subscribeSession) UI-reset when superseded. For deep routes (/team, /game) unmount runs on navigation — iteration_13 pass. For the four primary tabs, /app/frontend/app/index.tsx keeps every visited tab mounted using display:none, so the STATS TickerDesk keeps its HTMLAudioElement alive and playing after the user switches to HOME. When HOME's TickerDesk calls beginSession()->stopAudio(), stopAudio() apparently only pauses the module-tracked `currentAudio` reference, which is the *new* audio being created by the HOME desk (or otherwise fails to pause the STATS desk's independent Audio() instance). Net: two Audio elements playing at once. Fix must enforce the invariant imperatively via the session-supersede subscription (pause the local audio in TickerDesk when currentSession() != tokenRef) OR broaden stopAudio() to pause every <audio> element on the page."
+}

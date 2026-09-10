@@ -11,6 +11,7 @@ import { useFollows } from "@/src/lib/follows";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
+import { TickerDesk } from "@/src/components/TickerDesk";
 
 const CATS = [
   { key: "points", label: "Points", group: "skaters" as const },
@@ -74,6 +75,10 @@ export default function Stats() {
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <LeagueSwitcher league={league} onChange={setLeague} />
+
+          {/* SHOW — Reggie + Marc read the board, grounded in the selected league's stats */}
+          <TickerDesk surface="stats" league={league} fallbackTitle={`AROUND THE ${league.toUpperCase()}`} />
+
           <View style={styles.head}><View style={styles.headBar} /><Text style={styles.headTitle}>STATS</Text></View>
 
           {/* WHERE MY TEAMS SIT */}

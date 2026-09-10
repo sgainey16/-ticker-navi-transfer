@@ -584,3 +584,65 @@ async def build_game_desk(g: Game, llm_key: str, league_name: str = "NHL") -> li
             "Set up this UPCOMING matchup as a Reggie + Marc back-and-forth. Do NOT predict a score, "
             "goals, or player performances — just frame who's meeting and when.")
     return await _run_two_hosts(f"game-{g.id}", _game_desk_fact_sheet(g, league_name), task, _game_fallback(g, league_name), llm_key)
+
+
+# ---------------------------------------------------------------------------
+# STATS — league-level desk over the verified standings + leaders currently
+# shown. The hosts point at what's INTERESTING (leaders, tight races) rather
+# than reading a table aloud — but every claim stays inside the numbers.
+# ---------------------------------------------------------------------------
+
+def _top(rows: list[dict], n: int = 1) -> list[dict]:
+    return [r for r in (rows or []) if r][:n]
+
+
+def _stats_fact_sheet(standings: dict, leaders: dict, league_name: str) -> str:
+    lines = [f"{league_name} snapshot from the current standings and stat leaders."]
+    for conf in ("Eastern", "Western"):
+        rows = standings.get(conf) or []
+        if not rows:
+            continue
+        t = rows[0]
+        seg = f"{conf} leader: {t.get('name') or t.get('abbr')} — {t.get('points')} pts ({t.get('wins')}-{t.get('losses')}-{t.get('ot')})."
+        if len(rows) > 1:
+            c = rows[1]
+            gap = (t.get("points") or 0) - (c.get("points") or 0)
+            seg += f" Second: {c.get('name') or c.get('abbr')} ({c.get('points')} pts, {gap} back)."
+        lines.append(seg)
+    sk = leaders.get("skaters") or {}
+    for cat, label, unit in (("points", "Points", "pts"), ("goals", "Goals", "goals"), ("assists", "Assists", "assists")):
+        top = _top(sk.get(cat) or [])
+        if top and top[0].get("value") is not None:
+            p = top[0]
+            lines.append(f"{label} leader: {p.get('name')} ({p.get('team_abbr')}) — {p.get('value')} {unit}.")
+    gl = leaders.get("goalies") or {}
+    wins = _top(gl.get("wins") or [])
+    if wins and wins[0].get("value") is not None:
+        w = wins[0]
+        lines.append(f"Wins leader (goalie): {w.get('name')} ({w.get('team_abbr')}) — {w.get('value')} wins.")
+    return "\n".join(lines)
+
+
+def _stats_fallback(standings: dict, leaders: dict, league_name: str) -> list[dict]:
+    east = _top(standings.get("Eastern") or [])
+    top_pts = _top((leaders.get("skaters") or {}).get("points") or [])
+    lead_team = (east[0].get("name") or east[0].get("abbr")) if east else None
+    lead_scorer = top_pts[0].get("name") if top_pts else None
+    beats = [{"host": "reggie", "text": f"Let's read the {league_name} board and see who's setting the pace."}]
+    if lead_team:
+        beats.append({"host": "marc", "text": f"{lead_team} are sitting up top — the points don't lie."})
+    if lead_scorer:
+        beats.append({"host": "reggie", "text": f"And {lead_scorer} is out front in the scoring race. That's the name to watch."})
+    if len(beats) < 2:
+        beats.append({"host": "marc", "text": "Early days, but the numbers are starting to tell a story."})
+    return beats
+
+
+async def build_stats_desk(standings: dict, leaders: dict, llm_key: str, league_name: str = "NHL") -> list[dict]:
+    facts = _stats_fact_sheet(standings, leaders, league_name)
+    task = ("Give a SHORT desk read on what's INTERESTING in these standings and stat leaders "
+            "right now — who's on top, who's chasing, who's leading the scoring race — as a "
+            "Reggie + Marc back-and-forth. Interpret the numbers (a tight race, a runaway leader) "
+            "but keep every claim supported by the sheet. Do NOT read the table line by line.")
+    sig = abs(hash(facts)) % 10_000_000
+    return await _run_two_hosts(f"stats-{league_name}-{sig}", facts, task, _stats_fallback(standings, leaders, league_name), llm_key)

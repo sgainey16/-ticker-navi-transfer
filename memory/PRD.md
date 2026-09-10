@@ -305,3 +305,22 @@ VERIFIED — testing_agent iteration_13.json PASS:
 
 NOT expanded yet (await approval): Home · Recap · Next · Stats · Player. No Highlightly/Sportlogiq/autoplay/new leagues.
 
+
+
+## LIVE REGGIE + MARC — expanded to HOME · RECAP · NEXT · STATS (NHL + WHL) [DONE, verified]
+Approved expansion of the proven TickerDesk system to the four primary tabs. Same rules: hosts present, speak ONLY on deliberate Play; ONE global audio session; no autoplay; one-panel; capability-honest; no fabrication. Team + Game desks preserved unchanged. Player desk NOT added (still deferred). No Highlightly/Sportlogiq/AI play-by-play/new leagues/redesign.
+
+STATE FOUND: HOME, RECAP, NEXT already rendered the shared TickerDesk from earlier phases (surface=home personalized via POST /api/ticker/home_segment; surface=recap/next league-aware) and inherit the global-session behavior since it's the same component. Only STATS was missing a desk, and there was no `stats` backend surface.
+
+NEW WORK:
+- BACKEND ticker_recap.py: build_stats_desk(standings, leaders, league_name) + _stats_fact_sheet/_stats_fallback. Hosts INTERPRET the verified standings + stat leaders (conf leaders, tight vs runaway races, scoring/goal/assist/wins leaders) — every claim stays inside the numbers, no table-reading, no fabrication. WHL says less (lighter provider data).
+- BACKEND server.py /api/ticker/segment: added surface=stats (provider.standings_now + leaders_now → build_stats_desk), Mongo-cached (key = top-east-team + top-scorer signature). segment_type="reaction" → "AROUND THE LEAGUE" tag.
+- FRONTEND StatsScreen.tsx: mounted <TickerDesk surface="stats" league={league}/> as the top presence, right after LeagueSwitcher (league-aware NHL|WHL).
+
+CRITICAL FIX (found in iteration_14): global one-audio-session broke ACROSS the primary tabs because app/index.tsx keeps every visited tab mounted (display:none/flex) — a superseded desk's <audio> never unmounted, and stopAudio() only tracked ONE module pointer → maxConcurrent=2. Fix: audio.web.ts + audio.ts now track EVERY created HTMLAudioElement / AudioPlayer in a module-level Set `live`; stopAudio() tears down all of them (pause+clear src+load on web; .remove() native) and clears the set. beginSession() calls stopAudio() synchronously before a new desk creates its element → at most one live audio ever.
+
+VERIFIED — testing_agent iteration_14 (backend) + iteration_15 (frontend retest) PASS:
+- Backend 27/27 (test_ticker_stats_surface.py 17 + test_ticker_desk_surfaces.py 10): stats nhl/whl ready + grounded (NHL refs McDavid/MacKinnon/Vasilevskiy/Colorado/Dallas/Carolina/Buffalo; WHL shorter, real Regina/leaders); home/recap/next/team/game regression ready; no fabricated scores in league-level desks; cache reuse.
+- Frontend: ticker-desk + desk-play present on HOME/RECAP/NEXT/STATS (NHL+WHL) and Team/Game; ZERO autoplay (getUserMedia=0, permissions.query=0, playCalls=0 pre-tap, 0 legacy /api/segment); GLOBAL ONE-AUDIO-SESSION FIXED — STATS→HOME→RECAP→NEXT plays gave maxConcurrent=1; HOME→/team/BOS cross-stop maxConcurrent=1.
+
+Reggie + Marc are now the presentation layer across the whole product. NOT touched next (per user): voice polish, Player desk, Highlightly/Sportlogiq.

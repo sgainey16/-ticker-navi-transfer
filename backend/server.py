@@ -23,7 +23,7 @@ import asyncio
 import hashlib
 from providers import nhl
 from providers.registry import get_provider, list_providers, search_all
-from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk
+from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk, build_stats_desk
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -784,6 +784,31 @@ async def ticker_segment(surface: str, subject: str | None = None, league: str =
         except Exception:
             logger.exception("ticker_segment recap failed")
             return {"surface": "recap", "segment_type": "recap", "subject": league,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level STATS context: desk over verified standings + stat leaders.
+    if surface == "stats":
+        try:
+            prov = get_provider(league)
+            lname = getattr(prov, "name", "NHL")
+            standings = await prov.standings_now()
+            leaders = await prov.leaders_now(limit=5)
+            east = standings.get("Eastern") or []
+            top_pts = (leaders.get("skaters") or {}).get("points") or []
+            sig = f"{(east[0].get('abbr') if east else '')}:{(east[0].get('points') if east else '')}:{(top_pts[0].get('id') if top_pts else '')}:{(top_pts[0].get('value') if top_pts else '')}"
+            key = f"statsdesk:{league}:{sig}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_stats_desk(standings, leaders, EMERGENT_LLM_KEY, league_name=lname)
+                await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            return {"surface": "stats", "segment_type": "reaction", "subject": league,
+                    "title": f"AROUND THE {league.upper()}", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment stats failed")
+            return {"surface": "stats", "segment_type": "reaction", "subject": league,
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     # LEAGUE-level HOME context: the Ticker opening show (honest, NHL-only for now).

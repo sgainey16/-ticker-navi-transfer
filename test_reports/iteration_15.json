@@ -1,0 +1,31 @@
+{
+  "summary": "PASS. Global one-audio-session across primary tabs is FIXED. Re-ran the iteration_14 probe on a live 390x844 Expo web preview: pre-boot init script hooked HTMLMediaElement.play/pause and navigator.mediaDevices/permissions, then completed onboarding (fav NHL team = Boston Bruins, remaining steps skipped). Executed the exact required sequence STATS→PLAY, HOME→PLAY, RECAP→PLAY, NEXT→PLAY. Result: playCalls=5, pauseCalls=1, currentConcurrent=1, maxConcurrent=1 — never two audio streams at once (iteration_14 saw maxConcurrent=2 in the same sequence, so the regression is closed). Also verified deep-page cross-stop: HOME→PLAY then navigate to /team/BOS and press PLAY on the team desk — probe stayed at maxConcurrent=1 across the transition. Zero-autoplay regression clean: getUserMedia=0, permQuery=0, and playCalls stayed at 0 until the first deliberate desk-play tap on every surface. Desk presence regression clean: [data-testid='ticker-desk'] and [data-testid='desk-play'] were rendered and tappable on HOME/RECAP/NEXT/STATS and on /team/BOS. Segment fetches occurred only on deliberate entry (3 fetches for 4 primary tabs + 1 fetch for team page). No red screen, no getUserMedia calls, no legacy /api/segment usage. The tracked-Set fix in /app/frontend/src/lib/audio.web.ts and audio.ts correctly tears down every previously-created HTMLAudioElement / AudioPlayer synchronously inside beginSession() before the new desk creates its element, so cross-tab supersede now works even though tabs stay mounted via display:none.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ticker_stats_surface.py",
+    "/app/backend/tests/test_ticker_desk_surfaces.py",
+    "/app/test_reports/pytest/pytest_stats_surface.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/frontend/src/lib/audio.web.ts now tracks every HTMLAudioElement in a module-level Set `live`; stopAudio() pauses+detaches src+load()+removes every entry — correctly kills the previously-mounted STATS desk's audio when HOME's beginSession() fires. Verified empirically by pause+emptied event observation on the probe.",
+    "/app/frontend/src/lib/audio.ts mirrors the fix for the native path (Set<AudioPlayer>, remove() on every entry) — parity looks correct, though only web was exercised in this run.",
+    "/app/frontend/src/components/TickerDesk.tsx beginSession() is called synchronously before any audio creation and before the async TTS fetch, so the supersede is race-free: any prior desk's audio is stopped before the new one's element enters `live`."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (27/27 — carried over from iteration_14; not re-run per request)",
+    "frontend": "100% — cross-tab maxConcurrent=1 (5 plays / 1 pause), cross-deep-page maxConcurrent=1, zero autoplay artifacts, desk present on all four primary tabs + /team/BOS"
+  },
+  "seed_data_creation": "Onboarding completed via UI (fav team = Boston Bruins). No backend seed changes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Cross-tab and cross-deep-page one-audio-session invariant is fully green as of iteration_15. Probe pattern that reliably reproduces / verifies: (1) page.context.add_init_script that wraps HTMLMediaElement.prototype.play/pause into window.__probe { playCalls, pauseCalls, currentConcurrent, maxConcurrent }, hook getUserMedia+permissions.query, and count fetches to /api/ticker/segment; (2) complete onboarding via testIDs welcome-go → onboard-search 'Boston' → result-team-BOS → onboard-skip x2 → onboard-skip or onboard-finish; (3) traverse tabs via testID='toptab-{home|recap|tonight|stats}' clicking the visually-visible element (there are duplicates because tabs stay mounted display:none; walk ancestors to find the one with computed display!=none); (4) tap [data-testid='desk-play'] on each tab, waiting ~7s between taps so the first TTS beat has time to load+play. Deep-page test: page.goto /team/BOS and tap desk-play; a fresh team page fetches its own segment. Concurrency assertion: window.__probe.maxConcurrent must remain <= 1 throughout.",
+  "rca_of_issue": "Iteration_14 root cause was that stopAudio() only tracked a single module-level pointer, so a still-mounted TickerDesk on another tab (kept alive by /app/frontend/app/index.tsx's display:none pattern) held an untracked HTMLAudioElement that survived beginSession(). Fix (verified this run): audio.web.ts and audio.ts now hold a Set<HTMLAudioElement|AudioPlayer> and stopAudio() iterates every entry, pause+clear-src+load() on web (which fires 'emptied' + drops currentConcurrent immediately) and .remove() on native. beginSession() calls stopAudio() before returning, so the new desk's play() runs only after every prior audio is fully torn down. Probe confirms: 5 sequential desk-play taps produced maxConcurrent=1 (was 2 in iteration_14)."
+}

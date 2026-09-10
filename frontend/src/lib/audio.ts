@@ -2,9 +2,11 @@ import { Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 
-let current: AudioPlayer | null = null;
 let counter = 0;
 let modeSet = false;
+// Track every player we create — multiple mounted TickerDesks can each hold one,
+// so stopAudio() must remove them all to guarantee a single audio session.
+const live = new Set<AudioPlayer>();
 
 async function ensureMode() {
   if (modeSet) return;
@@ -15,10 +17,8 @@ async function ensureMode() {
 }
 
 export function stopAudio() {
-  try {
-    current?.remove();
-  } catch {}
-  current = null;
+  live.forEach((p) => { try { p.remove(); } catch {} });
+  live.clear();
 }
 
 // --- Global play session: only ONE Reggie+Marc segment can play anywhere. ---
@@ -53,12 +53,13 @@ export async function playDataUri(dataUri: string): Promise<void> {
     };
     try {
       const player = createAudioPlayer(source);
-      current = player;
+      live.add(player);
       const sub = player.addListener("playbackStatusUpdate", (s: any) => {
         if (s?.didJustFinish) {
           try {
             sub?.remove?.();
           } catch {}
+          live.delete(player);
           finish();
         }
       });
