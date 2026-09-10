@@ -231,3 +231,60 @@ Order:
 Then:
 3. **Friends & Family launch freeze:** onboarding, Home, routing, access code/invite, playback, mobile layout. BUG FIXES ONLY. No new concepts.
 4. After freeze: watch real users through the whole flow — especially Draft Board ranking, PLAY, and whether they immediately grasp why Home is different for them.
+
+---
+
+# PRODUCT RESET — SUBTRACTION REVIEW (review-only, nothing changed)
+Test sentence: "The Ticker knows the hockey I care about and Reggie + Marc bring it to life."
+
+## ROUTES / PAGES THAT EXIST TODAY (app/)
+- index (tab shell: RECAP, NEXT, HOME, MY HOCKEY, SCORES, STATS) · onboarding · game/[id] · team/[id] · player/[id] · recap/[id] · talk · coldopen (legacy) · voices (legacy) · highlights/[id] (MASL) · +html/_layout (infra)
+
+## PER-SURFACE VERDICT
+- First launch -> onboarding: KEEP (gate). SIMPLIFY: 4 steps (NHL/Teams/Players/Rounds); NHL step is a near-empty single-option screen; players step can be skipped; dev-reset link visible.
+- HOME (My Ticker): KEEP. The core. Personalized desk + Draft Board + Around My Hockey.
+- MY HOCKEY (reels tab): MERGE into Home. Overlaps Home's "Around My Hockey" (same followed finals/upcoming/league feed). Two destinations doing one job.
+- RECAP: KEEP (postgame desk + finals + depth).
+- NEXT: KEEP (preview desk + upcoming + depth).
+- SCORES: KEEP but SIMPLIFY (standings also duplicated in STATS).
+- STATS: KEEP but SIMPLIFY; "Standings" section duplicates SCORES.
+- GAME/TEAM/PLAYER: KEEP (deliberate depth, verified, connected).
+- TALK: KEEP (live host layer).
+- coldopen, voices: REMOVE (legacy MASL-era screens, not in MVP Plus flow).
+- highlights/[id]: REMOVE (fully MASL: game.video_id via YTPlayer, "Official highlights via MASLtv", Rayo/Casey HostQuotes, "Highlights coming soon" placeholder). This is the fake highlight experience.
+
+## SPECIFIC AUDIT ANSWERS
+- Where My Hockey came from: it is the old "reels" tab slot, rebuilt into a verified feed. It differs from Home only slightly (no desk, flat feed) and largely repeats Home's Around-My-Hockey. -> MERGE candidate #1.
+- Onboarding steps: 4 (Leagues[NHL only], Teams, Players, Draft Board rounds). NHL step and dev-reset add friction -> SIMPLIFY.
+- Where Reggie+Marc actually SPEAK (real 2-host banter, grounded Claude): TickerDesk PLAY on Home/Recap/Next; recap/[id] PLAY THE RECAP; Talk. All behind a deliberate PLAY tap; NO ambient banter and NO visible text (one-panel/no-transcript). => hosts are technically present but easy to miss while browsing. MISSING: their personality is not felt unless you tap.
+- Generic generated text vs genuine banter: the NEW engine (ticker_recap build_*) produces genuine grounded two-host banter. The OLD engine (broadcast.tsx) is generic MASL.
+- CRITICAL: OLD host engine still wired. app/index.tsx wraps everything in <BroadcastProvider> (src/lib/broadcast.tsx) which on every tab change calls the MASL /api/segment endpoint and plays RAYO/CASEY voices with green accent + hostStyle. This is a SECOND, conflicting host system (MASL) running under the new TickerDesk. -> REMOVE/replace. Likely source of any green residue + generic text + double audio.
+- Audio requires another tap/page: yes by design (PLAY on the desk). No ambient host presence.
+- Video/highlight sources connected today: ONLY MASL YouTube (YTPlayer + highlights/[id], "MASLtv"). GameDepth/Team/Player highlight slots are correctly capability-gated (render nothing). No real NHL/CHL video anywhere.
+- Highlightly in this fork: NONE (confirmed: no code/config/refs in frontend/backend).
+- Remaining MASL/MARSL: broadcast.tsx (Rayo/Casey/green), highlights/[id].tsx (MASLtv), coldopen.tsx, voices.tsx, StarSpotlight.tsx (unused), TeamLogo.tsx, ArenaBoard.tsx, api.segment/leaders/teams/availability, theme green tokens.
+- Redundant branding/UI: standings duplicated (Scores + Stats); Home vs My Hockey overlap; multiple legacy host screens.
+- New functionality beyond approved MVP Plus: My Hockey as a separate tab; the leftover MASL broadcast overlay.
+
+## PROPOSED TICKER MVP PLUS SUBTRACTION MAP (smallest product; propose, do not build)
+KEEP (5 primary + 3 depth + talk):
+- HOME (My Ticker) — personalized desk + Draft Board + Around My Hockey (absorbs My Hockey tab)
+- RECAP — postgame show
+- NEXT — preview show
+- SCORES — the facts (owns standings)
+- GAME / TEAM / PLAYER — deliberate depth
+- TALK — live hosts
+- Onboarding — trimmed preference capture
+REMOVE:
+- MY HOCKEY tab (merge into Home)
+- highlights/[id] MASL route + YTPlayer/ArenaBoard/MASLtv (no fake video)
+- coldopen, voices (legacy)
+- src/lib/broadcast.tsx MASL Rayo/Casey overlay + /api/segment path
+- StarSpotlight/TeamLogo + MASL api.leaders/teams/availability + green theme tokens
+SIMPLIFY:
+- Onboarding: drop the standalone NHL step + dev-reset chrome
+- STATS: remove duplicated standings (Scores owns it); keep leaders + "where my teams sit"
+- Tab count 6 -> 5 (RECAP/NEXT/HOME/SCORES/STATS)
+MISSING (to feel like The Ticker):
+- Reggie+Marc must be FELT while browsing, not only on a PLAY tap — a short, ambient, cached host beat on surface entry (still no generation loop, still one-panel), and/or a light visible personality cue. This is the #1 gap.
+- A deliberate highlights DECISION before launch: connect a verified video source OR ship with no highlight pretense (remove MASL highlights).
