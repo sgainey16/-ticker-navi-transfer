@@ -132,12 +132,13 @@ async def build_recap(g: Game, llm_key: str) -> list[dict]:
 
 def build_preview_fact_sheet(slate: dict) -> str:
     games = slate.get("games", []) or []
+    league = slate.get("league_name", "NHL")
     lines: list[str] = []
     if slate.get("is_future"):
-        lines.append(f"There are NO NHL games today ({slate.get('today')}).")
+        lines.append(f"There are NO {league} games today ({slate.get('today')}).")
         lines.append(f"The NEXT scheduled slate is {slate.get('date')}.")
     else:
-        lines.append(f"NHL slate for {slate.get('date')}.")
+        lines.append(f"{league} slate for {slate.get('date')}.")
     lines.append(f"Games on that slate: {len(games)}.")
     for g in games:
         a = g.get("away", {}) or {}

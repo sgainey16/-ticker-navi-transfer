@@ -436,7 +436,7 @@ async def _next_segment_beats(slate: dict):
 
     Cached in Mongo so ordinary browsing/re-entry never re-hits the LLM.
     """
-    key = f"next:{slate.get('date')}:{len(slate.get('games', []) or [])}"
+    key = f"next:{slate.get('league_name','NHL')}:{slate.get('date')}:{len(slate.get('games', []) or [])}"
     doc = await db.segments.find_one({"_id": key})
     if doc and doc.get("beats"):
         return doc["beats"]
@@ -687,8 +687,8 @@ async def ticker_home_segment(follows: HomeFollows):
 
 
 @api_router.get("/ticker/segment")
-async def ticker_segment(surface: str, subject: str | None = None):
-    """Shared Reggie + Marc sports-desk SHOW layer.
+async def ticker_segment(surface: str, subject: str | None = None, league: str = "nhl"):
+    """Shared Reggie + Marc sports-desk SHOW layer (any registered league).
 
     One reusable endpoint that returns a PREPARED/CACHED contextual segment for a
     surface (+ optional subject). Presence is constant across the app; the segment
@@ -711,18 +711,19 @@ async def ticker_segment(surface: str, subject: str | None = None):
             return {"surface": surface, "segment_type": "game", "subject": subject,
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
-    # LEAGUE-level NEXT context: prepared upcoming-slate preview.
+    # LEAGUE-level NEXT context: prepared upcoming-slate preview (league-aware).
     if surface == "next":
         try:
-            slate = await nhl.scoreboard_now()
+            slate = await get_provider(league).scoreboard_now()
             beats = await _next_segment_beats(slate)
-            title = "NEXT ON THE TICKER" if slate.get("is_future") else "TONIGHT ON THE TICKER"
-            return {"surface": "next", "segment_type": "preview", "subject": "league",
+            lname = slate.get("league_name", "NHL")
+            title = f"NEXT ON THE TICKER" if slate.get("is_future") else f"TONIGHT ON THE TICKER"
+            return {"surface": "next", "segment_type": "preview", "subject": league,
                     "title": title, "state": "ready" if beats else "unavailable",
                     "beats": beats, "voices": voices}
         except Exception:
             logger.exception("ticker_segment next failed")
-            return {"surface": "next", "segment_type": "preview", "subject": "league",
+            return {"surface": "next", "segment_type": "preview", "subject": league,
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     # LEAGUE-level RECAP context: prepared postgame show over recent finals.
@@ -824,6 +825,18 @@ async def search(q: str = ""):
         logger.exception("search failed")
         results = []
     return {"query": q, "results": results}
+
+
+@api_router.get("/league/{code}/scoreboard")
+async def league_scoreboard(code: str):
+    """League-aware upcoming slate (NEXT). Any registered provider."""
+    try:
+        return await get_provider(code).scoreboard_now()
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"No provider for league '{code}'")
+    except Exception:
+        logger.exception("league_scoreboard %s failed", code)
+        return {"date": None, "games": []}
 
 
 @api_router.get("/nhl/home")

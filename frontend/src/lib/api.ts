@@ -136,6 +136,8 @@ export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
   nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
+  leagues: () => get<{ leagues: { code: string; name: string; capabilities: Record<string, boolean> }[] }>("/leagues"),
+  leagueScoreboard: (code: string) => get<NhlScoreboard>(`/league/${code}/scoreboard`),
   nhlStandings: () => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>("/nhl/standings"),
   nhlLeaders: () => get<NhlLeaders>("/nhl/leaders"),
   search: (q: string) => get<{ query: string; results: SearchResult[] }>(`/search?q=${encodeURIComponent(q)}`),
@@ -154,8 +156,8 @@ export const api = {
   segment: (page: string) => get<{ page: string; beats: ColdOpenBeat[] }>(`/segments/${page}`),
   stars: () => get<{ stars: Star[] }>("/stars"),
   recap: (gameId: string) => get<RecapResponse>(`/recap/${gameId}`),
-  tickerSegment: (surface: string, subject?: string) =>
-    get<DeskSegment>(`/ticker/segment?surface=${encodeURIComponent(surface)}${subject ? `&subject=${encodeURIComponent(subject)}` : ""}`),
+  tickerSegment: (surface: string, subject?: string, league?: string) =>
+    get<DeskSegment>(`/ticker/segment?surface=${encodeURIComponent(surface)}${subject ? `&subject=${encodeURIComponent(subject)}` : ""}${league ? `&league=${encodeURIComponent(league)}` : ""}`),
   tickerHomeSegment: (follows: unknown) => post<DeskSegment>(`/ticker/home_segment`, follows),
   myHockey: (follows: unknown) => post<{ items: MyHockeyItem[]; personalized: boolean }>(`/ticker/my_hockey`, follows),
   availability: () => get<{ report: any[] }>("/availability"),

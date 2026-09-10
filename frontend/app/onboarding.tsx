@@ -17,8 +17,8 @@ import { TickerMark } from "@/src/components/TickerLogo";
 const DESK = require("../assets/images/broadcast-desk.png");
 
 type Kind = "team" | "player";
-type TeamPick = { abbr: string; name: string; logo?: string | null; fav?: boolean };
-type PlayerPick = { player_id: string; team_abbr: string; name: string; pos?: string; headshot?: string | null; fav?: boolean };
+type TeamPick = { abbr: string; name: string; logo?: string | null; fav?: boolean; league?: string };
+type PlayerPick = { player_id: string; team_abbr: string; name: string; pos?: string; headshot?: string | null; fav?: boolean; league?: string };
 
 type Step = { kind: Kind; fav: boolean; host: "reggie" | "marc"; line: string; ph: string; skippable: boolean };
 const STEPS: Step[] = [
@@ -92,10 +92,10 @@ export default function Onboarding() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (r.type === "team" && r.team_abbr) {
       const makeFav = step.fav && !hasFavTeam;
-      setTeams((prev) => ({ ...prev, [r.team_abbr!]: { abbr: r.team_abbr!, name: r.name, logo: r.logo, fav: makeFav || prev[r.team_abbr!]?.fav } }));
+      setTeams((prev) => ({ ...prev, [r.team_abbr!]: { abbr: r.team_abbr!, name: r.name, logo: r.logo, league: r.league_code, fav: makeFav || prev[r.team_abbr!]?.fav } }));
     } else if (r.type === "player" && r.player_id) {
       const makeFav = step.fav && !hasFavPlayer;
-      setPlayers((prev) => ({ ...prev, [r.player_id!]: { player_id: r.player_id!, team_abbr: r.team_abbr || "", name: r.name, pos: r.pos, headshot: r.headshot, fav: makeFav || prev[r.player_id!]?.fav } }));
+      setPlayers((prev) => ({ ...prev, [r.player_id!]: { player_id: r.player_id!, team_abbr: r.team_abbr || "", name: r.name, pos: r.pos, headshot: r.headshot, league: r.league_code, fav: makeFav || prev[r.player_id!]?.fav } }));
     }
     // Answering a "favorite" question flows straight into the next host line.
     if (step.fav) {
@@ -121,8 +121,8 @@ export default function Onboarding() {
   const finish = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const follows: Follows = {
-      teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name, fav: t.fav })),
-      players: playerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, fav: p.fav })),
+      teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name, fav: t.fav, league: t.league })),
+      players: playerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, fav: p.fav, league: p.league })),
     };
     await completeOnboarding(follows);
     router.replace("/");

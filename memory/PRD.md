@@ -243,3 +243,31 @@ VERIFIED — testing_agent iteration_7.json: PASS
 - Guarantees held: 0 legacy /api/segment, 0 /api/segments/, 0 permissions.query, 0 getUserMedia. Only 'segment' URL = /api/ticker/home_segment.
 
 BEHIND LAUNCH (not started; do not begin without approval): Highlightly -> AI Play-by-Play -> Multilingual/Global.
+
+## SECOND REAL LEAGUE — WHL "prove the pipe" cut [DONE, awaiting approval]
+Goal: prove the universal chassis accepts league #2 with REAL data, NHL untouched. Scope = NEXT only.
+
+DATA SOURCE (verified live): WHL via HockeyTech/Leaguestat — free PUBLIC key, no user key.
+  base=https://lscluster.hockeytech.com/feed/index.php, feed=modulekit, key=f1aa699db3d81487, client_code=whl.
+  (OHL client_code=ohl same key; QMJHL client_code=lhjmq key=f322673b6bcae299 — future.)
+
+BACKEND
+- NEW providers/whl.py WHLProvider(HockeyProvider): scoreboard_now (scorebar→canonical game cards, real logos assets.leaguestat.com), search (teamsbyseason + searchplayers, tagged league WHL), recent_finals_now (from scorebar finals). capabilities: schedule=T, search=T, recaps=T; standings/leaders/team_page/player_page/media=F (not wired this cut → hidden, no fake). game_by_id/latest_game/team_page/player_page raise (unused this cut).
+- registry: _PROVIDERS now {nhl, whl}. /api/leagues shows both. search_all already aggregates all providers with capability search=True → WHL auto-included in universal onboarding search.
+- server: /api/ticker/segment gained ?league= (next branch uses get_provider(league).scoreboard_now; cache key + fact sheet league-aware). NEW GET /api/league/{code}/scoreboard. ticker_recap.build_preview_fact_sheet now uses slate.league_name (default NHL) so WHL desk says "WHL".
+- NHL routes/behaviour UNCHANGED.
+
+FRONTEND
+- follows.tsx: TeamFollow/PlayerFollow gained league?: string (additive). onboarding sets league from result.league_code → NHL + WHL follows coexist in one store.
+- api.ts: leagues(), leagueScoreboard(code), tickerSegment(surface, subject?, league?).
+- TickerDesk: optional league prop (fetch + cacheKey include league).
+- TonightScreen (NEXT): NHL|WHL switcher (shown only when >1 league registered); league-aware scoreboard + desk. NHL keeps full GameDepth; WHL shows a light LiteMatchup card (no NHL deep links, no fabricated depth).
+- Home/Recap/Stats/Team/Player/Game NOT wired for WHL (per scope). WHL follows on Home render as chips; backend home facts skip non-NHL gracefully (per-item try/except) so nothing breaks.
+
+VERIFIED — testing_agent iteration_10.json: PASS
+- Backend 9/9 (tests/test_whl_provider.py): leagues=nhl+whl; WHL scoreboard real games+logos; search mixes NHL+WHL (edmonton→Oilers+Oil Kings; regina→Regina Pats abbr REG; wheat→Brandon Wheat Kings); WHL next segment state=ready WHL-grounded; NHL regression 200.
+- Frontend success test: onboard follow BOS(NHL fav ⭐)+REG(WHL) → Home shows both → NEXT → switch WHL → real WHL slate + Reggie/Marc desk grounded in WHL + LiteMatchup; switch back to NHL restores GameDepth. Desk PLAY→PAUSE. 0 permissions.query, 0 getUserMedia, 0 legacy /api/segment.
+
+NEXT WAVES (behind launch, not started): expand WHL to Recap/Stats/Team/Player/Home → then Elite Prospects (Champions HL/Liiga/SHL, PAID key) → AI Play-by-Play → Multilingual.
+Recon detail: /app/memory/second_league_recon.md
+

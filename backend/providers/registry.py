@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from providers.base import HockeyProvider
 from providers.nhl import NHLProvider
+from providers.whl import WHLProvider
 
 DEFAULT_LEAGUE = "nhl"
 
 _PROVIDERS: dict[str, HockeyProvider] = {
     "nhl": NHLProvider(),
-    # "chl": CHLProvider(),        # <- future league plugs in here, no page rewrites
-    # "khl": KHLProvider(),
+    "whl": WHLProvider(),        # second real league — proves the universal chassis
+    # "chl": CHLProvider(),      # (Champions HL / Liiga / SHL via Elite Prospects — paid key, later)
 }
 
 

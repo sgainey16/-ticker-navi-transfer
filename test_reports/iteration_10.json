@@ -1,0 +1,37 @@
+{
+  "summary": "PASS — Universal provider chassis proven with WHL as second real league; NHL surfaces untouched. BACKEND (pytest, 9/9 passing, /app/backend/tests/test_whl_provider.py): GET /api/leagues returns nhl + whl with correct capabilities (whl schedule=true, search=true, team_page=false, player_page=false); GET /api/league/whl/scoreboard returns league_name 'Western Hockey League' with real games carrying assets.leaguestat.com logos; GET /api/search aggregates BOTH leagues — 'wheat' -> Brandon Wheat Kings (WHL), 'edmonton' -> both NHL Oilers AND WHL Oil Kings, 'regina' -> Regina Pats with abbr 'REG' and subtitle 'WHL'; GET /api/ticker/segment?surface=next&league=whl -> state='ready' with WHL-grounded beats. NHL regression: /api/nhl/scoreboard 200, /api/nhl/standings 200. FRONTEND (Playwright, mobile 390x844): full acceptance flow ran green — /onboarding?reset=1 -> welcome-go -> Q0 typed 'boston' -> tapped result-team-BOS (NHL favorite, auto-advanced ~1.2s) -> Q1 typed 'regina' -> result-team-REG renders with subtitle 'WHL' and 'ADD' affordance -> tapped to ADD, then tapped onboard-next -> Q2 tapped onboard-skip ('No player') -> landed on Home without crash. Home MY DRAFT BOARD → FOLLOWING row shows BOS (gold star) AND REG chip — both leagues co-exist in a single follows store. Tapped toptab-tonight → NEXT screen renders league-nhl | league-whl switcher (both testIDs present because 2 leagues are registered). Tapped league-whl → desk title flipped to 'TONIGHT ON THE TICKER' with PREVIEW kicker; Today's Slate rail shows WHL kicker + real WHL games (RD, LET, SAS, PA, WEN, SEA) with 30 assets.leaguestat.com logos; Selected game renders lite-matchup (testID present), NOT GameDepth — matches spec. Tapped desk-play → label flipped from 'PLAY THE DESK' to 'PAUSE' immediately (iter 0, <500ms), tapped again → returned to 'PLAY THE DESK'. Tapped league-nhl → lite-matchup absent, NHL slate reappeared with 'NEXT ON THE TICKER' title, FLA/CAR/MTL/TOR/NYR/BOS logos on nhle.com (58 assets), 'OPEN GAME' CTA visible (NHL GameDepth active). Reliability probes (instrumented BEFORE app JS via add_init_script): navigator.permissions.query = 0, navigator.mediaDevices.getUserMedia = 0, bare '/api/segment' calls = 0 across onboarding + Home + NEXT + league switching (captured on the primary run). RN-Web deprecation warnings ('shadow*' style props, props.pointerEvents) remain as carryover — non-blocking, listed as react_native_issues.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web deprecation warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Carryover from earlier iterations, non-blocking."},
+      {"component": "tab body views", "issue": "RN-Web deprecation warning: props.pointerEvents is deprecated. Use style.pointerEvents. Reference: /app/frontend/app/index.tsx:59."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_whl_provider.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — every acceptance criterion for the WHL 'prove the pipe' cut passes.",
+    "OPTIONAL housekeeping (carryover): replace deprecated shadow* style props with boxShadow, and prop pointerEvents with style.pointerEvents in /app/frontend/app/index.tsx to silence RN-Web console warnings."
+  ],
+  "critical_code_review_comments": [
+    "backend/providers/registry.py cleanly plugs WHLProvider alongside NHL; get_provider(code) + search_all() keep the surface generic — a third league requires only one line.",
+    "backend/providers/whl.py adheres to real-data-only rule: capabilities standings/leaders/team_page/player_page = false, and team_page/player_page/game_by_id raise 'not wired yet' (never fabricates). _team_index cached 1h to avoid hammering HockeyTech; scorebar mapped to canonical Game shape.",
+    "backend/server.py /api/ticker/segment surface='next' now correctly uses get_provider(league).scoreboard_now() and caches beats in Mongo by league_name+date+game count — WHL segment reuses the same LLM builder as NHL, verified with 'ready' state on external base.",
+    "frontend TonightScreen.tsx conditionally hides the league switcher when only one league is connected (`leagues.length > 1`) — correct honest UX. Selecting a league resets selectedId so games array reflows.",
+    "TickerDesk.tsx cacheKey is `${surface}|${subject}|${league}` so switching NHL↔WHL invalidates cache correctly and refetches per league.",
+    "LiteMatchup component is used only for non-NHL leagues (isNhl branch), so NHL GameDepth is 100% untouched — matches 'do not flag missing WHL depth as a bug' guidance.",
+    "process.env.EXPO_PUBLIC_BACKEND_URL used throughout, no hardcoded hosts.",
+    "Follows store carries `league` implicitly via the picked abbr/player_id; BOS (NHL) and REG (WHL) co-exist in one array and both render on Home."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (9/9 pytest)", "frontend": "100% (all acceptance flows verified on mobile viewport)" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "WHL is the second real league via HockeyTech (client_code=whl, key=f1aa699db3d81487). Regina Pats' abbr in HockeyTech is 'REG' (confirmed via GET /api/search?q=regina). The league switcher testIDs are league-nhl / league-whl and appear only when the /api/leagues response has >1 league. The visible top-nav tab for NEXT is testID='toptab-tonight' (NOT 'tab-next'). On WHL, the SELECTED GAME renders <LiteMatchup testID='lite-matchup'> by design — do NOT flag missing GameDepth on WHL as a bug. desk-play may render TWICE in the DOM (one on the Home tab kept alive underneath, one on the NEXT tab); target the visible one via `Array.from(document.querySelectorAll('[data-testid=\"desk-play\"]')).find(e => e.offsetParent !== null)` for reliable clicks. Q1 WHL search takes ~500ms of HockeyTech round-trip on cold cache — use wait_for_selector('[data-testid=\"result-team-REG\"]', timeout=10000) rather than fixed sleeps."
+}

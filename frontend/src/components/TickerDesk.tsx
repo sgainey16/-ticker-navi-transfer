@@ -32,14 +32,16 @@ export function TickerDesk({
   fallbackTitle,
   segmentFetcher,
   cacheKey,
+  league,
 }: {
   surface: string;
   subject?: string;
   fallbackTitle?: string;
   segmentFetcher?: () => Promise<DeskSegment>;
   cacheKey?: string;
+  league?: string;
 }) {
-  const key = cacheKey || `${surface}|${subject || "league"}`;
+  const key = cacheKey || `${surface}|${subject || "league"}|${league || "nhl"}`;
   const [seg, setSeg] = useState<DeskSegment | null>(segCache[key] || null);
   const [loading, setLoading] = useState(!segCache[key]);
   const [playing, setPlaying] = useState(false);
@@ -54,7 +56,7 @@ export function TickerDesk({
     setLoading(true);
     (async () => {
       try {
-        const data = await (segmentFetcher ? segmentFetcher() : api.tickerSegment(surface, subject));
+        const data = await (segmentFetcher ? segmentFetcher() : api.tickerSegment(surface, subject, league));
         segCache[key] = data;
         if (alive) setSeg(data);
       } catch {
@@ -64,7 +66,7 @@ export function TickerDesk({
       }
     })();
     return () => { alive = false; };
-  }, [key, surface, subject]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, surface, subject, league]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(() => {
     runRef.current += 1;
