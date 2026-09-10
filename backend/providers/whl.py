@@ -87,15 +87,27 @@ class WHLProvider(HockeyProvider):
     code = "whl"
     name = "Western Hockey League"
     capabilities = {
-        "standings": False,      # not wired in this proof cut
-        "leaders": False,
+        "standings": True,       # WHL conference standings (HockeyTech)
+        "leaders": True,         # scoring + goalie leaders
         "recaps": True,          # finals available via scorebar
-        "schedule": True,        # NEXT proof
-        "team_page": False,
+        "schedule": True,        # NEXT
+        "team_page": False,      # depth pages arrive in the next sub-cut
         "player_page": False,
-        "search": True,          # teams + players searchable in onboarding
+        "search": True,
         "media": False,
     }
+
+    async def _active_season(self, client: httpx.AsyncClient) -> str:
+        """Season whose date range contains today (preseason/regular), else newest."""
+        from datetime import date
+        data = await _get(client, {**_common("seasons")})
+        seasons = data.get("Seasons", []) if isinstance(data, dict) else []
+        today = date.today().isoformat()
+        for s in seasons:
+            sd, ed = s.get("start_date"), s.get("end_date")
+            if sd and ed and sd <= today <= ed:
+                return str(s.get("season_id"))
+        return str(seasons[0]["season_id"]) if seasons else "295"
 
     async def scoreboard_now(self) -> dict:
         """Upcoming/live WHL games (NEXT). Real HockeyTech scorebar."""
@@ -174,14 +186,101 @@ class WHLProvider(HockeyProvider):
         raise ValueError("WHL latest game not wired yet")
 
     async def recent_finals_now(self, limit: int = 15) -> list[dict]:
-        board = await self.scoreboard_now()
-        return [g for g in board.get("games", []) if g.get("group") == "final"][:limit]
+        """Recently COMPLETED WHL games (RECAP) — own scorebar lookback."""
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 0, "numberofdaysback": 21})
+        rows = data.get("Scorebar", []) if isinstance(data, dict) else []
+        finals = []
+        for c in rows:
+            if c.get("GameStatus") != "4":
+                continue
+            finals.append({
+                "id": str(c.get("ID")), "state": "OFF", "group": "final",
+                "date": c.get("Date"), "start_utc": c.get("GameDateISO8601"),
+                "away": _side(c, "away"), "home": _side(c, "home"),
+            })
+        finals.sort(key=lambda g: g.get("date") or "", reverse=True)
+        return finals[:limit]
 
     async def standings_now(self) -> dict:
-        return {}
+        """WHL standings grouped into Eastern/Western conferences (matches Stats UI)."""
+        import json as _json
+        east: list[dict] = []
+        west: list[dict] = []
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            season = await self._active_season(client)
+            tindex = {t["abbr"]: t for t in await _team_index(client)}
+            url = ("https://lscluster.hockeytech.com/feed/index.php?feed=statviewfeed&view=teams"
+                   "&groupTeamsBy=division&context=overall&site_id=0&special=false&league_id=&conference=-1&division=-1"
+                   f"&season={season}&key={KEY}&client_code={CLIENT}&fmt=json")
+            r = await client.get(url, timeout=20, follow_redirects=True)
+            raw = r.text.strip()
+            if raw.startswith("("):
+                raw = raw[1:-1]
+            data = _json.loads(raw)
+        for section in (data[0].get("sections", []) if data else []):
+            for entry in section.get("data", []):
+                row = entry.get("row", {})
+                abbr = row.get("team_code")
+                t = tindex.get(abbr, {})
+                div = (t.get("division") or "").lower()
+                conf_east = ("east" in div) or ("central" in div)
+                out = {
+                    "abbr": abbr, "name": t.get("name") or abbr, "short": t.get("nickname") or abbr,
+                    "logo": t.get("logo"), "conference": "Eastern" if conf_east else "Western",
+                    "division": t.get("division"),
+                    "gp": _int(row.get("games_played")), "wins": _int(row.get("wins")),
+                    "losses": _int(row.get("losses")), "ot": _int(row.get("ot_losses")),
+                    "points": _int(row.get("points")), "gf": _int(row.get("goals_for")),
+                    "ga": _int(row.get("goals_against")), "streak": row.get("streak") or "",
+                    "conf_rank": _int(row.get("rank")),
+                }
+                (east if conf_east else west).append(out)
+        east.sort(key=lambda x: (-(x["points"] or 0)))
+        west.sort(key=lambda x: (-(x["points"] or 0)))
+        for i, x in enumerate(east): x["conf_rank"] = i + 1
+        for i, x in enumerate(west): x["conf_rank"] = i + 1
+        return {"Eastern": east, "Western": west}
 
     async def leaders_now(self, limit: int = 8) -> dict:
-        return {"skaters": {}, "goalies": {}}
+        """WHL scoring + goalie leaders (real HockeyTech), shaped like the NHL leaders."""
+        def _row(p):
+            return {"id": str(p.get("player_id")), "name": p.get("name"),
+                    "team_abbr": p.get("team_code"), "pos": p.get("position"),
+                    "value": None, "headshot": None}
+        out = {"skaters": {}, "goalies": {}}
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            season = await self._active_season(client)
+            try:
+                data = await _get(client, {**_common("statviewtype"), "type": "topscorers",
+                                           "season_id": season, "first": 0, "limit": limit})
+                sc = data.get("Statviewtype", []) if isinstance(data, dict) else []
+                out["skaters"]["points"] = [{**_row(p), "value": _int(p.get("points"))} for p in sc]
+                out["skaters"]["goals"] = [{**_row(p), "value": _int(p.get("goals"))}
+                                           for p in sorted(sc, key=lambda x: _int(x.get("goals")) or 0, reverse=True)]
+                out["skaters"]["assists"] = [{**_row(p), "value": _int(p.get("assists"))}
+                                             for p in sorted(sc, key=lambda x: _int(x.get("assists")) or 0, reverse=True)]
+            except Exception:
+                logger.exception("WHL topscorers failed")
+            try:
+                data = await _get(client, {**_common("statviewtype"), "type": "topgoalies",
+                                           "season_id": season, "first": 0, "limit": limit})
+                gl = data.get("Statviewtype", []) if isinstance(data, dict) else []
+                out["goalies"]["wins"] = [{**_row(p), "value": _int(p.get("wins"))} for p in gl]
+                out["goalies"]["gaa"] = [{**_row(p), "value": p.get("goals_against_average")}
+                                         for p in gl if p.get("goals_against_average") is not None]
+                out["goalies"]["svpct"] = [{**_row(p), "value": p.get("save_percentage")}
+                                           for p in gl if p.get("save_percentage") is not None]
+            except Exception:
+                logger.exception("WHL topgoalies failed")
+        return out
+
+    # --- depth pages (Team/Player/Game) arrive in the next sub-cut --------
+    async def game_by_id(self, game_id: str) -> Game:
+        raise ValueError("WHL game page not wired yet")
+
+    async def latest_game(self) -> Game:
+        raise ValueError("WHL latest game not wired yet")
 
     async def team_page(self, tri: str) -> dict:
         raise ValueError("WHL team page not wired yet")

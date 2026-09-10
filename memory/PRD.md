@@ -271,3 +271,18 @@ VERIFIED — testing_agent iteration_10.json: PASS
 NEXT WAVES (behind launch, not started): expand WHL to Recap/Stats/Team/Player/Home → then Elite Prospects (Champions HL/Liiga/SHL, PAID key) → AI Play-by-Play → Multilingual.
 Recon detail: /app/memory/second_league_recon.md
 
+
+## WHL EXPANSION — league-level surfaces [DONE, awaiting approval; DEPTH pages next]
+Scope delivered this cut (NHL untouched, no highlights/video, real WHL data only, missing modules hidden):
+- HOME: NHL + WHL follows coexist (onboarding tags each follow with league); Home renders both as follow chips.
+- NEXT: NHL|WHL switcher (from prior cut) — real WHL upcoming slate + WHL-grounded desk + LiteMatchup.
+- RECAP: NHL|WHL switcher — real recent WHL finals rail + final-card + Reggie/Marc recap desk grounded in WHL finals (build_recap_show now league-aware).
+- STATS: NHL|WHL switcher — real WHL Eastern/Western standings + real scoring/goalie leaders; "Where My Teams Sit" reflects followed WHL team.
+Backend WHLProvider now real: standings_now (statviewfeed, division→Eastern/Western), leaders_now (topscorers/topgoalies), recent_finals_now (scorebar lookback), _active_season (picks the season containing today → preseason 294 now, so real data today). capabilities: schedule/search/recaps/standings/leaders=True; team_page/player_page/media=False.
+Endpoints: /api/league/{code}/scoreboard|standings|leaders|recaps; /api/ticker/segment?league= (next+recap). Shared frontend LeagueSwitcher; TickerDesk gained league prop.
+
+DEFERRED to the IMMEDIATE NEXT sub-cut (not built; depth links gated OFF for WHL so no dead ends):
+- TEAM · PLAYER · GAME depth for WHL. Reason: HockeyTech roster/player/gamesummary shapes are season-dependent and need careful, no-fabrication mapping into the canonical team_page/player_page/Game shapes + league-param routing on /team /player /game. Will do as its own controlled cut.
+
+VERIFIED — testing_agent iteration_11.json PASS: backend 20/20 (test_whl_league_surfaces.py + test_whl_provider.py); frontend all switchers real WHL data, desk grounded, HEAR THE RECAP gated off for WHL, WHL depth taps don't navigate; NHL fully unregressed; 0 permissions.query, 0 getUserMedia, 1 play only on deliberate desk-play, 0 legacy /api/segment.
+

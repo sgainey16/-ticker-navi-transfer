@@ -1,0 +1,38 @@
+{
+  "summary": "PASS — WHL is fully wired into NEXT, RECAP, and STATS through the universal chassis, and NHL is unregressed. BACKEND (pytest, 20/20 passing: 11 new /app/backend/tests/test_whl_league_surfaces.py + 9 prior /app/backend/tests/test_whl_provider.py): /api/league/whl/standings returns Eastern+Western with real records (Regina Pats REG present in Eastern with numeric wins/losses/points); /api/league/whl/leaders returns skaters.points and goalies.wins with numeric values; /api/league/whl/recaps returns real WHL finals with verified scores; /api/ticker/segment?surface=recap&league=whl -> state='ready' with WHL-grounded beats; NHL regression: /api/nhl/standings, /api/nhl/leaders, /api/nhl/recaps all 200 with real data; /api/ticker/segment?surface=recap&league=nhl still 'ready'. FRONTEND (Playwright, mobile 390x844): full acceptance flow ran green in a single session — /onboarding?reset=1 -> welcome-go -> Q0 'boston' -> result-team-BOS (auto-advanced) -> Q1 'regina' -> result-team-REG -> onboard-next -> Q2 onboard-skip -> Home. Home MY DRAFT BOARD FOLLOWING shows BOS (gold star, NHL) AND REG (WHL) chip. NEXT (toptab-tonight): NHL|WHL switcher visible; tap league-whl -> lite-matchup renders (no GameDepth on WHL by design); tap desk-play -> exactly ONE audio play triggered (0->1); tap league-nhl -> lite-matchup gone (NHL GameDepth restored). RECAP: default NHL shows THE TICKER RECAP desk + 'HEAR THE RECAP' CTA. Tap league-whl -> desk regrounds to WHL, real WHL finals appear in the Recent Finals rail (screenshot confirms 'KEL 1 – 6 PEN', 'REG 7 – 3 MJ', 'KAM – PEN'), final-card (testID final-card) renders 'KEL 1 – 6 PEN' with date '2026-09-09', and HEAR THE RECAP is correctly absent (WHL GameDepth gated OFF this cut). Switch back to NHL restores HEAR THE RECAP. STATS: default NHL renders leaders+standings normally. Tap league-whl -> 'Where My Teams Sit' shows 'Regina Pats · 1st in the Eastern · 5-0-0' with 10 PTS (followed WHL team surfaced); League Leaders shows real WHL names with numeric values (Ellis Mieyette C·REG=6, Gavin Katz RW·PEN=6, Cooper Williams C·SAS=6, Kris Muissu LW·BDN=5, Jonas Vanicek C·EDM=5, Giorgos Pantelas D·PEN, Rhys Jamieson…); EASTERN+WESTERN standings render; NO NaN/blank values. WHL depth gating confirmed: tapping a leader row on WHL Stats does NOT navigate (URL unchanged, no NHL page loaded, no crash). Reliability probes (instrumented BEFORE app JS via add_init_script across the whole flow incl. switching leagues and playing desk): navigator.permissions.query = 0, navigator.mediaDevices.getUserMedia = 0, bare '/api/segment' calls = 0, HTMLMediaElement.play() called exactly 1 time (only on the deliberate desk-play tap; no autoplay; only one segment played at a time). 0 console errors during the flow. RN-Web deprecation warnings ('shadow*' and props.pointerEvents) remain carryover — non-blocking.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (multiple)", "issue": "RN-Web deprecation warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Carryover, non-blocking."},
+      {"component": "tab body views", "issue": "RN-Web deprecation warning: props.pointerEvents is deprecated. Use style.pointerEvents. Reference: /app/frontend/app/index.tsx:59."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_whl_league_surfaces.py",
+    "/app/backend/tests/test_whl_provider.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — every acceptance criterion for the WHL league-surface expansion passes.",
+    "OPTIONAL housekeeping (carryover): swap deprecated shadow* style props for boxShadow, and prop pointerEvents for style.pointerEvents to silence RN-Web console warnings."
+  ],
+  "critical_code_review_comments": [
+    "frontend RecapScreen.tsx and StatsScreen.tsx both consume the shared LeagueSwitcher and correctly branch on isNhl for depth-page navigation (openTeam/openPlayer gated to NHL) and for GameDepth vs FinalCard rendering on Recap — matches 'do not flag missing WHL depth as a bug' guidance.",
+    "TickerDesk uses `${surface}|${subject}|${league}` cache key so switching NHL↔WHL invalidates the desk correctly (verified by observing WHL beats replace NHL beats on Recap after tap).",
+    "backend/providers/whl.py standings_now() groups by division into Eastern/Western correctly, re-ranks by points, and pulls real HockeyTech statviewfeed data; leaders_now() reuses topscorers/topgoalies with the active season resolved by date range — no fabrication when categories are missing.",
+    "backend/server.py /api/ticker/segment?surface=recap now takes league param, fetches recent_finals_now from the correct provider, caches per league+top-game+len, and passes league_name to build_recap_show — WHL desk grounds in WHL finals as required.",
+    "LeagueSwitcher hides itself when only one league is registered (leagues.length <= 1) — single-league builds look unchanged; correct honest UX.",
+    "StatsScreen 'Where My Teams Sit' correctly surfaces the followed REG team on WHL because it reads from the current-league standings, not a global list — confirmed on-screen with 'Regina Pats · 1st in the Eastern · 5-0-0'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_whl_league_surfaces.py (new — 11 tests for WHL surfaces + NHL regression)"
+  ],
+  "success_rate": { "backend": "100% (20/20 pytest across 2 files)", "frontend": "100% (all acceptance flows verified on mobile viewport)" },
+  "seed_data_creation": "None — real HockeyTech + real NHL data only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "WHL league-surface expansion is complete for NEXT + RECAP + STATS. WHL depth pages (Team/Player/Game) are intentionally OFF this cut: on WHL Stats, tapping team/leader rows must NOT navigate; on WHL Recap, GameDepth/HEAR THE RECAP are correctly hidden and FinalCard (testID='final-card') is shown for the selected game — do NOT flag these as bugs. Section titles on screens render via textTransform:'uppercase' — asserting on rendered innerText for 'Standings', 'League Leaders', 'Recent Finals' will return the uppercase forms; screenshots are the source of truth. The onboarding follows must be seeded IN THE SAME playwright session (localStorage/AsyncStorage does not persist across separate browser sessions in these headless runs). Regina Pats abbr is 'REG'. Known real WHL scoring leaders today (preseason 294): Ellis Mieyette (C·REG), Gavin Katz (RW·PEN), Cooper Williams (C·SAS), Kris Muissu (LW·BDN), Jonas Vanicek (C·EDM). desk-play may exist twice in the DOM (Home tab kept alive underneath); target the visible one via `Array.from(document.querySelectorAll('[data-testid=\"desk-play\"]')).find(e => e.offsetParent !== null)`."
+}

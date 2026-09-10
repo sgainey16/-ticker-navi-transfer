@@ -225,8 +225,8 @@ async def build_next_preview(slate: dict, llm_key: str) -> list[dict]:
 # Grounded strictly on verified final results (team names + final scores).
 # ---------------------------------------------------------------------------
 
-def build_show_fact_sheet(finals: list[dict]) -> str:
-    lines: list[str] = [f"Completed NHL games: {len(finals)}."]
+def build_show_fact_sheet(finals: list[dict], league_name: str = "NHL") -> str:
+    lines: list[str] = [f"Completed {league_name} games: {len(finals)}."]
     for g in finals[:8]:
         a = g.get("away", {}) or {}
         h = g.get("home", {}) or {}
@@ -289,10 +289,10 @@ def _show_fallback(finals: list[dict]) -> list[dict]:
     ]
 
 
-async def build_recap_show(finals: list[dict], llm_key: str) -> list[dict]:
+async def build_recap_show(finals: list[dict], llm_key: str, league_name: str = "NHL") -> list[dict]:
     if not finals:
         return []
-    facts = build_show_fact_sheet(finals)
+    facts = build_show_fact_sheet(finals, league_name)
     if not llm_key:
         return _show_fallback(finals)
     chat = LlmChat(

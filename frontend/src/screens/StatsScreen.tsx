@@ -10,6 +10,7 @@ import { useApi } from "@/src/lib/useApi";
 import { useFollows } from "@/src/lib/follows";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
 
 const CATS = [
   { key: "points", label: "Points", group: "skaters" as const },
@@ -20,10 +21,12 @@ const CATS = [
   { key: "svpct", label: "SV%", group: "goalies" as const },
 ];
 
-function fmtVal(key: string, v: number) {
-  if (key === "svpct") return v.toFixed(3).replace(/^0/, "");
-  if (key === "gaa") return v.toFixed(2);
-  return `${v}`;
+function fmtVal(key: string, v: any) {
+  const n = Number(v);
+  if (!isFinite(n)) return `${v ?? "–"}`;
+  if (key === "svpct") return n.toFixed(3).replace(/^0/, "");
+  if (key === "gaa") return n.toFixed(2);
+  return `${n}`;
 }
 function ordinal(n?: number | null) {
   if (!n) return "";
@@ -35,8 +38,13 @@ export default function Stats() {
   const router = useRouter();
   const { follows } = useFollows();
   const [cat, setCat] = useState("points");
-  const leaders = useApi(() => api.nhlLeaders());
-  const standings = useApi(() => api.nhlStandings());
+  const [league, setLeague] = useState("nhl");
+  const isNhl = league === "nhl";
+  const leaders = useApi(() => (isNhl ? api.nhlLeaders() : api.leagueLeaders(league)), [league]);
+  const standings = useApi(() => (isNhl ? api.nhlStandings() : api.leagueStandings(league)), [league]);
+
+  const openTeam = (abbr: string) => { if (isNhl) router.push(`/team/${abbr}`); };
+  const openPlayer = (pid: string) => { if (isNhl) router.push(`/player/${pid}`); };
 
   const followTeams = useMemo(() => new Set(follows.teams.map((t) => t.abbr)), [follows]);
   const followPlayers = useMemo(() => new Set(follows.players.map((p) => p.player_id)), [follows]);
@@ -65,6 +73,7 @@ export default function Stats() {
         <ErrorState message="Couldn't load stats" onRetry={() => { leaders.reload(); standings.reload(); }} />
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <LeagueSwitcher league={league} onChange={setLeague} />
           <View style={styles.head}><View style={styles.headBar} /><Text style={styles.headTitle}>STATS</Text></View>
 
           {/* WHERE MY TEAMS SIT */}
@@ -72,7 +81,7 @@ export default function Stats() {
             <View style={styles.section}>
               <SectionTitle title="Where My Teams Sit" accent={colors.blue} />
               {myStanding.map((r) => (
-                <Pressable key={r.abbr} style={[styles.row, styles.rowMine]} onPress={() => router.push(`/team/${r.abbr}`)}>
+                <Pressable key={r.abbr} style={[styles.row, styles.rowMine]} onPress={() => openTeam(r.abbr)}>
                   <NhlLogo abbr={r.abbr} url={r.logo} size={34} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowName}>{r.name}</Text>
@@ -100,7 +109,7 @@ export default function Stats() {
             {rows.map((p, i) => {
               const mine = followPlayers.has(p.id) || followTeams.has(p.team_abbr);
               return (
-                <Pressable key={p.id} style={[styles.leader, mine && styles.rowMine]} onPress={() => router.push(`/player/${p.id}`)} testID={`leader-${p.id}`}>
+                <Pressable key={p.id} style={[styles.leader, mine && styles.rowMine]} onPress={() => openPlayer(p.id)} testID={`leader-${p.id}`}>
                   <Text style={[styles.rank, i === 0 && { color: colors.gold }]}>{i + 1}</Text>
                   {p.headshot ? <Image source={p.headshot} style={styles.shot} contentFit="cover" /> : <View style={styles.shot} />}
                   <View style={{ flex: 1 }}>
@@ -123,7 +132,7 @@ export default function Stats() {
                   {(standings.data![conf] || []).map((r, i) => {
                     const mine = followTeams.has(r.abbr);
                     return (
-                      <Pressable key={r.abbr} style={[styles.standRow, mine && styles.rowMine]} onPress={() => router.push(`/team/${r.abbr}`)}>
+                      <Pressable key={r.abbr} style={[styles.standRow, mine && styles.rowMine]} onPress={() => openTeam(r.abbr)}>
                         <Text style={styles.standRank}>{i + 1}</Text>
                         <NhlLogo abbr={r.abbr} url={r.logo} size={22} />
                         <Text style={[styles.standName, mine && { color: colors.white }]} numberOfLines={1}>{r.short || r.name}</Text>

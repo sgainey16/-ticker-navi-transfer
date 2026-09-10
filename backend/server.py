@@ -729,24 +729,26 @@ async def ticker_segment(surface: str, subject: str | None = None, league: str =
     # LEAGUE-level RECAP context: prepared postgame show over recent finals.
     if surface == "recap":
         try:
-            finals = await nhl.recent_finals_now(limit=8)
-            key = f"recap:{(finals[0].get('id') if finals else 'none')}:{len(finals)}"
+            prov = get_provider(league)
+            finals = await prov.recent_finals_now(limit=8)
+            lname = getattr(prov, "name", "NHL")
+            key = f"recap:{league}:{(finals[0].get('id') if finals else 'none')}:{len(finals)}"
             doc = await db.segments.find_one({"_id": key})
             if doc and doc.get("beats"):
                 beats = doc["beats"]
             else:
-                beats = await build_recap_show(finals, EMERGENT_LLM_KEY)
+                beats = await build_recap_show(finals, EMERGENT_LLM_KEY, league_name=lname)
                 await db.segments.update_one(
                     {"_id": key},
                     {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
                     upsert=True,
                 )
-            return {"surface": "recap", "segment_type": "recap", "subject": "league",
+            return {"surface": "recap", "segment_type": "recap", "subject": league,
                     "title": "THE TICKER RECAP", "state": "ready" if beats else "unavailable",
                     "beats": beats, "voices": voices}
         except Exception:
             logger.exception("ticker_segment recap failed")
-            return {"surface": "recap", "segment_type": "recap", "subject": "league",
+            return {"surface": "recap", "segment_type": "recap", "subject": league,
                     "title": None, "state": "unavailable", "beats": [], "voices": voices}
 
     # LEAGUE-level HOME context: the Ticker opening show (honest, NHL-only for now).
@@ -837,6 +839,34 @@ async def league_scoreboard(code: str):
     except Exception:
         logger.exception("league_scoreboard %s failed", code)
         return {"date": None, "games": []}
+
+
+@api_router.get("/league/{code}/standings")
+async def league_standings(code: str):
+    try:
+        return await get_provider(code).standings_now()
+    except Exception:
+        logger.exception("league_standings %s failed", code)
+        return {"Eastern": [], "Western": []}
+
+
+@api_router.get("/league/{code}/leaders")
+async def league_leaders(code: str):
+    try:
+        return await get_provider(code).leaders_now(limit=8)
+    except Exception:
+        logger.exception("league_leaders %s failed", code)
+        return {"skaters": {}, "goalies": {}}
+
+
+@api_router.get("/league/{code}/recaps")
+async def league_recaps(code: str):
+    try:
+        games = await get_provider(code).recent_finals_now()
+    except Exception:
+        logger.exception("league_recaps %s failed", code)
+        games = []
+    return {"games": games}
 
 
 @api_router.get("/nhl/home")
