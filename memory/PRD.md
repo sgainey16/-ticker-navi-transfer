@@ -414,3 +414,10 @@ Video/highlights: media=False on every provider; nothing ingested or shown. AHL/
 Highlightly offers video highlights + scores/standings/momentum/match-stats across 170+ leagues incl AHL/ECHL/WHL/OHL/QMJHL/NCAA. Weak on play-by-play/lineups/injuries.
 Pricing = calls not depth: all paid tiers same data; 5k->25k only raises daily ceiling. Major-league highlights need a PAID tier (RapidAPI basic excludes NHL/AHL/OHL/NCAA highlights).
 Full report: /app/memory/highlightly_audit.md. No code changed.
+
+## Jun 2026 — Highlightly Universal Rollout + Game-Centered Video (BUILT, tested PASS)
+Highlightly Pro key (7,500/day) wired via backend/highlightly.py — ONE universal adapter + HL_LEAGUES registry (nhl/ahl/echl/whl/ohl/qmjhl/ncaa). Additive to NHL API + HockeyTech (never overwrites verified data). In-memory TTL cache (15m) keeps us well under 7,500/day.
+Endpoints: GET /api/highlights?league=&limit= (league feed), GET /api/highlights/match?league=&home=&away=&date= (game package: recap + clips, nickname+date matcher, disambiguates playoff series by date). /api/leagues now reports capabilities.video.
+Frontend: HighlightsModule (video-first) on final game pages, ABOVE the Reggie+Marc GAME DESK — recap hero + 'more from this matchup' rail + 'Verified video · Highlightly'. Native inline youtube player (react-native-youtube-iframe) isolated behind YoutubeInline.web.tsx so web bundle stays intact; web taps open verified source via Linking. Renders nothing when no clip matched (no placeholders).
+PROOF: NHL Cup Final Game 6 (Carolina@Vegas, id 2025030416) -> exact recap yt=3jbQ58HKtXA in the game package. All 7 league IDs resolve real clips. Testing agent iteration_18.json PASS (backend 5/5 + frontend web). Live Desk PLAY/TALK/STOP FROZEN and untouched (Kamloops bridges still return 6 grounded lines).
+POPULATED NOW: NHL game packages (rich, Cup Final live) + WHL (preseason started). AHL/ECHL/OHL/QMJHL/NCAA video is connected + matches at the adapter, and will surface in the on-screen game package the moment each league's SCORES/game provider is registered (per-league registration, not a rebuild). Elite Prospects enrichment stub still pending EP key.

@@ -148,6 +148,14 @@ export type SearchResult = {
   league_code: string;
 };
 
+export type HighlightClip = {
+  id: number | string; title: string; category: string; type?: string | null;
+  source?: string | null; channel?: string | null; url?: string | null;
+  embed_url?: string | null; youtube_id?: string | null; thumbnail?: string | null;
+  date?: string | null; home?: string | null; away?: string | null;
+};
+export type MatchHighlights = { league: string; recap: HighlightClip | null; clips: HighlightClip[] };
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
@@ -189,6 +197,9 @@ export const api = {
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
   bridges: (subject: string, league?: string) => get<{ lines: DeskBeat[]; voices: { reggie: string | null; marc: string | null } }>(`/ticker/bridges?subject=${encodeURIComponent(subject)}&league=${league || "nhl"}`),
+  leagueHighlights: (league: string, limit = 20) => get<{ league: string; clips: HighlightClip[] }>(`/highlights?league=${league}&limit=${limit}`),
+  matchHighlights: (opts: { league: string; home: string; away: string; date?: string }) =>
+    get<MatchHighlights>(`/highlights/match?league=${opts.league}&home=${encodeURIComponent(opts.home)}&away=${encodeURIComponent(opts.away)}${opts.date ? `&date=${encodeURIComponent(opts.date)}` : ""}`),
   converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; directive?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
     const form = new FormData();
     form.append("subject", opts.subject);

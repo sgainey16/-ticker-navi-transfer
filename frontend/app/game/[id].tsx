@@ -10,6 +10,7 @@ import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { BackBar } from "@/app/team/[id]";
 import { TickerDesk } from "@/src/components/TickerDesk";
+import { HighlightsModule } from "@/src/components/HighlightsModule";
 import { NhlLogo } from "@/src/components/NhlLogo";
 
 const FINAL = ["OFF", "FINAL"];
@@ -112,6 +113,12 @@ export default function GameDetail() {
 
         <Text style={styles.subMeta}>{fmtDate(g.date)}{g.venue ? ` · ${g.venue}` : ""}</Text>
         {seriesLine(g) ? <Text style={styles.seriesLine}>{seriesLine(g)}</Text> : null}
+
+        {/* GAME VIDEO PACKAGE — verified Highlightly recap/clips, matched to this game.
+            Video comes first in the package; renders nothing if no clip is matched. */}
+        {isFinal ? (
+          <HighlightsModule league={lg} home={g.home.name} away={g.away.name} date={g.start_utc || g.date} />
+        ) : null}
 
         {/* Reggie + Marc — present on the matchup, speak only on deliberate Play */}
         <TickerDesk surface="game" subject={id} league={lg} fallbackTitle={`${g.away.abbr} @ ${g.home.abbr} · GAME DESK`} />

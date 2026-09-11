@@ -1,0 +1,31 @@
+{
+  "summary": "PASS — Universal Highlightly rollout + game-centered highlights verified end-to-end (backend + frontend web). BACKEND: 5/5 pytest cases green in /app/backend/tests/test_highlightly.py: (a) GET /api/highlights?league=nhl&limit=5 returns {league:'nhl', clips:[...]} with each clip carrying youtube_id, thumbnail, title, category, date, home, away; (b) GET /api/highlights?league=ahl&limit=3 returns real AHL clips (Calder Cup window active) with correct shape and limit obeyed; (c) GET /api/highlights/match?league=nhl&home=Vegas Golden Knights&away=Carolina Hurricanes&date=2026-06-15T00:00:00Z returns recap.youtube_id == '3jbQ58HKtXA' (Cup Final Game 6); (d) GET /api/highlights/match with nonsense teams (home=Zzz&away=Qqq) returns {recap:null, clips:[]} — graceful, no fabrication, HTTP 200; (e) GET /api/leagues exposes capabilities.video on every league and both nhl AND whl are True. Total pytest wall time 1.92s. FRONTEND: On mobile viewport 390x844, navigated directly to /game/2025030416 (NHL Cup Final Game 6 — CAR beat VGK 3-0, series 4-2). The HIGHLIGHTS section with testID 'highlights-module' rendered ABOVE the 'GAME DESK' Reggie+Marc panel (bounding-rect check: hmTop=307 < deskTop=767). The recap hero (testID 'highlight-hero') showed the 16:9 Highlightly thumbnail with play-circle overlay, 'GAME RECAP' badge (blue accent), the clip title 'Hurricanes vs. Golden Knights | NHL Playoff Highlights | Game 6 | June 14, 2026', 'via NHL' channel line, and the 'Verified video · Highlightly' credit exactly once. Tapping the hero on web triggered Linking.openURL against the verified YouTube source URL and did NOT crash the web bundle (module still mounted, body content unchanged, 0 pageerrors, 0 console errors). The web-safe YoutubeInline.web.tsx correctly isolates react-native-youtube-iframe from the web build (renders an empty View, never imports the native player). The empty-package path is guaranteed by code (HighlightsModule returns null when !pkg.recap) and is corroborated by the backend nonsense-teams test returning recap:null. No deprecated Expo packages, no SafeAreaView issues, no text-outside-Text issues detected in the touched files.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_highlightly.py",
+    "/app/test_reports/pytest/pytest_highlightly.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/highlightly.py: clean, small, additive adapter. Key is read lazily via _key() so load_dotenv timing is not an issue. In-memory _CACHE keyed by (leagueId, limit) with 15-min TTL is appropriate for the 7500 calls/day Pro-plan budget. On fetch failure it falls back to the last-good cache entry, which is the right behavior. HL_LEAGUES is a single plug point per the design intent — adding a league is one line.",
+    "match_highlights() correctly uses BOTH team nicknames + date-proximity (diff<=2 days) for playoff-series disambiguation, and clips are sorted by date proximity so the closest match becomes the recap. Returns {recap:None, clips:[]} on empty nicknames or no match — no fabrication.",
+    "server.py /api/highlights and /api/highlights/match both wrap the adapter in try/except and always return a well-shaped payload so the client can render nothing safely; /api/leagues correctly OR-merges provider media capability with highlightly.covers(code) so video=true for any Highlightly-covered league even if the provider doesn't natively expose media.",
+    "HighlightsModule.tsx: module-level `cache` object keyed by `${league}:${away}@${home}:${date}` makes re-opening a game instant with zero extra API calls. Early-return `if (!pkg || !pkg.recap) return null` guarantees NO empty box when nothing matches — matches the 'never a placeholder' rule. Platform.OS==='web' branch calls Linking.openURL(clip.url) and skips the Modal path entirely, which is why the react-native-youtube-iframe web-bundle issue is neutralised.",
+    "YoutubeInline.web.tsx: correctly no-op View so the web bundle never imports react-native-youtube-iframe. Metro's platform-specific resolution (.web.tsx) is the right isolation mechanism here."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_highlightly.py (new — 5 pytest cases, 3 classes)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% of the 3 requested UI/web criteria on /game/2025030416"},
+  "seed_data_creation": "None — real NHL id 2025030416 (Cup Final Game 6) drives the flow via live NHL API + live Highlightly API.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend endpoints: GET /api/highlights?league={code}&limit={n} -> {league, clips:[{id,title,category,type,source,channel,url,embed_url,youtube_id,thumbnail,date,home,away}]}. GET /api/highlights/match?league={code}&home={name}&away={name}&date={iso} -> {league, recap:<clip|null>, clips:[<clip>...]}. Match logic uses last-token nickname + date-proximity <=2 days; unmatched teams => {recap:null, clips:[]}. GET /api/leagues now includes capabilities.video (bool) — true for any league in HL_LEAGUES (nhl, ahl, echl, whl, ohl, qmjhl, ncaa) OR any provider with native media. Frontend testIDs: 'highlights-module' (section root), 'highlight-hero' (recap tap target), 'highlight-close' (native modal). On web the hero tap calls Linking.openURL(clip.url); on iOS/Android it opens the Modal with YoutubeInline (react-native-youtube-iframe). HL Cup Final Game 6 recap youtube_id == '3jbQ58HKtXA'. Live Desk / /api/ticker/converse / /api/ticker/bridges remain FROZEN — untouched by this build and by these tests.",
+  "rca_of_issue": "N/A — feature verified working; no bugs found."
+}

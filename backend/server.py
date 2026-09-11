@@ -28,6 +28,7 @@ from ticker_recap import build_recap, build_next_preview, build_recap_show, buil
 from ticker_converse import build_team_context, converse_turn, build_bridge_lines, AFFIRM
 from retrieval import assemble_team_context
 from ticker_hosts import host_voice
+import highlightly
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -874,8 +875,39 @@ async def leagues():
 
     This is the plug point: a second league appears here automatically once its
     adapter is registered, and every screen reads it through the same contract.
+    Video capability is contributed additively by the Highlightly layer.
     """
-    return {"leagues": [p.describe() for p in list_providers()]}
+    out = []
+    for p in list_providers():
+        d = p.describe()
+        d["capabilities"] = {**d.get("capabilities", {}),
+                             "video": bool(d.get("capabilities", {}).get("media")) or highlightly.covers(p.code)}
+        out.append(d)
+    return {"leagues": out}
+
+
+@api_router.get("/highlights")
+async def highlights_feed(league: str = "nhl", limit: int = 20):
+    """Recent verified video highlights for a league (Highlightly). Empty when
+    unsupported or none available — the client renders nothing, never a placeholder."""
+    try:
+        clips = await highlightly.league_highlights(league, limit=limit)
+    except Exception:
+        logger.exception("highlights_feed %s failed", league)
+        clips = []
+    return {"league": league, "clips": clips}
+
+
+@api_router.get("/highlights/match")
+async def highlights_match(league: str = "nhl", home: str = "", away: str = "", date: str = ""):
+    """Verified video package for one canonical game, matched by teams + date.
+    Returns {recap, clips}; gracefully thin when nothing exists."""
+    try:
+        pkg = await highlightly.match_highlights(league, home, away, date or None)
+    except Exception:
+        logger.exception("highlights_match %s %s/%s failed", league, away, home)
+        pkg = {"recap": None, "clips": []}
+    return {"league": league, **pkg}
 
 
 @api_router.get("/search")

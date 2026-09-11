@@ -101,3 +101,43 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## user_problem_statement: "Universal Highlightly rollout + game-centered highlights. One reusable Highlightly adapter + league registry across 7 leagues (NHL, AHL, ECHL, WHL, OHL, QMJHL, NCAA), additive to existing NHL/HockeyTech feeds. Organize verified video around the GAME (recap video first) into the Ticker game package. No redesign of Live Desk / PLAY·TALK·STOP."
+
+## backend:
+##   - task: "Highlightly universal adapter + endpoints"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/highlightly.py, /app/backend/server.py"
+##     stuck_count: 0
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "New highlightly.py: HL_LEAGUES registry (7 leagues), lazy key read, in-memory TTL cache (15m), nickname+date matcher. Endpoints: GET /api/highlights?league=&limit= (league feed), GET /api/highlights/match?league=&home=&away=&date= (game package recap+clips). /api/leagues now includes video capability. Verified via curl: NHL Cup Final Game 6 (Carolina@Vegas 2026-06-14) matches exact recap clip yt=3jbQ58HKtXA, series disambiguated by date. All 7 league IDs resolve and return real clips."
+
+## frontend:
+##   - task: "Game-centered Highlights module (video-first)"
+##     implemented: true
+##     working: true
+##     file: "/app/frontend/src/components/HighlightsModule.tsx, /app/frontend/src/components/YoutubeInline.tsx(.web.tsx), /app/frontend/app/game/[id].tsx, /app/frontend/src/lib/api.ts"
+##     stuck_count: 0
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "HighlightsModule renders on final game pages above the Reggie+Marc desk: recap video hero (thumbnail+play), MORE FROM THIS MATCHUP rail, 'Verified video · Highlightly' credit. Native taps open inline react-native-youtube-iframe player in a modal; web opens verified source URL via Linking (youtube-iframe isolated behind YoutubeInline.web.tsx so web bundle is not broken). Renders nothing when no clip matched. Web smoke screenshot on /game/2025030416 shows real Cup Final Game 6 recap thumbnail + GAME RECAP badge."
+
+## metadata:
+##   created_by: "main_agent"
+##   version: "1.0"
+##   test_sequence: 1
+
+## test_plan:
+##   current_focus:
+##     - "Highlightly universal adapter + endpoints"
+##     - "Game-centered Highlights module (video-first)"
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+
+## agent_communication:
+##   - agent: "main"
+##     message: "Please test: (1) GET /api/highlights?league=nhl&limit=5 returns clips with youtube_id+thumbnail+title. (2) GET /api/highlights/match for NHL game 2025030416 (home='Vegas Golden Knights' away='Carolina Hurricanes' date='2026-06-15T00:00:00Z') returns recap with youtube_id 3jbQ58HKtXA. (3) /api/leagues includes capabilities.video=true for nhl/whl. (4) unsupported/empty case: match with nonsense teams returns recap:null, clips:[]. (5) Frontend: /game/2025030416 shows HIGHLIGHTS section with recap thumbnail above GAME DESK; module renders nothing on a game with no match. Do NOT test Live Desk PLAY/TALK/STOP (frozen)."
