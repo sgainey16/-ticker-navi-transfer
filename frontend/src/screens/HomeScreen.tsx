@@ -11,7 +11,7 @@ import { useFollows, Tier, PlayerFollow, TeamFollow } from "@/src/lib/follows";
 import { TabScreen, SectionTitle, Loader } from "@/src/components/ui";
 import { TickerStrip } from "@/src/components/TickerStrip";
 import { NhlLogo } from "@/src/components/NhlLogo";
-import { TickerDesk } from "@/src/components/TickerDesk";
+import { HomeShow } from "@/src/components/HomeShow";
 import { GameRail } from "@/src/components/GameRail";
 import { GameDepth } from "@/src/components/GameDepth";
 
@@ -42,10 +42,6 @@ export default function Home() {
 
   const followTeamSet = useMemo(() => new Set(follows.teams.map((t) => t.abbr)), [follows]);
   const followPlayerTeams = useMemo(() => new Set(follows.players.map((p) => p.team_abbr)), [follows]);
-
-  // Personalized desk: fetch is a POST driven by the Draft Board; cache key = follows signature.
-  const followSig = useMemo(() => JSON.stringify(follows), [follows]);
-  const deskFetcher = useMemo(() => () => api.tickerHomeSegment(follows), [followSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const slateGames = useMemo(() => feed.data?.slate?.games || [], [feed.data]);
   const finals = useMemo(() => recapsQ.data?.games || [], [recapsQ.data]);
@@ -105,8 +101,8 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl tintColor={colors.blue} refreshing={false} onRefresh={() => { feed.reload(); recapsQ.reload(); }} />}
         >
-          {/* 1. MY TICKER DESK — personalized opening from the Draft Board */}
-          <TickerDesk surface="home" fallbackTitle="YOUR HOCKEY STARTS HERE" segmentFetcher={deskFetcher} cacheKey={`home|${followSig}`} />
+          {/* 1. MY TICKER — the produced, personalized auto-advancing Sports Desk */}
+          <HomeShow />
 
           {/* 2. MY DRAFT BOARD */}
           {hasFollows ? (

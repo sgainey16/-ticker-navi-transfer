@@ -1,0 +1,41 @@
+{
+  "summary": "PASS — Home Sports Desk (HomeShow) end-to-end verified. BACKEND (8/8 in /app/backend/tests/test_home_show.py, ~11s): POST /api/ticker/home_show with teams=[KAM/whl/tier1, EDM/nhl/tier2] returns personalized:true and stories[] where EVERY story has title, subtitle, beats containing both hosts (reggie+marc) with text, optional stat{label,value}; both KAM (whl) and EDM (nhl) are present in subjects/leagues. Empty follows returns personalized:false with a non-empty fallback rundown (each story still has reggie+marc beats) so the show always runs. voices{reggie,marc} keys present in both cases. FRONTEND (mobile 390x844): (a) Completed /onboarding via testIDs welcome-go → onboard-search (Kamloops) → result-team-KAM → onboard-search (Edmonton) → result-team-EDM → onboard-next → onboard-skip; landed on Home ('/'). (b) HomeShow (testID home-show) mounts on Home with title 'YOUR HOCKEY STARTS HERE', kicker 'MY TICKER'. Before PLAY: NO 'ON AIR' text anywhere in the panel (verified via body text). (c) After tapping home-play the ON AIR indicator appears, kicker changes to 'NOW: 2-0-1 to start · #1 B.C. Division' and title changes to 'KAMLOOPS BLAZERS' — confirming the personalized Draft-Board junior team drives the first story and the show auto-advances (no further taps). The stage area rendered under the panel with the stat card (11/11 GF/GA) plus Marc's live caption. (d) URL stayed on preview host after PLAY (no youtube.com navigation). (e) home-stop tapped mid-show → 'ON AIR' cleared immediately, panel returned to idle title. (f) home-talk tapped: mic denied in headless (as expected) — app did NOT crash; home-show remained mounted. Deprecated packages detected: none.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "React duplicate keys in onboarding search results", "issue": "Console error 'Encountered two children with the same key' fires while typing in onboard-search. Key is `${r.type}-${r.id}` in /app/frontend/app/onboarding.tsx:244, so /api/search must be returning two results with identical type+id (likely the same team/player surfaced by multiple providers). Non-blocking (selection still worked) but should be de-duped either in the search endpoint or in the client before .map(). Reference: /app/frontend/app/onboarding.tsx:244"},
+      {"component": "web-only style deprecation", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non-blocking (carry-over from prior iteration)."},
+      {"component": "web-only prop deprecation", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents.' Non-blocking; HomeShow.tsx:165 already moves it into style but a caller (LinearGradient in TeamDesk.tsx) still triggers it."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_home_show.py",
+    "/app/test_reports/pytest/pytest_home_show.xml"
+  ],
+  "action_items": [
+    "De-duplicate /api/search results (same type+id from two providers) OR de-dupe on the client before mapping to Pressable to silence the React 'duplicate key' console error in onboarding.",
+    "(Nice-to-have) When a story exposes highlight.youtube_id, ensure the YoutubeInline iframe mounts — was not observed in the ~17s playback window under test (may just mean the picked highlight was for a later story or the story on stage at check time was 'graphic'; not a functional failure)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:_home_show_stories orders followed teams by round tier and blends WHL + NHL cleanly; falls back to recent finals when <2 personalized stories exist so the show never goes empty. Good defensive shape.",
+    "server.py:_home_show_beats does ONE Claude call to script the whole rundown, cached by a sha1 signature of {subject:subtitle:youtube_id} — repeated opens don't re-hit the LLM. Good.",
+    "HomeShow.tsx: `modeRef` + `tokenRef` + `beginSession/currentSession` correctly gate the async speak loop so STOP immediately breaks out. Verified: STOP removed ON AIR mid-utterance.",
+    "HomeShow.tsx: `runShow` fires unlockAudio() and Haptics BEFORE beginSession — audio unlock is inside the user gesture, satisfying browser autoplay policy. Good.",
+    "HomeShow.tsx:184-200 controls only render after loading resolves and stories exist ('The desk is quiet right now.' otherwise) — nothing autoplays on mount. Verified: no ON AIR in idle state.",
+    "HomeShow.tsx:212 fall-back Pressable uses `active.game_link ? /game/... : /team/...` — safe navigation choice; `active` is guarded by `playing && active` at line 204.",
+    "api.ts:homeShow POSTs the follows list directly — server accepts extra keys thanks to Pydantic's default behavior; contract stable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_home_show.py (new — 8 pytest cases across TestHomeShowPersonalized + TestHomeShowFallback)",
+    "/app/test_reports/pytest/pytest_home_show.xml (new JUnit report)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (6/6 flows: onboard-to-home, idle-no-ON-AIR, PLAY starts + ON AIR + kicker/title change to NOW: Kamloops, stage renders with stat+caption, inline (no youtube.com nav), STOP halts, TALK no-crash)"},
+  "seed_data_creation": "None — real /api/search results drove the Draft Board (KAM WHL + EDM NHL).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "HomeShow depends on completed onboarding (Draft Board persisted in AsyncStorage). To reach the Home tab in Playwright: navigate to /onboarding?reset=1, then: welcome-go → onboard-search 'Kamloops' → result-team-KAM → onboard-search 'Edmonton' → result-team-EDM → onboard-next → onboard-skip. Then / renders <HomeShow> with testIDs home-play/home-talk/home-stop. Backend contract: POST /api/ticker/home_show accepts {teams:[{abbr,league,tier}], players:[{player_id,team_abbr,league,tier}]}; returns {stories[{subject,league,title,subtitle,stat{label,value},highlight?,beats[{host,text}],game_link?}], voices{reggie,marc}, personalized:boolean}. Fallback stories are drawn from NHL recent finals when follows are empty. LLM script call is cached by sha1 of story signatures, so identical follows produce identical (cached) beats on re-run — first call may take 3-8s. Team Live Desk (TeamDesk PLAY/TALK/STOP) is frozen per prior instruction; only HomeShow was exercised here.",
+  "rca_of_issue": "N/A — no functional failure. Only advisory: /api/search occasionally returns duplicate (type,id) tuples, producing React duplicate-key console errors during onboarding autocomplete; recommend de-dupe either in providers.registry.search_all or in onboarding.tsx before .map()."
+}

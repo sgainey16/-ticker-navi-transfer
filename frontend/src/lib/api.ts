@@ -156,6 +156,13 @@ export type HighlightClip = {
 };
 export type MatchHighlights = { league: string; recap: HighlightClip | null; clips: HighlightClip[] };
 
+export type HomeStory = {
+  subject: string; league: string; title: string; subtitle: string;
+  stat?: { label: string; value: string } | null;
+  highlight?: HighlightClip | null;
+  beats: DeskBeat[]; game_link?: string | null;
+};
+
 export const api = {
   home: () => get<any>("/home"),
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
@@ -197,6 +204,7 @@ export const api = {
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
   bridges: (subject: string, league?: string) => get<{ lines: DeskBeat[]; voices: { reggie: string | null; marc: string | null } }>(`/ticker/bridges?subject=${encodeURIComponent(subject)}&league=${league || "nhl"}`),
+  homeShow: (follows: any) => post<{ stories: HomeStory[]; voices: { reggie: string | null; marc: string | null }; personalized: boolean }>(`/ticker/home_show`, follows),
   leagueHighlights: (league: string, limit = 20) => get<{ league: string; clips: HighlightClip[] }>(`/highlights?league=${league}&limit=${limit}`),
   matchHighlights: (opts: { league: string; home: string; away: string; date?: string }) =>
     get<MatchHighlights>(`/highlights/match?league=${opts.league}&home=${encodeURIComponent(opts.home)}&away=${encodeURIComponent(opts.away)}${opts.date ? `&date=${encodeURIComponent(opts.date)}` : ""}`),

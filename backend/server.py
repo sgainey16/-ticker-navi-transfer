@@ -459,6 +459,7 @@ class FollowItem(BaseModel):
     abbr: Optional[str] = None
     player_id: Optional[str] = None
     team_abbr: Optional[str] = None
+    league: Optional[str] = None
     tier: Optional[int] = None
 
 
@@ -645,6 +646,130 @@ async def _my_hockey_feed(follows: HomeFollows) -> dict:
 
     items = mine + league[:10] if has else league[:14]
     return {"items": items, "personalized": has}
+
+
+async def _home_show_stories(follows: HomeFollows) -> list[dict]:
+    """Personalized rundown: followed teams (NHL + junior) first, then strongest
+    league stories. Each story carries verified facts + a Highlightly clip if one
+    exists. Never fabricated — thinner when data is thin."""
+    stories: list[dict] = []
+    seen: set[str] = set()
+    for t in sorted(follows.teams, key=_round_key):
+        if not t.abbr or t.abbr in seen or len(stories) >= 5:
+            continue
+        lg = (t.league or "nhl").lower()
+        try:
+            tp = await get_provider(lg).team_page(t.abbr)
+        except Exception:
+            continue
+        seen.add(t.abbr)
+        team, rec, goals = tp.get("team", {}), tp.get("record", {}), tp.get("goals", {})
+        name = team.get("name") or t.abbr
+        gp = rec.get("gp")
+        if gp is None:
+            gp = (rec.get("wins") or 0) + (rec.get("losses") or 0) + (rec.get("ot") or 0)
+        recf = f"{rec.get('wins',0)}-{rec.get('losses',0)}" + (f"-{rec.get('ot')}" if rec.get("ot") is not None else "")
+        form = f"{recf} to start" if gp and gp < 10 else recf
+        last = (tp.get("recent") or [None])[0]
+        nxt = tp.get("next")
+        try:
+            clip = await highlightly.find_team_clip(lg, name)
+        except Exception:
+            clip = None
+        facts = f"{name} ({lg.upper()}): {form}, #{rec.get('div_rank')} in the {team.get('division','')}."
+        if goals.get("gf") is not None:
+            facts += f" {goals.get('gf')} GF / {goals.get('ga')} GA."
+        if last:
+            facts += f" Last: {last['away']['abbr']} {last['away'].get('score')} @ {last['home']['abbr']} {last['home'].get('score')}."
+        if nxt:
+            facts += f" Next: {nxt['away']['abbr']} @ {nxt['home']['abbr']} {nxt.get('date','')}."
+        top = (tp.get("scorers") or [None])[0]
+        if top:
+            facts += f" Leading scorer {top['name']} ({top.get('points')} pts)."
+        stories.append({
+            "subject": t.abbr, "league": lg, "title": name.upper(),
+            "subtitle": f"{form} · #{rec.get('div_rank')} {team.get('division','')}",
+            "stat": {"label": "GF / GA", "value": f"{goals.get('gf','–')} / {goals.get('ga','–')}"},
+            "highlight": clip, "facts": facts,
+        })
+    if len(stories) < 2:
+        try:
+            finals = await nhl.recent_finals_now(limit=4)
+        except Exception:
+            finals = []
+        for c in finals:
+            if len(stories) >= 4:
+                break
+            a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+            if a.get("score") is None:
+                continue
+            headline, win, _ = _final_headline(a, h)
+            try:
+                clip = await highlightly.find_team_clip("nhl", win.get("name") or win.get("abbr"))
+            except Exception:
+                clip = None
+            stories.append({
+                "subject": c.get("id"), "league": "nhl", "title": headline.upper(),
+                "subtitle": "AROUND THE NHL",
+                "stat": {"label": "FINAL", "value": f"{a.get('abbr')} {a.get('score')} – {h.get('score')} {h.get('abbr')}"},
+                "highlight": clip, "facts": f"Final: {headline}.", "game_link": c.get("id"),
+            })
+    return stories
+
+
+async def _home_show_beats(stories: list[dict]) -> list[dict]:
+    """ONE Claude call scripts the whole rundown (cached upstream by caller)."""
+    lines = [f"[{i}] {s['facts']}" for i, s in enumerate(stories)]
+    prompt = (
+        "You are scripting THE TICKER — a personalized hockey studio show. Below is the RUNDOWN of "
+        "stories in order (verified facts only). For EACH story, write Reggie's line then Marc's line — "
+        "punchy broadcast energy, people-first, natural handoffs, NEVER invent facts beyond what's given. "
+        "Return STRICT JSON ONLY: an array like "
+        '[{"i":0,"reggie":"...","marc":"..."}, ...] with one object per story index.\n\nRUNDOWN:\n'
+        + "\n".join(lines)
+    )
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"homeshow-{uuid.uuid4().hex[:8]}",
+                   system_message=build_system_prompt()).with_model("anthropic", "claude-sonnet-4-6")
+    by_i: dict = {}
+    try:
+        raw = await chat.send_message(UserMessage(text=prompt))
+        txt = re.sub(r"^```(?:json)?|```$", "", str(raw).strip(), flags=re.MULTILINE).strip()
+        m = re.search(r"\[.*\]", txt, flags=re.DOTALL)
+        arr = json.loads(m.group(0) if m else txt)
+        by_i = {int(o.get("i", k)): o for k, o in enumerate(arr)}
+    except Exception:
+        logger.exception("home show script failed; using templated beats")
+    out = []
+    for i, s in enumerate(stories):
+        o = by_i.get(i) or {}
+        out.append({"reggie": (o.get("reggie") or f"{s['title'].title()} — let's get into it.").strip(),
+                    "marc": (o.get("marc") or s["facts"]).strip()})
+    return out
+
+
+@api_router.post("/ticker/home_show")
+async def ticker_home_show(follows: HomeFollows):
+    """Personalized auto-advancing Home show rundown. Nothing plays on open — the
+    client starts it on a single deliberate PLAY, then auto-advances story to story."""
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    try:
+        stories = await _home_show_stories(follows)
+        if not stories:
+            return {"stories": [], "voices": voices, "personalized": False}
+        sig = hashlib.sha1(("|".join(f"{s['subject']}:{s['subtitle']}:{(s.get('highlight') or {}).get('youtube_id')}" for s in stories)).encode()).hexdigest()[:16]
+        key = f"homeshow:{sig}"
+        doc = await db.segments.find_one({"_id": key})
+        beats = doc["beats"] if (doc and doc.get("beats")) else await _home_show_beats(stories)
+        if not (doc and doc.get("beats")):
+            await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        for i, s in enumerate(stories):
+            b = beats[i] if i < len(beats) else {"reggie": "", "marc": ""}
+            s["beats"] = [{"host": "reggie", "text": b.get("reggie", "")}, {"host": "marc", "text": b.get("marc", "")}]
+        return {"stories": stories, "voices": voices, "personalized": bool(follows.teams or follows.players)}
+    except Exception:
+        logger.exception("ticker_home_show failed")
+        return {"stories": [], "voices": voices, "personalized": False}
+
 
 
 @api_router.post("/ticker/my_hockey")

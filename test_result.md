@@ -175,3 +175,29 @@
 ## agent_communication:
 ##   - agent: "main"
 ##     message: "Test Prince George navigation flow (WHL, /team/PG?league=whl): (1) breadcrumb 'WHL' chip -> /league/whl hub; 'B.C. Division' chip -> hub with B.C. Division on top. (2) League hub rows tappable -> team pages. (3) Next Game: tapping KAM logo/abbr -> /team/KAM?league=whl; tapping elsewhere on card -> /game/{id}. (4) 'Around the B.C. Division' rail cards -> other team pages (Kelowna, Victoria, etc). (5) 'Leading the Way' scorer row -> /player/{id}. (6) Recent/Last Game card -> /game/{id}. (7) Early-season: read line says 'to start the season', NO 'over their last 10', season strip shows START/GF/GA/DIFF (no LAST 10 at gp<10). (8) Desk controls PLAY/TALK/STOP visible & tappable and title not obscuring — but DO NOT exercise the mic/converse (Live Desk FROZEN). (9) NHL parity: /team/VGK still renders with division rail. Backend: GET /api/league/whl/team/PG has division_teams+record.gp+scorers gp; GET /api/nhl/team/VGK has division_teams. Focus frontend nav + these backend fields; skip Live Desk voice interaction."
+
+## HOME SPORTS DESK (auto-advancing personalized show) — needs testing
+## backend:
+##   - task: "POST /api/ticker/home_show personalized rundown"
+##     file: "/app/backend/server.py, /app/backend/highlightly.py"
+##     working: true
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "Builds personalized rundown from Draft Board follows (NHL + junior), one Claude call scripts all beats (cached in db.segments), highlightly.find_team_clip attaches a clip when one exists. Verified via curl: follows KAM(whl)+EDM(nhl) -> 2 grounded stories (Kamloops Blazers 2-0-1 beside Oilers/McDavid), voices present. Added league field to FollowItem."
+## frontend:
+##   - task: "HomeShow — one PLAY starts auto-advancing personalized show"
+##     file: "/app/frontend/src/components/HomeShow.tsx, /app/frontend/src/screens/HomeScreen.tsx"
+##     working: "NA"
+##     status_history:
+##       - working: "NA"
+##         agent: "main"
+##         comment: "New HomeShow mounted at top of Home tab (replaces old passive TickerDesk). Nothing autoplays on open. PLAY MY SHOW -> auto-advances story->beats(TTS)->inline highlight(YoutubeInline, held 30s)->next story. TALK joins hands-free (converse for current story). STOP silences. Stage below panel shows inline video OR a story graphic (stat + live caption). Not yet visually verified (onboarding gate)."
+## test_plan:
+##   current_focus: ["HomeShow — one PLAY starts auto-advancing personalized show", "POST /api/ticker/home_show personalized rundown"]
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+## agent_communication:
+##   - agent: "main"
+##     message: "Onboard first (the app redirects to /onboarding until a Draft Board exists): complete onboarding and FOLLOW at least one junior team (search 'Kamloops', WHL) AND one NHL team (e.g. 'Edmonton'). Then on HOME test: (1) HomeShow panel shows 'YOUR HOCKEY STARTS HERE' with PLAY MY SHOW + TALK + STOP; NOTHING plays until PLAY is tapped. (2) Tap PLAY MY SHOW (testID home-play): the show AUTO-ADVANCES through stories on its own (title/kicker change, ON AIR indicator, captions update) with NO further taps. (3) A 'stage' appears under the panel: either an inline highlight video or a story graphic (stat + caption). Video must play INSIDE the app (no navigation to youtube.com). (4) STOP (home-stop) silences and returns to idle. (5) TALK (home-talk) requests mic (may be denied in headless — just confirm it doesn't crash). Also hit POST /api/ticker/home_show with body {\"teams\":[{\"abbr\":\"KAM\",\"league\":\"whl\",\"tier\":1},{\"abbr\":\"EDM\",\"league\":\"nhl\",\"tier\":2}],\"players\":[]} -> stories[] each with beats + subtitle. DO NOT test/modify the Team Live Desk (frozen)."

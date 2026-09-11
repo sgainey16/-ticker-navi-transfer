@@ -194,3 +194,15 @@ async def match_highlights(league: str, home: str, away: str,
     scored.sort(key=lambda x: x[0])
     shaped = [_shape(c) for _, c in scored]
     return {"recap": shaped[0] if shaped else None, "clips": shaped}
+
+
+
+async def find_team_clip(league: str, team_name: str) -> dict | None:
+    """First recent clip that mentions this team (cached list — cheap)."""
+    nick = _nickname(team_name or "")
+    if not nick:
+        return None
+    for c in await _recent_highlights(league, limit=40):
+        if nick in _clip_haystack(c):
+            return _shape(c)
+    return None

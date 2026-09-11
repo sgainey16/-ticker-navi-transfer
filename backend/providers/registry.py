@@ -45,4 +45,13 @@ async def search_all(q: str, limit: int = 16) -> list[dict]:
             out.extend(await p.search(q, limit=limit))
         except Exception:
             pass
-    return out[:limit]
+    # De-dupe by (type,id) so overlapping providers never yield duplicate keys.
+    seen: set = set()
+    deduped: list[dict] = []
+    for r in out:
+        k = (r.get("type"), str(r.get("id")))
+        if k in seen:
+            continue
+        seen.add(k)
+        deduped.append(r)
+    return deduped[:limit]
