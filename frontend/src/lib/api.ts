@@ -160,7 +160,7 @@ export type HomeStory = {
   subject: string; league: string; title: string; subtitle: string;
   stat?: { label: string; value: string } | null;
   highlight?: HighlightClip | null;
-  beats: DeskBeat[]; game_link?: string | null;
+  beats: DeskBeat[]; game_link?: string | null; breaking?: boolean;
 };
 
 export const api = {

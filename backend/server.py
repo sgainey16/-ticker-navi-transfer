@@ -692,6 +692,37 @@ async def _home_show_stories(follows: HomeFollows) -> list[dict]:
             "stat": {"label": "GF / GA", "value": f"{goals.get('gf','–')} / {goals.get('ga','–')}"},
             "highlight": clip, "facts": facts,
         })
+    # EDITORIAL RULE: personalized is not a cage. Even with follows, ONE genuinely
+    # major league story can break in (gated to notable games that actually have a
+    # verified highlight), inserted AFTER your follows lead the show.
+    if stories:
+        covered = {s.get("subject") for s in stories}
+        try:
+            finals = await nhl.recent_finals_now(limit=6)
+        except Exception:
+            finals = []
+        for c in finals:
+            a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+            if a.get("score") is None:
+                continue
+            headline, win, _ = _final_headline(a, h)
+            if a.get("abbr") in covered or h.get("abbr") in covered:
+                continue
+            try:
+                clip = await highlightly.find_team_clip("nhl", win.get("name") or win.get("abbr"))
+            except Exception:
+                clip = None
+            if not clip:                     # only break in for a genuinely notable game
+                continue
+            stories.insert(min(2, len(stories)), {
+                "subject": c.get("id"), "league": "nhl", "title": headline.upper(),
+                "subtitle": "BREAKING · AROUND THE NHL", "breaking": True,
+                "stat": {"label": "FINAL", "value": f"{a.get('abbr')} {a.get('score')} – {h.get('score')} {h.get('abbr')}"},
+                "highlight": clip, "facts": f"Around the NHL — {headline}.", "game_link": c.get("id"),
+            })
+            break
+        stories = stories[:5]
+
     if len(stories) < 2:
         try:
             finals = await nhl.recent_finals_now(limit=4)

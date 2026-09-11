@@ -40,6 +40,7 @@ export function HomeShow() {
   const modeRef = useRef<"idle" | "show" | "talk">("idle");
   const tokenRef = useRef(0);
   const convoIdRef = useRef<string | null>(null);
+  const resumeIdxRef = useRef(0);
   const followSig = JSON.stringify(follows);
 
   const setModeBoth = (m: "idle" | "show" | "talk") => { modeRef.current = m; setMode(m); };
@@ -90,7 +91,7 @@ export function HomeShow() {
     tick();
   });
 
-  const runShow = useCallback(async () => {
+  const runShowFrom = useCallback(async (start: number) => {
     if (!stories.length) return;
     unlockAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -98,7 +99,7 @@ export function HomeShow() {
     const token = beginSession();
     tokenRef.current = token;
     setModeBoth("show");
-    for (let i = 0; i < stories.length; i++) {
+    for (let i = Math.max(0, start); i < stories.length; i++) {
       if (currentSession() !== token || modeRef.current !== "show") break;
       const s = stories[i];
       setIdx(i);
@@ -135,18 +136,19 @@ export function HomeShow() {
       } catch { /* ignore */ }
     }
     rec.closeMic();
-    if (modeRef.current === "talk") setModeBoth("idle");
-  }, [rec, stories, idx, speak]);
+    if (modeRef.current === "talk") { setModeBoth("idle"); runShowFrom(resumeIdxRef.current); }  // quiet -> back to the rundown
+  }, [rec, stories, idx, speak, runShowFrom]);
 
   const startTalk = useCallback(async () => {
     unlockAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    resumeIdxRef.current = idx + 1;                 // after the chat, continue the rundown
     endSession(); setSpeaking(false); setStage("none");
     setModeBoth("talk");
     const ok = await rec.openMic();
     if (!ok) { setModeBoth("idle"); return; }
     talkLoop();
-  }, [rec, talkLoop]);
+  }, [rec, talkLoop, idx]);
 
   const stopAll = useCallback(() => {
     setModeBoth("idle"); endSession(); setSpeaking(false); setStage("none"); setCaption(null);
@@ -175,14 +177,14 @@ export function HomeShow() {
         </View>
 
         <View style={styles.bottom}>
-          <Text style={styles.kicker}>{playing && active ? `NOW: ${active.subtitle}` : "MY TICKER"}</Text>
+          <Text style={[styles.kicker, playing && active?.breaking && styles.breaking]}>{playing && active ? (active.breaking ? `🔴 ${active.subtitle}` : `NOW: ${active.subtitle}`) : "MY TICKER"}</Text>
           <Text style={styles.title} numberOfLines={2}>{playing && active ? active.title : "YOUR HOCKEY STARTS HERE"}</Text>
 
           {loading ? (
             <View style={styles.loadRow}><ActivityIndicator size="small" color={colors.blue} /><Text style={styles.loadText}>Building your show…</Text></View>
           ) : stories.length ? (
             <View style={styles.controls}>
-              <Pressable testID="home-play" style={[styles.btn, styles.playBtn]} onPress={() => (mode === "show" ? stopAll() : runShow())}>
+              <Pressable testID="home-play" style={[styles.btn, styles.playBtn]} onPress={() => (mode === "show" ? stopAll() : runShowFrom(0))}>
                 <Ionicons name={mode === "show" ? "pause" : "play"} size={15} color={colors.white} />
                 <Text style={styles.btnText}>{mode === "show" ? "PAUSE" : "PLAY MY SHOW"}</Text>
               </Pressable>
@@ -243,6 +245,7 @@ const styles = StyleSheet.create({
 
   bottom: { padding: spacing.lg, paddingTop: spacing.md, gap: 7 },
   kicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 10.5, fontWeight: "700", letterSpacing: 1.5 },
+  breaking: { color: colors.red },
   title: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
   controls: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs },
   btn: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 11 },
