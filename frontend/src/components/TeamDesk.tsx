@@ -23,11 +23,6 @@ type ThreadItem = { who: "you" | "reggie" | "marc"; text: string };
 const HOST_COLOR: Record<string, string> = { reggie: colors.green, marc: colors.blue, you: colors.textDim };
 const HOST_NAME: Record<string, string> = { reggie: "REGGIE", marc: "MARC", you: "YOU" };
 
-// Content-free bridges — spoken instantly so there is no dead air while the real
-// answer is retrieved. They never state a fact, so they can never be wrong.
-const BRIDGE_REGGIE = ["Yeah, let me pull that up.", "Good question — give me a second.", "Let me take a look at that."];
-const BRIDGE_MARC = ["One sec, folks.", "Standby — we'll get it.", "Take your time."];
-
 /**
  * TeamDesk — ONE continuous Reggie + Marc desk on the Team page. PLAY runs the
  * grounded team show (with one webbed continuation, then a quiet ending); TALK
@@ -52,7 +47,7 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
   const modeRef = useRef<Mode>("idle");
   const convoIdRef = useRef<string | null>(null);
   const tokenRef = useRef(0);
-  const bridgesRef = useRef<{ reggie: string[]; marc: string[] }>({ reggie: [], marc: [] });
+  const bridgesRef = useRef<{ audio: string }[]>([]);
 
   const lg = league || "nhl";
   const lq = lg === "nhl" ? "" : `?league=${lg}`;
@@ -86,34 +81,30 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
     rec.abort(); rec.closeMic();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // pre-synthesize a few short bridge clips so we can cover retrieval latency
-  const primeBridges = useCallback(async (voices: { reggie: string | null; marc: string | null }) => {
-    if (bridgesRef.current.reggie.length) return;
-    const grab = async (lines: string[], vid: string | null) => {
-      if (!vid) return [] as string[];
-      const out: string[] = [];
-      for (const t of lines.slice(0, 2)) {
-        try { const r = await api.tts(t, vid, 1.0); out.push(r.audio); } catch { /* ignore */ }
+  // pre-synthesize grounded, varied bridge clips so retrieval time is filled naturally
+  const primeBridges = useCallback(async () => {
+    if (bridgesRef.current.length) return;
+    try {
+      const b = await api.bridges(subject, lg);
+      const pick = [...b.lines].sort(() => Math.random() - 0.5).slice(0, 3);
+      const clips: { audio: string }[] = [];
+      for (const ln of pick) {
+        const vid = ln.host === "marc" ? b.voices.marc : b.voices.reggie;
+        if (!vid) continue;
+        try { const r = await api.tts(ln.text, vid, ln.host === "marc" ? 1.08 : 1.0); clips.push({ audio: r.audio }); } catch { /* ignore */ }
       }
-      return out;
-    };
-    const [rg, mc] = await Promise.all([grab(BRIDGE_REGGIE, voices.reggie), grab(BRIDGE_MARC, voices.marc)]);
-    bridgesRef.current = { reggie: rg, marc: mc };
-  }, []);
+      bridgesRef.current = clips;
+    } catch { /* ignore */ }
+  }, [subject, lg]);
 
   const playBridge = useCallback(async () => {
-    const b = bridgesRef.current;
-    if (!b.reggie.length && !b.marc.length) return;
+    const clips = bridgesRef.current;
+    if (!clips.length) return;
     const token = beginSession();
     tokenRef.current = token;
     setSpeaking(true);
-    const r = b.reggie[Math.floor(Math.random() * b.reggie.length)];
-    if (r) { try { await playDataUri(r); } catch { /* ignore */ } }
-    if (currentSession() !== token) return;
-    if (b.marc.length && Math.random() < 0.6) {
-      const m = b.marc[Math.floor(Math.random() * b.marc.length)];
-      if (m) { try { await playDataUri(m); } catch { /* ignore */ } }
-    }
+    const c = clips[Math.floor(Math.random() * clips.length)];
+    if (c) { try { await playDataUri(c.audio); } catch { /* ignore */ } }
   }, []);
 
   const playReply = useCallback(async (beats: DeskBeat[], voices: { reggie: string | null; marc: string | null }) => {
@@ -220,9 +211,9 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
     setModeBoth("convo");
     const ok = await rec.openMic();
     if (!ok) { setModeBoth("idle"); return; }   // denied -> settings UI shows
-    if (seg?.voices) primeBridges(seg.voices);  // warm up latency-cover clips
+    primeBridges();  // warm up grounded, varied latency-cover clips
     conversationLoop();
-  }, [rec, setModeBoth, conversationLoop, seg, primeBridges]);
+  }, [rec, setModeBoth, conversationLoop, primeBridges]);
 
   const active = mode !== "idle";
   const status = rec.listening ? "LISTENING" : busy ? "THINKING" : speaking ? "ON AIR" : "";

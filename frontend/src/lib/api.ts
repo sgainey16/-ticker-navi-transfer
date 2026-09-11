@@ -188,6 +188,7 @@ export const api = {
   selectVoice: (host: string, generated_voice_id: string) => post<{ host: string; voice_id: string }>("/voices/select", { host, generated_voice_id }),
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
+  bridges: (subject: string, league?: string) => get<{ lines: DeskBeat[]; voices: { reggie: string | null; marc: string | null } }>(`/ticker/bridges?subject=${encodeURIComponent(subject)}&league=${league || "nhl"}`),
   converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; directive?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
     const form = new FormData();
     form.append("subject", opts.subject);

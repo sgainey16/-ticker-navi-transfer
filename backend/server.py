@@ -25,7 +25,8 @@ import hashlib
 from providers import nhl
 from providers.registry import get_provider, list_providers, search_all
 from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk, build_stats_desk
-from ticker_converse import build_team_context, converse_turn, AFFIRM
+from ticker_converse import build_team_context, converse_turn, build_bridge_lines, AFFIRM
+from retrieval import assemble_team_context
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -1074,6 +1075,20 @@ async def nhl_recaps():
 # Voice in (Whisper) -> grounded Reggie + Marc reply (Claude) -> whitelisted,
 # tappable suggestions + voice-"yes" Follow action. Voice out reuses /api/tts.
 # ---------------------------------------------------------------------------
+@api_router.get("/ticker/bridges")
+async def ticker_bridges(subject: str, league: str = "nhl"):
+    """Grounded, varied 'hold' lines the desk can speak while retrieving — built
+    only from verified team facts (never fabricated). The client pre-synthesizes
+    a few so retrieval time is filled naturally instead of dead air."""
+    prov = get_provider(league)
+    try:
+        tp = await assemble_team_context(prov, league, subject)
+    except Exception:
+        raise HTTPException(status_code=404, detail="team not found")
+    return {"lines": build_bridge_lines(tp),
+            "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")}}
+
+
 @api_router.post("/ticker/converse")
 async def ticker_converse(
     subject: str = Form(...),
@@ -1086,7 +1101,7 @@ async def ticker_converse(
     prov = get_provider(league)
     lname = getattr(prov, "name", "NHL")
     try:
-        tp = await prov.team_page(subject)
+        tp = await assemble_team_context(prov, league, subject)
     except Exception:
         raise HTTPException(status_code=404, detail="team not found")
     fact_sheet, links = build_team_context(tp, lname, league)

@@ -393,3 +393,16 @@ VERIFIED (real public/mobile path, not just headless):
 - Real-path screenshot (/team/KAM?league=whl, real speech injected via getUserMedia): full round-trip, thread shows YOU + REGGIE + MARC, profile + Follow chips, ON AIR (Web Audio playback executing). Conversational context + continued listening intact.
 
 CAVEAT: iOS/mobile-web AUDIBLE playback of the reply can only be finally confirmed on real hardware (headless has no speakers) — the unlock fix is the standard correct approach and the playback path executes without error. Native iOS/Android dev build still recommended for on-device mic + audio QA. UI unchanged (PLAY·TALK·STOP, one panel) per instruction.
+
+
+## ITERATION 19 — make the Live Desk feel alive during retrieval [DONE, verified real path]
+Iteration 18 confirmed working on real iPhone. PLAY·TALK·STOP frozen (no redesign). Three refinements:
+1) FILL retrieval time naturally (varied, grounded). NEW GET /api/ticker/bridges?subject&league → build_bridge_lines(tp): short VERIFIED one-liners from already-loaded facts (record, division rank, GF/GA, coach) + a couple content-free host lines. Frontend TeamDesk.primeBridges() fetches these on TALK start, shuffles, TTSes 3 in the right host voice; playBridge() speaks a random one the instant a turn starts processing → no dead air, and NOT "let me pull that up" every time. Never states an unknown fact.
+2) ELABORATE once the answer arrives. CONVO_SYS updated: answer FIRST, then add 1-2 verified context points (related player/standing/form/meaning); 1-5 short beats; conversational, not a DB response. Verified: "how big is their D?" → honest "no measurements" + Marc names the D corps + Reggie ties it to 11 GA in 4 games / top of division. No fabrication.
+3) MULTI-SOURCE RETRIEVAL LAYER (the architecture ask). NEW backend/retrieval.py: EnrichmentSource ABC (supports/enrich_team) + ENRICHMENT_SOURCES registry + assemble_team_context(provider, league, subject) = primary team_page merged (additive, gap-filling, never overwrites verified) with every applicable source. build_team_context now renders a "Player bios:" line (height/weight/age/shoots) from tp.player_bio when present, so richer data → richer desk automatically with ZERO Live Desk changes. EliteProspectsSource stub REGISTERED but INERT until ELITEPROSPECTS_API_KEY set (supports whl/chl/ohl/qmjhl/ncaa); documents the player_bio merge contract. converse + bridges both go through assemble_team_context (desk no longer hard-wired to one league feed).
+
+VERIFIED (localhost + real public path):
+- /api/ticker/bridges KAM/whl → 6 grounded varied lines (2-0-1, #1 B.C. Division, 11-11, Shaun Clouston).
+- Real-path screenshot /team/KAM?league=whl: voice "how big is their defense?" → 3-beat layered answer (honest + D corps names + standing context) + chips + ON AIR. Round-trip + continued listening intact.
+- WHL retrieval (iter18) still rich: coach, goalies, scorers, last-game scorers.
+EP READINESS (business note only, no code owed): the layer accepts Elite Prospects by implementing EliteProspectsSource.enrich_team() + setting a key; when it returns player_bio, D-line size / age / history questions answer automatically. Good moment to engage Ed at EP — the conversational desk is live and shows exactly where EP data unlocks the next level. (Contacting EP is a human/business action, not implemented here.)

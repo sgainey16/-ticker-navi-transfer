@@ -137,7 +137,47 @@ def build_team_context(tp: dict, league_name: str, league_code: str) -> tuple[st
         if names:
             lines.append(f"Roster ({len(names)}): " + ", ".join(names[:26]) + ("…" if len(names) > 26 else ""))
 
+    # Enrichment bios (e.g. Elite Prospects): height/weight/age/shoots when present.
+    bios = tp.get("player_bio") or {}
+    if bios:
+        name_by_id = {}
+        for grp in ("forwards", "defensemen", "goalies"):
+            for p in (roster or {}).get(grp, []) or []:
+                name_by_id[str(p.get("player_id"))] = p.get("name")
+        shown = []
+        for pid, b in list(bios.items())[:12]:
+            nm = name_by_id.get(str(pid)) or b.get("name") or "Player"
+            bits = [x for x in [b.get("height"), (f"{b.get('weight')} lb" if b.get("weight") else None),
+                                (f"age {b.get('age')}" if b.get("age") else None),
+                                (f"shoots {b.get('shoots')}" if b.get("shoots") else None)] if x]
+            if bits:
+                shown.append(f"{nm}: {', '.join(bits)}")
+        if shown:
+            lines.append("Player bios: " + "; ".join(shown) + ".")
+
     return "\n".join(lines), links
+
+
+def build_bridge_lines(tp: dict) -> list[dict]:
+    """Short, VERIFIED one-liners a host can say to fill retrieval time — built only
+    from already-loaded team facts, so they can never be wrong. Varied on purpose."""
+    team = tp.get("team", {}) or {}
+    rec = tp.get("record", {}) or {}
+    goals = tp.get("goals", {}) or {}
+    short = team.get("short") or team.get("name") or "this group"
+    out: list[dict] = []
+    rec_str = f"{rec.get('wins')}-{rec.get('losses')}-{rec.get('ot')}"
+    if rec.get("wins") is not None:
+        out.append({"host": "marc", "text": f"While he digs that up — {short} are sitting {rec_str} on the year."})
+    if rec.get("div_rank") and team.get("division"):
+        out.append({"host": "marc", "text": f"Give him a beat. Meantime, {short} are number {rec.get('div_rank')} in the {team.get('division')} right now."})
+    if goals.get("gf") is not None and goals.get("ga") is not None:
+        out.append({"host": "marc", "text": f"One sec on that. You look at the goals — {goals.get('gf')} for, {goals.get('ga')} against — tells you what kind of team this is."})
+    if tp.get("coach"):
+        out.append({"host": "marc", "text": f"Let him check. This is {tp['coach']}'s group, and they've got an identity."})
+    out.append({"host": "reggie", "text": "Yeah, let me pull that up for you."})
+    out.append({"host": "reggie", "text": "Good question — give me one second on that."})
+    return out
 
 
 CONVO_SYS = HOST_BIBLE + """
@@ -147,8 +187,10 @@ THREE people: the FAN, REGGIE and MARC. Both of you are on the desk together.
 
 STYLE:
 - Reggie usually leads; Marc adds context, memory, or good-naturedly pushes back. Real chemistry.
-- SHORT. 2 to 4 total lines. Talk-radio pace — never a monologue, never a wall of text.
-- Actually answer what the fan said. Be a hockey friend, not a search box.
+- Actually answer what the fan said FIRST, then ADD one or two useful, verified context points
+  (a related player, the standing, recent form, what it means) so it feels like two broadcasters,
+  not a database lookup. Do NOT just answer literally and stop.
+- Keep each line tight (1-2 sentences); the whole reply is 2-5 short lines, talk-radio pace.
 - PEOPLE FIRST: move toward players, storylines and connections when it's natural.
 - You do NOT have to end on a question. Do not interrogate the fan.
 
@@ -167,7 +209,7 @@ number in front of you and offer what you DO have — never guess a stat, trade,
 OUTPUT: return ONLY valid JSON (no markdown fences), exactly:
 {"turns":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}],
  "suggestions":[{"ref":"<exact ref from LINKABLE>","label":"<short tappable label>"}]}
-- 1 to 4 turns, hosts alternating naturally (both may appear).
+- 1 to 5 turns, hosts alternating naturally (both may appear); lead with the answer, then context.
 - 0 to 3 suggestions; every ref MUST be copied exactly from LINKABLE. Omit if none fit.
 """
 
@@ -227,7 +269,7 @@ async def converse_turn(llm_key: str, conversation_id: str, fact_sheet: str,
                 "suggestions": []}
 
     turns = [{"host": ("marc" if t.get("host") == "marc" else "reggie"), "text": str(t.get("text", "")).strip()}
-             for t in data["turns"] if str(t.get("text", "")).strip()][:4]
+             for t in data["turns"] if str(t.get("text", "")).strip()][:5]
 
     by_ref = {l["ref"]: l for l in links}
     suggestions = []
