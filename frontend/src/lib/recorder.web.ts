@@ -90,7 +90,12 @@ export function useVoiceRecorder() {
 
     return new Promise<VoiceClip | null>((resolve) => {
       const stream = streamRef.current!;
-      const mr = new MediaRecorder(stream);
+      // Pick a container Whisper accepts AND the browser supports (iOS Safari -> mp4).
+      const prefer = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"];
+      let picked = "";
+      const MR: any = (window as any).MediaRecorder;
+      for (const t of prefer) { if (MR?.isTypeSupported?.(t)) { picked = t; break; } }
+      const mr = picked ? new MediaRecorder(stream, { mimeType: picked }) : new MediaRecorder(stream);
       mrRef.current = mr;
       const chunks: Blob[] = [];
       let spoke = false;
@@ -109,7 +114,7 @@ export function useVoiceRecorder() {
       mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       mr.onstop = () => {
         if (abortRef.current || !spoke) { done(null); return; }
-        const type = mr.mimeType || "audio/webm";
+        const type = mr.mimeType || picked || "audio/webm";
         const blob = new Blob(chunks, { type });
         const ext = type.includes("mp4") ? "mp4" : type.includes("ogg") ? "ogg" : "webm";
         done({ uri: "", name: `clip.${ext}`, type, blob });

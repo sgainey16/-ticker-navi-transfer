@@ -368,3 +368,14 @@ VERIFIED — testing_agent iteration_17 PASS (backend 7/7 test_ticker_converse.p
 CAVEATS: full hands-free VOICE round-trip (speak→Whisper→reply) needs a real device/mic — headless can't speak (backend correctness proven via pytest/curl). Native mic capture + background audio require an iOS/Android dev build to fully QA. Mic-denial "Open Settings" branch verified by source (headless auto-grants a fake stream).
 
 NEXT per user: actually USE it before touching voices — then decide pacing vs page design vs data depth vs highlights.
+
+
+## FIX — Live TALK "Couldn't reach the desk" on real device (iteration 17 field FAIL) [DONE, verified on public path]
+Symptom: Kamloops Blazers Team Live Desk opened fine and TALK entered LISTENING hands-free, but after speaking it returned "Couldn't reach the desk." Headless never caught it (can't produce real speech).
+ROOT CAUSE: /api/ticker/converse audio path 500'd (→ ingress 502 → frontend catch → "Couldn't reach the desk"). emergentintegrations OpenAISpeechToText.transcribe() forwards its `file` arg straight to litellm/OpenAI, which requires bytes / io.IOBase / PathLike / tuple — we passed a **str path**, so OpenAI raised "Expected entry at `file` to be bytes... received str". (_validate_audio_file accepts a str path, but litellm does not.)
+FIX (server.py ticker_converse): open the temp file in binary and pass the FILE OBJECT — `with open(tmp_path,"rb") as fh: await stt.transcribe(fh, response_format="text")`. Added temporary stage logging ([converse] audio received bytes/filename + transcript). Also hardened web recorder (recorder.web.ts) to select a Whisper-friendly, browser-supported container via MediaRecorder.isTypeSupported (iOS Safari → audio/mp4) so the file extension matches the real bytes.
+VERIFIED on the PUBLIC preview ingress (not just localhost/headless):
+- POST /api/ticker/converse with a real speech clip (KAM/whl) → 200, transcript "How are the Blazers looking this season?", grounded Reggie+Marc reply, ~8s localhost / ~16s public.
+- FRONTEND real path: /team/KAM?league=whl, fed real TTS speech into the mic via a getUserMedia override, tapped TALK → thread showed YOU (transcribed) + REGGIE + MARC (grounded 2-0-1, 11-11) + chips (Follow the Blazers, Next game vs PG, Last game vs PEN). Spoken round-trip COMPLETES on the Kamloops Blazers page.
+UI unchanged (PLAY/TALK/STOP, one panel) per instruction — only the connection bug was fixed.
+NOTE: native iOS/Android dev build still recommended for on-hardware mic capture QA; m4a (native) + mp4/webm (web) all accepted by Whisper.

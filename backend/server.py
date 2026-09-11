@@ -1100,10 +1100,12 @@ async def ticker_converse(
         if not stt:
             raise HTTPException(status_code=503, detail="speech-to-text not available")
         raw = await audio.read()
+        logger.info("[converse] audio received: filename=%s content_type=%s bytes=%d subject=%s league=%s",
+                    audio.filename, audio.content_type, len(raw or b""), subject, league)
         if not raw:
             raise HTTPException(status_code=400, detail="empty audio")
         suffix = (Path(audio.filename or "clip.webm").suffix or ".webm").lower()
-        if suffix not in (".m4a", ".mp4", ".webm", ".wav", ".mp3", ".mpeg", ".mpga"):
+        if suffix not in (".m4a", ".mp4", ".webm", ".wav", ".mp3", ".mpeg", ".mpga", ".ogg"):
             suffix = ".webm"
         import tempfile
         tmp_path = None
@@ -1111,15 +1113,18 @@ async def ticker_converse(
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
                 f.write(raw)
                 tmp_path = f.name
-            result = await stt.transcribe(tmp_path, response_format="text")
+            # litellm/OpenAI needs a file object (or bytes/PathLike) — NOT a str path.
+            with open(tmp_path, "rb") as fh:
+                result = await stt.transcribe(fh, response_format="text")
             if isinstance(result, str):
                 user_text = result.strip()
             elif isinstance(result, dict):
                 user_text = str(result.get("text", "")).strip()
             else:
                 user_text = str(getattr(result, "text", "") or "").strip()
+            logger.info("[converse] transcript: %r", user_text[:200])
         except Exception:
-            logger.exception("transcription failed")
+            logger.exception("[converse] transcription failed (suffix=%s bytes=%d)", suffix, len(raw or b""))
             raise HTTPException(status_code=502, detail="could not transcribe audio")
         finally:
             if tmp_path:
