@@ -346,3 +346,25 @@ VERIFIED — testing_agent iteration_16 PASS (backend 5/5 test_ticker_converse.p
 FEATURES REQUIRING NATIVE BUILD: real voice-in/out is validated end-to-end on web via getUserMedia + browser Audio, but full native mic capture + background audio must be QA'd on an iOS/Android dev build (Expo Go / web preview can't fully validate native recording). Whisper accepts m4a (native) and webm (web).
 
 NOT done (per scope): no spread beyond Team page; no Highlightly/Sportlogiq/AI play-by-play/new leagues/redesign; no autoplay change; no voice polish. Next per user: actually USE it, then decide pacing vs design vs data vs highlights.
+
+
+## TEAM LIVE DESK — MERGE PLAY + TALK INTO ONE EXPERIENCE (Team page only) [DONE, verified]
+User: the Team page's separate "PLAY THE DESK" + "TALK TO THE DESK" felt like two products with too much tapping. Merge into ONE continuous Reggie + Marc desk. One control set: PLAY · TALK · STOP. PLAY runs the grounded show and may continue with ONE webbed connection then end quietly. TALK = hands-free join (listen → detect end-of-speech → respond → listen again, no repeated tap-record/tap-send). User speech takes priority over the running show. STOP always immediately silences. Preserve global one-audio-session. Webbing restraint (1-2 connections, quiet endings). NO new providers / Player / Game convo / autoplay / pages / redesign / cleanup.
+
+FRONTEND:
+- NEW src/components/TeamDesk.tsx replaces the old TickerDesk(surface=team)+LiveDesk pair on the Team page. Reuses the exact desk panel visual (broadcast-desk image + gradient + REGGIE+MARC tag + ON AIR/LISTENING/THINKING status + mic level bar). Three controls: desk-play, desk-talk, desk-stop. Modes idle/show/convo via modeRef. playReply() claims beginSession token and checks currentSession() so any supersede stops it. startShow() plays the prepared team segment then ONE directive continuation (SHOW_CONTINUE) then quiet idle. startTalk() calls endSession() (user priority) → rec.openMic() → conversationLoop() (captureUtterance → converse(clip) → thread+chips+voice-yes-follow → playReply → listen again; 2 empty utterances end it). stopAll() = endSession+abort+closeMic. Compact thread (last 4) + webbing chips + Open-Settings on mic denial. LiveDesk.tsx now unused (left in place, not bundled).
+- src/lib/recorder.web.ts REWRITTEN: hands-free useVoiceRecorder with Web-Audio AnalyserNode VAD (SPEECH_ON rms, 1.1s trailing silence ends utterance), openMic/closeMic/captureUtterance/abort, level meter. src/lib/recorder.ts REWRITTEN: native expo-audio with isMeteringEnabled + getStatus().metering dBFS VAD (same interface). Mic requested ONLY on deliberate TALK.
+
+BACKEND:
+- ticker_converse.py converse_turn(..., directive=False): directive mode frames the prompt as a producer cue ("the fan has NOT spoken"), not a fan question.
+- server.py POST /api/ticker/converse: added `directive` form field. Directive turn (no text/audio) runs a continuation, returns user_text="" and does not require speech. Voice/text/follow paths unchanged.
+
+VERIFIED — testing_agent iteration_17 PASS (backend 7/7 test_ticker_converse.py incl. new NHL+WHL directive cases; frontend live):
+- ONE panel team-desk with desk-play/desk-talk/desk-stop; old live-desk/live-mic/text-input testIDs GONE; LiveDesk not imported by app/*.
+- Entry: playCalls=0, getUserMedia=0, permissionsQuery=0 (no autoplay, no mic on entry).
+- PLAY → audio + ON AIR + relabel SHOW; grounded directive continuation (Geekie 39G) + 1 connection chip. TALK → getUserMedia exactly once. TALK during PLAY → pauseCalls 0→1 (show stops before mic; user priority). STOP silences. One-audio-session: no audible overlap (transient probe count during rapid re-taps is the known play()-promise artifact; pause is synchronous).
+- Regression: Home/Recap/Next/Stats/Game/Player unchanged.
+
+CAVEATS: full hands-free VOICE round-trip (speak→Whisper→reply) needs a real device/mic — headless can't speak (backend correctness proven via pytest/curl). Native mic capture + background audio require an iOS/Android dev build to fully QA. Mic-denial "Open Settings" branch verified by source (headless auto-grants a fake stream).
+
+NEXT per user: actually USE it before touching voices — then decide pacing vs page design vs data depth vs highlights.

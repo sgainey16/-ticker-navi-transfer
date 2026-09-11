@@ -173,6 +173,56 @@ class TestConverseFollowFlow:
             f"missing player_id in follow action: {action}"
 
 
+# ---- Directive (show continuation) — internal producer cue, NOT a fan utterance
+class TestConverseDirective:
+    def test_bos_directive_grounded(self):
+        r = _post_form({
+            "subject": "BOS",
+            "league": "nhl",
+            "directive": "Keep the show rolling: raise ONE interesting player, riff briefly, then wrap.",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("conversation_id")
+        assert data.get("user_text") == "", \
+            f"directive turn should have empty user_text, got {data.get('user_text')!r}"
+        beats = data.get("beats") or []
+        assert len(beats) >= 1, "no host beats in directive turn"
+        for b in beats:
+            assert b.get("host") in ("reggie", "marc"), f"bad host: {b}"
+            assert isinstance(b.get("text"), str) and b["text"].strip()
+
+        # every suggestion must resolve to a real BOS entity (grounded)
+        tp = _fetch_team_page("nhl", "BOS")
+        valid = _collect_valid_ids(tp)
+        for s in (data.get("suggestions") or []):
+            kind = s.get("kind")
+            ent = s.get("entity") or {}
+            assert kind in ("player", "team", "game", "follow_team", "follow_player")
+            if kind in ("player", "follow_player"):
+                assert str(ent.get("player_id")) in valid["players"], \
+                    f"fabricated player in directive: {ent}"
+            elif kind == "team":
+                assert str(ent.get("abbr")) in valid["teams"], f"fabricated team: {ent}"
+            elif kind == "game":
+                assert str(ent.get("id")) in valid["games"], f"fabricated game: {ent}"
+
+    def test_whl_reg_directive_grounded_no_players(self):
+        r = _post_form({
+            "subject": "REG",
+            "league": "whl",
+            "directive": "Keep the show rolling: raise ONE interesting storyline for this team, riff briefly, then wrap.",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("user_text") == ""
+        beats = data.get("beats") or []
+        assert len(beats) >= 1
+        for s in (data.get("suggestions") or []):
+            assert s.get("kind") in ("team", "game", "follow_team"), \
+                f"WHL directive should not surface player/follow_player: got {s.get('kind')}"
+
+
 # ---- Error handling -------------------------------------------------------
 class TestConverseErrors:
     def test_missing_text_and_audio_400(self):

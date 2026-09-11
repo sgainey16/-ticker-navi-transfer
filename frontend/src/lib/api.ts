@@ -188,12 +188,13 @@ export const api = {
   selectVoice: (host: string, generated_voice_id: string) => post<{ host: string; voice_id: string }>("/voices/select", { host, generated_voice_id }),
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
-  converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
+  converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; directive?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
     const form = new FormData();
     form.append("subject", opts.subject);
     form.append("league", opts.league || "nhl");
     if (opts.conversation_id) form.append("conversation_id", opts.conversation_id);
     if (opts.text) form.append("text", opts.text);
+    if (opts.directive) form.append("directive", opts.directive);
     if (opts.clip) {
       if (opts.clip.blob) form.append("audio", opts.clip.blob, opts.clip.name);
       else form.append("audio", { uri: opts.clip.uri, name: opts.clip.name, type: opts.clip.type } as any);

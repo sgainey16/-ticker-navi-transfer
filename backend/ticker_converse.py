@@ -162,19 +162,26 @@ def _extract_json(text: str) -> dict | None:
 
 
 async def converse_turn(llm_key: str, conversation_id: str, fact_sheet: str,
-                        links: list[dict], history: list[dict], user_text: str) -> dict:
+                        links: list[dict], history: list[dict], user_text: str,
+                        directive: bool = False) -> dict:
     linkable = "\n".join(f"  {l['ref']} = {l['label']} [{l['kind']}]" for l in links) or "  (none)"
     convo = ""
     for h in history[-6:]:
         who = "FAN" if h.get("role") == "user" else (h.get("host") or "desk").upper()
         convo += f"{who}: {h.get('text')}\n"
 
+    if directive:
+        cue = (f"SHOW DIRECTION (the fan has NOT spoken — this is the desk producer cueing you):\n{user_text}\n\n"
+               f"Continue the live show as Reggie + Marc. Do NOT treat this as a fan question. "
+               f"Keep it short and let it breathe toward a natural finish. JSON only.")
+    else:
+        cue = f"FAN JUST SAID: {user_text}\n\nReply now as Reggie + Marc. JSON only."
+
     prompt = (
         f"TEAM CONTEXT (verified — the ONLY facts you may use):\n{fact_sheet}\n\n"
         f"LINKABLE (only these may be cited in suggestions, by exact ref):\n{linkable}\n\n"
         f"CONVERSATION SO FAR:\n{convo or '(this is the start)'}\n"
-        f"FAN JUST SAID: {user_text}\n\n"
-        f"Reply now as Reggie + Marc. JSON only."
+        f"{cue}"
     )
 
     data = None

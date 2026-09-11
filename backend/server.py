@@ -1080,6 +1080,7 @@ async def ticker_converse(
     league: str = Form("nhl"),
     conversation_id: Optional[str] = Form(None),
     text: Optional[str] = Form(None),
+    directive: Optional[str] = Form(None),
     audio: Optional[UploadFile] = File(None),
 ):
     prov = get_provider(league)
@@ -1089,6 +1090,9 @@ async def ticker_converse(
     except Exception:
         raise HTTPException(status_code=404, detail="team not found")
     fact_sheet, links = build_team_context(tp, lname, league)
+
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    is_directive = bool(directive) and not (text or "").strip() and audio is None
 
     # ---- voice in -> transcript (Whisper) ----
     user_text = (text or "").strip()
@@ -1120,12 +1124,32 @@ async def ticker_converse(
         finally:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
-    if not user_text:
+
+    if not is_directive and not user_text:
         raise HTTPException(status_code=400, detail="no speech detected")
 
     cid = conversation_id or uuid.uuid4().hex
     doc = await db.conversations.find_one({"_id": cid}) or {"history": [], "last_follow": None}
     history = doc.get("history", [])
+
+    if is_directive:
+        # Internal show-continuation — NOT a fan utterance.
+        out = await converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, directive, directive=True)
+        for t in out["turns"]:
+            history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
+        last_follow = None
+        for s in out["suggestions"]:
+            if s["kind"] in ("follow_team", "follow_player"):
+                last_follow = {"kind": s["kind"], "entity": s["entity"], "label": s["label"]}
+                break
+        await db.conversations.update_one(
+            {"_id": cid},
+            {"$set": {"history": history[-20:], "last_follow": last_follow,
+                      "updated": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        return {"conversation_id": cid, "user_text": "", "beats": out["turns"],
+                "suggestions": out["suggestions"], "action": None, "voices": voices}
 
     # A verbal "yes" to a pending Follow offer becomes a real Follow action.
     action = None
@@ -1158,7 +1182,7 @@ async def ticker_converse(
         "beats": out["turns"],
         "suggestions": out["suggestions"],
         "action": action,
-        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+        "voices": voices,
     }
 
 
