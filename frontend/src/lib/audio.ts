@@ -21,6 +21,9 @@ export function stopAudio() {
   live.clear();
 }
 
+// Web-only concept (iOS autoplay unlock). No-op on native — expo-audio plays fine.
+export function unlockAudio(): void {}
+
 // --- Global play session: only ONE Reggie+Marc segment can play anywhere. ---
 let session = 0;
 const subs = new Set<() => void>();

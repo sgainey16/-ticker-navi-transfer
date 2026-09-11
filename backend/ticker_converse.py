@@ -50,6 +50,8 @@ def build_team_context(tp: dict, league_name: str, league_code: str) -> tuple[st
         lines.append(f"Goals: {goals.get('gf')} for / {goals.get('ga')} against (diff {goals.get('diff')}).")
     if form.get("l10") and form.get("l10") != "–":
         lines.append(f"Form: {form.get('l10')} in last 10, streak {form.get('streak')}, home {form.get('home')}, road {form.get('road')}.")
+    if tp.get("coach"):
+        lines.append(f"Head coach: {tp['coach']}.")
 
     links: list[dict] = []
 
@@ -74,11 +76,35 @@ def build_team_context(tp: dict, league_name: str, league_code: str) -> tuple[st
 
     goalie = tp.get("goalie")
     if goalie and goalie.get("player_id"):
-        lines.append(f"Goalie: {goalie['name']} — {goalie.get('record')}, {goalie.get('svpct')} SV%, {goalie.get('gaa')} GAA.")
+        extra = []
+        if goalie.get("record"):
+            extra.append(goalie.get("record"))
+        if goalie.get("svpct"):
+            extra.append(f"{goalie.get('svpct')} SV%")
+        if goalie.get("gaa"):
+            extra.append(f"{goalie.get('gaa')} GAA")
+        lines.append(f"Goalie: {goalie['name']}" + (f" — {', '.join(extra)}." if extra else "."))
         gent = {"player_id": str(goalie["player_id"]), "name": goalie["name"],
                 "team_abbr": abbr, "pos": "G", "league": league_code}
         add(f"P:{goalie['player_id']}", "player", f"{goalie['name']} (open profile)", gent)
         add(f"FP:{goalie['player_id']}", "follow_player", f"Keep an eye on {goalie['name']}", gent)
+
+    goalies = tp.get("goalies") or []
+    if goalies:
+        lines.append("Goaltenders on the roster: " + ", ".join(
+            (g.get("name") + (f" (#{g['number']})" if g.get("number") else "")) for g in goalies))
+        for g in goalies:
+            if g.get("player_id"):
+                gent = {"player_id": str(g["player_id"]), "name": g["name"], "team_abbr": abbr, "pos": "G", "league": league_code}
+                add(f"P:{g['player_id']}", "player", f"{g['name']} (open profile)", gent)
+
+    lg_ = tp.get("last_game")
+    if lg_:
+        head = f"Last game: {lg_['away']['abbr']} {lg_['away'].get('score')} @ {lg_['home']['abbr']} {lg_['home'].get('score')} ({lg_.get('date')})."
+        sc = lg_.get("scorers") or []
+        if sc:
+            head += " Goals: " + "; ".join(f"{s['name']} ({s['team']})" for s in sc) + "."
+        lines.append(head)
 
     nxt = tp.get("next")
     if nxt:
@@ -132,8 +158,11 @@ WEBBING (do this when it's genuinely interesting, not every time):
 - You may ONLY reference items in the LINKABLE list below, quoting their exact ref token.
 - NEVER invent a player, team, or game that isn't in the facts.
 
-GROUNDING: use ONLY the TEAM CONTEXT facts. If the fan asks for something not in front of you,
-say so plainly ("I don't have that one in front of me") — never guess a stat, trade, or story.
+GROUNDING: use ONLY the TEAM CONTEXT facts below (they now include roster, goalies,
+coach, scorers, and the last game's goals when available). Answer from them directly.
+NEVER tell the fan to check a website or "look it up" elsewhere — you ARE the desk. If a
+specific detail genuinely is not in the context, say plainly that you don't have that exact
+number in front of you and offer what you DO have — never guess a stat, trade, or story.
 
 OUTPUT: return ONLY valid JSON (no markdown fences), exactly:
 {"turns":[{"host":"reggie","text":"..."},{"host":"marc","text":"..."}],

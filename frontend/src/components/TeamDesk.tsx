@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, DeskSegment, DeskBeat, ConverseSuggestion } from "@/src/lib/api";
-import { playDataUri, beginSession, endSession, currentSession, subscribeSession } from "@/src/lib/audio";
+import { playDataUri, beginSession, endSession, currentSession, subscribeSession, unlockAudio } from "@/src/lib/audio";
 import { useVoiceRecorder } from "@/src/lib/recorder";
 import { useFollows, TeamFollow, PlayerFollow } from "@/src/lib/follows";
 
@@ -22,6 +22,11 @@ type Mode = "idle" | "show" | "convo";
 type ThreadItem = { who: "you" | "reggie" | "marc"; text: string };
 const HOST_COLOR: Record<string, string> = { reggie: colors.green, marc: colors.blue, you: colors.textDim };
 const HOST_NAME: Record<string, string> = { reggie: "REGGIE", marc: "MARC", you: "YOU" };
+
+// Content-free bridges — spoken instantly so there is no dead air while the real
+// answer is retrieved. They never state a fact, so they can never be wrong.
+const BRIDGE_REGGIE = ["Yeah, let me pull that up.", "Good question — give me a second.", "Let me take a look at that."];
+const BRIDGE_MARC = ["One sec, folks.", "Standby — we'll get it.", "Take your time."];
 
 /**
  * TeamDesk — ONE continuous Reggie + Marc desk on the Team page. PLAY runs the
@@ -47,6 +52,7 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
   const modeRef = useRef<Mode>("idle");
   const convoIdRef = useRef<string | null>(null);
   const tokenRef = useRef(0);
+  const bridgesRef = useRef<{ reggie: string[]; marc: string[] }>({ reggie: [], marc: [] });
 
   const lg = league || "nhl";
   const lq = lg === "nhl" ? "" : `?league=${lg}`;
@@ -79,6 +85,36 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
     if (currentSession() === tokenRef.current) endSession();
     rec.abort(); rec.closeMic();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // pre-synthesize a few short bridge clips so we can cover retrieval latency
+  const primeBridges = useCallback(async (voices: { reggie: string | null; marc: string | null }) => {
+    if (bridgesRef.current.reggie.length) return;
+    const grab = async (lines: string[], vid: string | null) => {
+      if (!vid) return [] as string[];
+      const out: string[] = [];
+      for (const t of lines.slice(0, 2)) {
+        try { const r = await api.tts(t, vid, 1.0); out.push(r.audio); } catch { /* ignore */ }
+      }
+      return out;
+    };
+    const [rg, mc] = await Promise.all([grab(BRIDGE_REGGIE, voices.reggie), grab(BRIDGE_MARC, voices.marc)]);
+    bridgesRef.current = { reggie: rg, marc: mc };
+  }, []);
+
+  const playBridge = useCallback(async () => {
+    const b = bridgesRef.current;
+    if (!b.reggie.length && !b.marc.length) return;
+    const token = beginSession();
+    tokenRef.current = token;
+    setSpeaking(true);
+    const r = b.reggie[Math.floor(Math.random() * b.reggie.length)];
+    if (r) { try { await playDataUri(r); } catch { /* ignore */ } }
+    if (currentSession() !== token) return;
+    if (b.marc.length && Math.random() < 0.6) {
+      const m = b.marc[Math.floor(Math.random() * b.marc.length)];
+      if (m) { try { await playDataUri(m); } catch { /* ignore */ } }
+    }
+  }, []);
 
   const playReply = useCallback(async (beats: DeskBeat[], voices: { reggie: string | null; marc: string | null }) => {
     const token = beginSession();
@@ -133,6 +169,7 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
   // ---- PLAY: the team show + one webbed continuation, then a quiet ending ----
   const startShow = useCallback(async () => {
     if (!seg || !seg.beats.length || busy) return;
+    unlockAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     rec.abort(); rec.closeMic();
     setModeBoth("show");
@@ -159,6 +196,7 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
       if (!clip) { empties += 1; if (empties >= 2) break; continue; }
       empties = 0;
       setBusy(true);
+      playBridge(); // instant acknowledgement — cover retrieval latency, no dead air
       try {
         const r = await api.converse({ subject, league: lg, conversation_id: convoIdRef.current, clip });
         convoIdRef.current = r.conversation_id;
@@ -172,17 +210,19 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
     }
     rec.closeMic();
     if (modeRef.current === "convo") setModeBoth("idle");
-  }, [rec, subject, lg, pushThread, applyFollow, playReply, flash, setModeBoth]);
+  }, [rec, subject, lg, pushThread, applyFollow, playReply, playBridge, flash, setModeBoth]);
 
   const startTalk = useCallback(async () => {
+    unlockAudio();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     endSession();          // user speech takes priority over the running show
     setSpeaking(false);
     setModeBoth("convo");
     const ok = await rec.openMic();
     if (!ok) { setModeBoth("idle"); return; }   // denied -> settings UI shows
+    if (seg?.voices) primeBridges(seg.voices);  // warm up latency-cover clips
     conversationLoop();
-  }, [rec, setModeBoth, conversationLoop]);
+  }, [rec, setModeBoth, conversationLoop, seg, primeBridges]);
 
   const active = mode !== "idle";
   const status = rec.listening ? "LISTENING" : busy ? "THINKING" : speaking ? "ON AIR" : "";
