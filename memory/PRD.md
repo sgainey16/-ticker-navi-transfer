@@ -437,3 +437,13 @@ Prior web path opened youtube.com via Linking (bounced out of Ticker = failure).
 ## Jun 2026 — Provider keys stored + health check
 Elite Prospects key stored (ELITEPROSPECTS_API_KEY, auth ?apiKey=, base https://api.eliteprospects.com/v1) — validated LIVE (1566 leagues). Not yet feeding the desk (EP data build still to be scoped); retrieval EliteProspectsSource.supports() now true but enrich_team still returns {} (harmless, no fabrication).
 No provider exposes an expiry DATE. Added GET /api/health/keys: reports live/dead + quota for Highlightly (Pro 7500/day), Elite Prospects, ElevenLabs (TTS-only scoped key — valid for desk voices, lacks voices_read/quota scope), Emergent LLM (managed, balance-based). A key flipping to live:false = expired/revoked = the signal to renew.
+
+## Jun 2026 — Elite Prospects wired in (cached development allowance, BUILT + verified)
+Goal: prove what EP adds beyond Highlightly using the 1,000/mo Basic tier as a DEV allowance, cache everything.
+- backend/eliteprospects.py: self-contained cached client. Auth ?apiKey=, base /v1. PERSISTENT Mongo cache (ep_cache, 30d TTL) + per-process hot cache + negative-cache (7d). Monthly usage counter (ep_usage). Only counts REAL upstream calls; re-views cost 0 (verified: repeat lookup left usage unchanged).
+- Free-tier reality: player DETAIL endpoint is rich (bio, height/weight/shoots/age, birthplace, youthTeam, draftSelection, nhlRights, leagueExperience=career path, playerStyles, biography). Transfers + season-stats endpoints are 403 on free tier (skipped gracefully).
+- player_by_name(name,pos): 1 search + 1 detail first time, cached after. Normalized profile.
+- Endpoints: GET /api/ep/player?name=&pos= (on-demand profile), GET /api/ep/usage (calls used/1000 + cached count), EP usage folded into /api/health/keys.
+- Player page (NHL): /api/nhl/player attaches `ep`; frontend renders a 'Background' card (draft, NHL rights, born, youth, frame, play-style chips, career path, bio, 'via Elite Prospects'). Verified on McDavid (2015 #1 Edmonton, path U16→OHL→WJC, styles).
+- Live Desk SMARTER: /api/ticker/converse appends eliteprospects.scorer_backgrounds(tp) (top 3 scorers, cached) to the fact sheet. Verified Kamloops: desk answered 'how big is their top scorer?' with Andrew Thomson 6'1" 192, age 19, Sherwood Park AB — data only EP has. This closes the old size/bio gap.
+- Frugal: all build+test used only ~10 of 1000 calls. PLAY·TALK·STOP interaction unchanged (frozen); only fact-sheet CONTENT enriched.

@@ -38,7 +38,7 @@ export default function PlayerPage() {
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the player…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load player" onRetry={q.reload} /></Screen>;
 
-  const { player: p, skater, goalie, last5, next: nextGame, highlights } = q.data;
+  const { player: p, skater, goalie, last5, next: nextGame, highlights, ep } = q.data;
   const a = age(p.birth_date);
   // PLAYER HIGHLIGHTS are capability-driven, never required. The page is complete without them.
   // `highlights` is only present when the provider supplies verified player-linked video for this
@@ -77,6 +77,29 @@ export default function PlayerPage() {
           <Ionicons name="mic" size={13} color={colors.blue} />
           <Text style={styles.readText}>{read}</Text>
         </View>
+
+        {/* BACKGROUND — Elite Prospects depth Highlightly can't give: draft, path, styles, bio.
+            Renders only when EP has a verified match; otherwise absent (no placeholder). */}
+        {ep ? (
+          <View style={styles.section}>
+            <SectionTitle title="Background" accent={colors.blue} />
+            <View style={styles.epCard}>
+              {ep.draft ? <EpRow icon="trophy-outline" label="Draft" value={ep.draft} /> : null}
+              {ep.nhl_rights ? <EpRow icon="shield-checkmark-outline" label="Rights" value={ep.nhl_rights} /> : null}
+              {ep.birthplace ? <EpRow icon="location-outline" label="Born" value={[ep.birthplace, ep.dob].filter(Boolean).join(" · ")} /> : null}
+              {ep.youth_team ? <EpRow icon="home-outline" label="Youth" value={ep.youth_team} /> : null}
+              {(ep.height || ep.weight) ? <EpRow icon="body-outline" label="Frame" value={[ep.height, ep.weight, ep.shoots ? `shoots ${ep.shoots}` : null].filter(Boolean).join(" · ")} /> : null}
+              {ep.styles?.length ? (
+                <View style={styles.styleWrap}>
+                  {ep.styles.map((s: string) => (<View key={s} style={styles.chip}><Text style={styles.chipText}>{s}</Text></View>))}
+                </View>
+              ) : null}
+              {ep.career_leagues?.length ? <EpRow icon="git-branch-outline" label="Path" value={ep.career_leagues.slice(0, 8).join("  ›  ")} /> : null}
+              {ep.bio ? <Text style={styles.epBio}>{ep.bio}</Text> : null}
+              <Text style={styles.epCredit}>via Elite Prospects</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* SEASON STATS */}
         <View style={styles.section}>
@@ -160,6 +183,16 @@ export default function PlayerPage() {
   );
 }
 
+function EpRow({ icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <View style={styles.epRow}>
+      <Ionicons name={icon} size={15} color={colors.blue} style={{ marginTop: 1 }} />
+      <Text style={styles.epLabel}>{label}</Text>
+      <Text style={styles.epValue}>{value}</Text>
+    </View>
+  );
+}
+
 function Stat({ label, value, accent }: { label: string; value: any; accent?: string }) {
   return (
     <View style={styles.stat}>
@@ -182,6 +215,17 @@ const styles = StyleSheet.create({
   readText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17, flex: 1 },
 
   section: { gap: spacing.sm, paddingHorizontal: spacing.lg },
+
+  epCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.blueDim, padding: spacing.md, gap: spacing.sm },
+  epRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  epLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1, width: 52, marginTop: 2 },
+  epValue: { color: colors.text, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, flex: 1 },
+  styleWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: { backgroundColor: colors.bgElev, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: 10, paddingVertical: 4 },
+  chipText: { color: colors.blue, fontFamily: fonts.display, fontSize: 11.5, fontWeight: "700" },
+  epBio: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, marginTop: 2 },
+  epCredit: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "600", letterSpacing: 1 },
+
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   stat: { width: "22%", flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, alignItems: "center", gap: 2 },
   statVal: { color: colors.text, fontFamily: fonts.display, fontSize: 17, fontWeight: "800" },

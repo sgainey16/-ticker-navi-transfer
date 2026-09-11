@@ -29,6 +29,7 @@ from ticker_converse import build_team_context, converse_turn, build_bridge_line
 from retrieval import assemble_team_context
 from ticker_hosts import host_voice
 import highlightly
+import eliteprospects
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -987,7 +988,27 @@ async def health_keys():
     # Emergent universal LLM key — managed, balance-based (no date expiry)
     out["emergent_llm"] = {"present": bool(os.environ.get("EMERGENT_LLM_KEY", "").strip()),
                            "note": "Emergent-managed · balance-based, not date-expiring · top up under Profile > Manage plan"}
+    try:
+        out["eliteprospects_usage"] = await eliteprospects.usage()
+    except Exception:
+        pass
     return out
+
+
+@api_router.get("/ep/usage")
+async def ep_usage():
+    """Elite Prospects development-allowance meter: calls used this month vs 1,000,
+    plus how many player records we've cached (each cached player = calls we won't respend)."""
+    return await eliteprospects.usage()
+
+
+@api_router.get("/ep/player")
+async def ep_player(name: str, pos: str = ""):
+    """On-demand, cached Elite Prospects profile by name (bio/draft/career/styles)."""
+    prof = await eliteprospects.player_by_name(name, pos or None)
+    if not prof:
+        raise HTTPException(status_code=404, detail="no Elite Prospects match")
+    return {"ep": prof}
 
 
 @api_router.get("/search")
@@ -1153,12 +1174,20 @@ async def nhl_leaders():
 
 @api_router.get("/nhl/player/{pid}")
 async def nhl_player(pid: str):
-    """Verified NHL player snapshot for the Player Page."""
+    """Verified NHL player snapshot for the Player Page (+ Elite Prospects background)."""
     try:
-        return await get_provider("nhl").player_page(pid)
+        d = await get_provider("nhl").player_page(pid)
     except Exception as e:
         logger.exception("nhl_player failed")
         raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
+    try:
+        pl = d.get("player") or {}
+        ep = await eliteprospects.player_by_name(pl.get("name"), pl.get("pos"))
+        if ep:
+            d["ep"] = ep
+    except Exception:
+        logger.exception("nhl_player EP enrich failed (non-fatal)")
+    return d
 
 
 @api_router.get("/nhl/team/{tri}")
@@ -1217,6 +1246,12 @@ async def ticker_converse(
     except Exception:
         raise HTTPException(status_code=404, detail="team not found")
     fact_sheet, links = build_team_context(tp, lname, league)
+    try:
+        bg = await eliteprospects.scorer_backgrounds(tp)   # EP makes the hosts smarter
+        if bg:
+            fact_sheet = f"{fact_sheet}\n\n{bg}"
+    except Exception:
+        logger.exception("EP scorer_backgrounds failed (non-fatal)")
 
     voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
     is_directive = bool(directive) and not (text or "").strip() and audio is None
