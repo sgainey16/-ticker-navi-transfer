@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Image, ScrollView, Modal, Platform, Linking, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, Image, ScrollView, Modal, Linking, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import YoutubeInline from "@/src/components/YoutubeInline";
@@ -52,11 +52,7 @@ export function HighlightsModule({ league, home, away, date }:
 
   const open = (clip: HighlightClip) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (Platform.OS === "web") {
-      if (clip.url) Linking.openURL(clip.url);        // web: open verified source
-      return;
-    }
-    setActive(clip);                                   // native: inline player
+    setActive(clip);                                   // inline player on native AND web
   };
 
   return (

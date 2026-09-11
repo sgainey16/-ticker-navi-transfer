@@ -430,3 +430,6 @@ Test case Prince George Cougars (WHL PG). All 5 asks delivered:
 4. EARLY-SEASON INTELLIGENCE (generic via record.gp): gp<10 shows 'X-Y to start the season' and hides LAST 10; gp>=10 shows RECORD + LAST 10. Fixed the '(0-2-0-0) last 10' bug.
 5. PERFORMANCE: WHL team_page parallelized (asyncio.gather scorebar/roster/scorers) + cached season(1h)+team_page(90s) -> PG 1.54s->1.16s cold, 0.01s warm. Frontend cache.ts loadTeam/prefetchTeam (60s) + prefetch on pressIn -> team<->team hops instant.
 Backend added division_teams + record.gp + scorers[].gp to WHL team_page; division_teams to NHL team_page (parity, Pacific=8). New files: frontend/src/lib/cache.ts, frontend/app/league/[code].tsx. Testing iteration_19.json PASS (backend 10/10, frontend 7/7). Live Desk PLAY/TALK/STOP untouched.
+
+## Jun 2026 — Highlight inline-playback fix (web/mobile-Safari)
+Prior web path opened youtube.com via Linking (bounced out of Ticker = failure). Fixed: HighlightsModule now always opens the in-app modal; YoutubeInline.web.tsx renders a raw inline <iframe> (react-native-web -> react-dom) so verified highlights play INSIDE Ticker on web too; native still uses react-native-youtube-iframe inline. Verified on /game/2025030416: tap hero -> inline player, URL stays on Ticker (not youtube.com).
