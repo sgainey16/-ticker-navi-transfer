@@ -910,6 +910,86 @@ async def highlights_match(league: str = "nhl", home: str = "", away: str = "", 
     return {"league": league, **pkg}
 
 
+@api_router.get("/health/keys")
+async def health_keys():
+    """Live status of every external provider key.
+
+    Keys carry NO expiry date (not in the key, not in responses) — expiry is tied to
+    each provider's subscription. So we treat a 401/403 as 'expired/revoked' and a 200
+    as 'live'. Run this anytime to catch the moment a key stops working, plus any
+    daily quota the provider reports.
+    """
+    import httpx as _httpx
+    ep = os.environ.get("ELITEPROSPECTS_API_KEY", "").strip()
+    hl = os.environ.get("HIGHLIGHTLY_API_KEY", "").strip()
+    el = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    out: dict = {}
+
+    async with _httpx.AsyncClient(timeout=12) as c:
+        # Highlightly
+        if hl:
+            try:
+                r = await c.get("https://sports.highlightly.net/hockey/leagues",
+                                params={"limit": 1}, headers={"x-rapidapi-key": hl})
+                out["highlightly"] = {
+                    "present": True, "live": r.status_code == 200, "http": r.status_code,
+                    "plan_daily_limit": r.headers.get("x-ratelimit-requests-limit"),
+                    "remaining_today": r.headers.get("x-ratelimit-requests-remaining"),
+                    "note": "Pro plan · daily quota resets each day · no fixed expiry date",
+                }
+            except Exception as e:
+                out["highlightly"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["highlightly"] = {"present": False}
+
+        # Elite Prospects
+        if ep:
+            try:
+                r = await c.get("https://api.eliteprospects.com/v1/leagues",
+                                params={"apiKey": ep, "limit": 1})
+                out["eliteprospects"] = {
+                    "present": True, "live": r.status_code == 200, "http": r.status_code,
+                    "note": "Annual subscription key · no quota/expiry exposed by API · 401 => renew",
+                }
+            except Exception as e:
+                out["eliteprospects"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["eliteprospects"] = {"present": False}
+
+        # ElevenLabs (scoped TTS keys are common: they can speak but not read quota/voices)
+        if el:
+            try:
+                r = await c.get("https://api.elevenlabs.io/v1/user/subscription",
+                                headers={"xi-api-key": el})
+                info = {"present": True, "http": r.status_code}
+                if r.status_code == 200:
+                    j = r.json()
+                    info.update({"live": True, "tier": j.get("tier"),
+                                 "chars_used": j.get("character_count"),
+                                 "chars_limit": j.get("character_limit"),
+                                 "resets_unix": j.get("next_character_count_reset_unix")})
+                else:
+                    body = {}
+                    try:
+                        body = r.json().get("detail", {}) if isinstance(r.json(), dict) else {}
+                    except Exception:
+                        body = {}
+                    restricted = r.status_code == 401 and body.get("status") == "missing_permissions"
+                    info["live"] = restricted            # scoped key = still valid for TTS
+                    info["note"] = ("TTS-only scoped key · valid for the desk voices · lacks quota-read scope"
+                                    if restricted else "key rejected (invalid/revoked) — renew")
+                out["elevenlabs"] = info
+            except Exception as e:
+                out["elevenlabs"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["elevenlabs"] = {"present": False}
+
+    # Emergent universal LLM key — managed, balance-based (no date expiry)
+    out["emergent_llm"] = {"present": bool(os.environ.get("EMERGENT_LLM_KEY", "").strip()),
+                           "note": "Emergent-managed · balance-based, not date-expiring · top up under Profile > Manage plan"}
+    return out
+
+
 @api_router.get("/search")
 async def search(q: str = ""):
     """Universal onboarding search across every connected provider (verified only).

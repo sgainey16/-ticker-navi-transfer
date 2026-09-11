@@ -433,3 +433,7 @@ Backend added division_teams + record.gp + scorers[].gp to WHL team_page; divisi
 
 ## Jun 2026 — Highlight inline-playback fix (web/mobile-Safari)
 Prior web path opened youtube.com via Linking (bounced out of Ticker = failure). Fixed: HighlightsModule now always opens the in-app modal; YoutubeInline.web.tsx renders a raw inline <iframe> (react-native-web -> react-dom) so verified highlights play INSIDE Ticker on web too; native still uses react-native-youtube-iframe inline. Verified on /game/2025030416: tap hero -> inline player, URL stays on Ticker (not youtube.com).
+
+## Jun 2026 — Provider keys stored + health check
+Elite Prospects key stored (ELITEPROSPECTS_API_KEY, auth ?apiKey=, base https://api.eliteprospects.com/v1) — validated LIVE (1566 leagues). Not yet feeding the desk (EP data build still to be scoped); retrieval EliteProspectsSource.supports() now true but enrich_team still returns {} (harmless, no fabrication).
+No provider exposes an expiry DATE. Added GET /api/health/keys: reports live/dead + quota for Highlightly (Pro 7500/day), Elite Prospects, ElevenLabs (TTS-only scoped key — valid for desk voices, lacks voices_read/quota scope), Emergent LLM (managed, balance-based). A key flipping to live:false = expired/revoked = the signal to renew.
