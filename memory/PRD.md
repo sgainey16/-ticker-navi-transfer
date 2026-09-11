@@ -324,3 +324,25 @@ VERIFIED — testing_agent iteration_14 (backend) + iteration_15 (frontend retes
 - Frontend: ticker-desk + desk-play present on HOME/RECAP/NEXT/STATS (NHL+WHL) and Team/Game; ZERO autoplay (getUserMedia=0, permissions.query=0, playCalls=0 pre-tap, 0 legacy /api/segment); GLOBAL ONE-AUDIO-SESSION FIXED — STATS→HOME→RECAP→NEXT plays gave maxConcurrent=1; HOME→/team/BOS cross-stop maxConcurrent=1.
 
 Reggie + Marc are now the presentation layer across the whole product. NOT touched next (per user): voice polish, Player desk, Highlightly/Sportlogiq.
+
+
+## LIVE CONVERSATION — the fan JOINS the desk (TEAM PAGE proof, NHL + WHL) [DONE, verified]
+User choices: Voice in / voice out · Claude Sonnet 4.6 · navigation + Follow both · compact live thread INSIDE the existing desk panel · Team page ONLY · Mute/Stop · preserve the one global audio session · both hosts share ONE conversation. Canonical vision saved to /app/memory/webbing_bible.md (§5 relationship + §7 every-question-does-something proven here).
+
+BACKEND:
+- ticker_converse.py: build_team_context(tp, league_name, league_code) → (verified fact sheet, whitelist of LINKABLE entities with refs P:/FP:/T:/G:/FT: and fully-resolved entity payloads). converse_turn(...) calls Claude Sonnet 4.6 (LlmChat, session_id=convo-<id>, system=HOST_BIBLE+webbing/grounding rules) and returns STRICT JSON {turns[], suggestions[]}; suggestions resolved ONLY against the whitelist → fabrication impossible. AFFIRM regex detects a verbal "yes".
+- server.py POST /api/ticker/converse (multipart: subject, league, conversation_id?, text?, audio?): Whisper STT via emergentintegrations OpenAISpeechToText(EMERGENT_LLM_KEY).transcribe(path,response_format="text") for voice-in; loads/saves conversation history in db.conversations; a "yes" to a stored last_follow offer returns action.type=="follow" with entity; returns beats + suggestions + action + voices. Voice-out reuses /api/tts.
+
+FRONTEND:
+- src/lib/recorder.ts (native expo-audio useAudioRecorder + requestRecordingPermissionsAsync; mic ONLY on deliberate tap) and recorder.web.ts (browser MediaRecorder + getUserMedia; NOT expo-audio, protecting Safari) — same useVoiceRecorder() hook via file resolution.
+- src/components/LiveDesk.tsx: mic ("TAP TO TALK"/"TAP TO SEND"), compact thread (last 4 exchanges, YOU/REGGIE/MARC), tappable suggestion chips (player/team/game → router.push; follow_team/follow_player → follows store, chip flips to "Following…"), discreet type fallback, Mute/Stop. Plays host beats through the SAME global session (beginSession/playDataUri/currentSession) — endSession() before recording. action.type=="follow" from voice-"yes" auto-applies.
+- app/team/[id].tsx: LiveDesk mounted directly under TickerDesk in a connected deskGroup (one panel). app.json: NSMicrophoneUsageDescription + android RECORD_AUDIO.
+
+VERIFIED — testing_agent iteration_16 PASS (backend 5/5 test_ticker_converse.py + frontend live):
+- NHL BOS grounded (Pastrnak/Geekie/Swayman, ids validated vs /api/nhl/team/BOS); WHL REG grounded, suggestions restricted to team/game/follow_team (no roster → no player chips); Yes→follow returns entity.player_id 8477956; 400 on empty, 404 unknown team.
+- Team page renders ticker-desk + live-desk as one block; entry playCalls=0/getUserMedia=0/permQuery=0 (no autoplay, no mic prompt); text path → thread + 3 grounded chips + host audio; Pastrnak chip → /player/8477956; follow chip → "Following…"+toast; mic tap → getUserMedia 0→1 (deliberate only); LiveDesk imported ONLY by team/[id].tsx (Home/Recap/Next/Stats/Game untouched).
+- One-audio-session: passive desk-play → live send kills passive (pause fires); only one AUDIBLE stream (pause is synchronous). A transient probe count of 2 during handoff is a measurement artifact of play()'s async promise, not real double-audio — accepted for this proof.
+
+FEATURES REQUIRING NATIVE BUILD: real voice-in/out is validated end-to-end on web via getUserMedia + browser Audio, but full native mic capture + background audio must be QA'd on an iOS/Android dev build (Expo Go / web preview can't fully validate native recording). Whisper accepts m4a (native) and webm (web).
+
+NOT done (per scope): no spread beyond Team page; no Highlightly/Sportlogiq/AI play-by-play/new leagues/redesign; no autoplay change; no voice polish. Next per user: actually USE it, then decide pacing vs design vs data vs highlights.

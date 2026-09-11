@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MASL — The Ticker",
+    "name": "MASL \u2014 The Ticker",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.leaguemobileapp.bnwyr0"
+      "bundleIdentifier": "com.emergent.leaguemobileapp.bnwyr0",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Talk hockey live with Reggie and Marc"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,10 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.leaguemobileapp.bnwyr0"
+      "package": "com.emergent.leaguemobileapp.bnwyr0",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",

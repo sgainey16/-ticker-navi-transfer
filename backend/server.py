@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Form, File, UploadFile
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
 
@@ -24,6 +25,7 @@ import hashlib
 from providers import nhl
 from providers.registry import get_provider, list_providers, search_all
 from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk, build_stats_desk
+from ticker_converse import build_team_context, converse_turn, AFFIRM
 from ticker_hosts import host_voice
 
 ROOT_DIR = Path(__file__).parent
@@ -36,6 +38,7 @@ db = client[os.environ['DB_NAME']]
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
 eleven = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
+stt = OpenAISpeechToText(EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 _tts_cache: dict = {}
 TTS_CACHE_DIR = ROOT_DIR / ".tts_cache"
 TTS_CACHE_DIR.mkdir(exist_ok=True)
@@ -1064,6 +1067,100 @@ async def nhl_recaps():
         logger.exception("nhl_recaps failed")
         games = []
     return {"games": games}
+
+
+# ---------------------------------------------------------------------------
+# LIVE CONVERSATION — the fan joins the desk (Team-page proof, NHL + WHL).
+# Voice in (Whisper) -> grounded Reggie + Marc reply (Claude) -> whitelisted,
+# tappable suggestions + voice-"yes" Follow action. Voice out reuses /api/tts.
+# ---------------------------------------------------------------------------
+@api_router.post("/ticker/converse")
+async def ticker_converse(
+    subject: str = Form(...),
+    league: str = Form("nhl"),
+    conversation_id: Optional[str] = Form(None),
+    text: Optional[str] = Form(None),
+    audio: Optional[UploadFile] = File(None),
+):
+    prov = get_provider(league)
+    lname = getattr(prov, "name", "NHL")
+    try:
+        tp = await prov.team_page(subject)
+    except Exception:
+        raise HTTPException(status_code=404, detail="team not found")
+    fact_sheet, links = build_team_context(tp, lname, league)
+
+    # ---- voice in -> transcript (Whisper) ----
+    user_text = (text or "").strip()
+    if audio is not None:
+        if not stt:
+            raise HTTPException(status_code=503, detail="speech-to-text not available")
+        raw = await audio.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="empty audio")
+        suffix = (Path(audio.filename or "clip.webm").suffix or ".webm").lower()
+        if suffix not in (".m4a", ".mp4", ".webm", ".wav", ".mp3", ".mpeg", ".mpga"):
+            suffix = ".webm"
+        import tempfile
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(raw)
+                tmp_path = f.name
+            result = await stt.transcribe(tmp_path, response_format="text")
+            if isinstance(result, str):
+                user_text = result.strip()
+            elif isinstance(result, dict):
+                user_text = str(result.get("text", "")).strip()
+            else:
+                user_text = str(getattr(result, "text", "") or "").strip()
+        except Exception:
+            logger.exception("transcription failed")
+            raise HTTPException(status_code=502, detail="could not transcribe audio")
+        finally:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+    if not user_text:
+        raise HTTPException(status_code=400, detail="no speech detected")
+
+    cid = conversation_id or uuid.uuid4().hex
+    doc = await db.conversations.find_one({"_id": cid}) or {"history": [], "last_follow": None}
+    history = doc.get("history", [])
+
+    # A verbal "yes" to a pending Follow offer becomes a real Follow action.
+    action = None
+    if doc.get("last_follow") and AFFIRM.search(user_text):
+        lf = doc["last_follow"]
+        action = {"type": "follow", "kind": lf["kind"], "entity": lf["entity"], "label": lf.get("label")}
+
+    history.append({"role": "user", "text": user_text})
+    out = await converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, user_text)
+    for t in out["turns"]:
+        history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
+
+    # Remember a fresh Follow offer so the next verbal "yes" can resolve it.
+    last_follow = None
+    for s in out["suggestions"]:
+        if s["kind"] in ("follow_team", "follow_player"):
+            last_follow = {"kind": s["kind"], "entity": s["entity"], "label": s["label"]}
+            break
+
+    await db.conversations.update_one(
+        {"_id": cid},
+        {"$set": {"history": history[-20:], "last_follow": last_follow,
+                  "updated": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    return {
+        "conversation_id": cid,
+        "user_text": user_text,
+        "beats": out["turns"],
+        "suggestions": out["suggestions"],
+        "action": action,
+        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+    }
+
 
 
 app.include_router(api_router)

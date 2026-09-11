@@ -93,6 +93,22 @@ export type NhlScoreboard = { date: string | null; today?: string | null; is_fut
 export type NhlFinalCard = NhlGameCard & { date: string; period_type?: string | null };
 
 export type DeskBeat = { host: "reggie" | "marc"; text: string };
+
+export type ConverseSuggestion = {
+  kind: "player" | "team" | "game" | "follow_team" | "follow_player";
+  label: string;
+  entity: any;
+};
+export type ConverseAction = { type: "follow"; kind: string; entity: any; label?: string } | null;
+export type ConverseResponse = {
+  conversation_id: string;
+  user_text: string;
+  beats: DeskBeat[];
+  suggestions: ConverseSuggestion[];
+  action: ConverseAction;
+  voices: { reggie: string | null; marc: string | null };
+};
+export type VoiceClip = { uri: string; name: string; type: string; blob?: Blob };
 export type DeskSegment = {
   surface: string; segment_type: string; subject: string; title?: string | null;
   state: "ready" | "unavailable"; beats: DeskBeat[];
@@ -172,6 +188,20 @@ export const api = {
   selectVoice: (host: string, generated_voice_id: string) => post<{ host: string; voice_id: string }>("/voices/select", { host, generated_voice_id }),
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
+  converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
+    const form = new FormData();
+    form.append("subject", opts.subject);
+    form.append("league", opts.league || "nhl");
+    if (opts.conversation_id) form.append("conversation_id", opts.conversation_id);
+    if (opts.text) form.append("text", opts.text);
+    if (opts.clip) {
+      if (opts.clip.blob) form.append("audio", opts.clip.blob, opts.clip.name);
+      else form.append("audio", { uri: opts.clip.uri, name: opts.clip.name, type: opts.clip.type } as any);
+    }
+    const res = await fetch(`${BASE}/api/ticker/converse`, { method: "POST", body: form });
+    if (!res.ok) throw new Error(`converse -> ${res.status}`);
+    return res.json();
+  },
   talk: (message: string, session_id: string | null) =>
     post<{ session_id: string; rayo: string; casey: string }>("/talk", { message, session_id }),
   talkHistory: (session_id: string) => get<{ session_id: string; turns: any[] }>(`/talk/${session_id}`),

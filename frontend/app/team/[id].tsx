@@ -9,6 +9,7 @@ import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { TickerDesk } from "@/src/components/TickerDesk";
+import { LiveDesk } from "@/src/components/LiveDesk";
 
 function niceDate(iso?: string) {
   if (!iso) return "";
@@ -49,7 +50,11 @@ export default function TeamPage() {
         </View>
 
         {/* Reggie + Marc — present on the team, speak only on deliberate Play */}
-        <TickerDesk surface="team" subject={id} league={lg} fallbackTitle={`${team.name.toUpperCase()} · ON THE DESK`} />
+        <View style={styles.deskGroup}>
+          <TickerDesk surface="team" subject={id} league={lg} fallbackTitle={`${team.name.toUpperCase()} · ON THE DESK`} />
+          {/* Live: the fan joins the desk — voice conversation grounded in this team */}
+          <LiveDesk subject={id} league={lg} />
+        </View>
 
         {/* TICKER READ — verified data restated, one line (no second host panel) */}
         <View style={styles.read}>
@@ -203,6 +208,7 @@ const styles = StyleSheet.create({
   backText: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
 
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
+  deskGroup: { gap: 0 },
   banner: { alignItems: "center", paddingTop: spacing.sm, paddingBottom: spacing.md, gap: 4 },
   name: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", letterSpacing: 0.5, marginTop: spacing.sm, textAlign: "center" },
   meta: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
