@@ -201,3 +201,32 @@
 ## agent_communication:
 ##   - agent: "main"
 ##     message: "Onboard first (the app redirects to /onboarding until a Draft Board exists): complete onboarding and FOLLOW at least one junior team (search 'Kamloops', WHL) AND one NHL team (e.g. 'Edmonton'). Then on HOME test: (1) HomeShow panel shows 'YOUR HOCKEY STARTS HERE' with PLAY MY SHOW + TALK + STOP; NOTHING plays until PLAY is tapped. (2) Tap PLAY MY SHOW (testID home-play): the show AUTO-ADVANCES through stories on its own (title/kicker change, ON AIR indicator, captions update) with NO further taps. (3) A 'stage' appears under the panel: either an inline highlight video or a story graphic (stat + caption). Video must play INSIDE the app (no navigation to youtube.com). (4) STOP (home-stop) silences and returns to idle. (5) TALK (home-talk) requests mic (may be denied in headless — just confirm it doesn't crash). Also hit POST /api/ticker/home_show with body {\"teams\":[{\"abbr\":\"KAM\",\"league\":\"whl\",\"tier\":1},{\"abbr\":\"EDM\",\"league\":\"nhl\",\"tier\":2}],\"players\":[]} -> stories[] each with beats + subtitle. DO NOT test/modify the Team Live Desk (frozen)."
+
+## PROVIDER BREADTH — NCAA + OHL/QMJHL registration (cross-league Draft Board) — needs testing
+backend:
+  - task: "NCAA provider (Highlightly structure + EP people, thin/honest) + OHL/QMJHL HockeyTech + league-aware personalization + EP-backed cross-league player pages"
+    file: "/app/backend/providers/ncaa.py, /app/backend/highlightly.py, /app/backend/providers/whl.py, /app/backend/providers/registry.py, /app/backend/eliteprospects.py, /app/backend/server.py"
+    working: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Registered 5 leagues: nhl, whl, ohl, qmjhl, ncaa. NCAA = Highlightly (teams/standings/schedule/scores/video, 62 teams/6 conferences) + Elite Prospects (name search + bio/draft/career). NO rosters/goals/logos faked. School-name alias/code layer (DEN/MICH/MINN/BU) keeps HL numeric ids separate. Verified via curl: search Denver/Michigan/Minnesota/BostonUniversity -> correct NCAA teams; /league/ncaa/standings 62 teams; /league/ncaa/team/DEN 20-1 #1 NCHC, recent finals populated (WIS 1 @ DEN 2 championship), goals null, scorers [], next null (offseason honest); /league/ncaa/game/{id} has_video True; search Celebrini -> EP players. My Ticker + Home Show league-aware (MTL nhl + KAM whl + BAR ohl + DEN ncaa all resolve). OHL/QMJHL on same HockeyTech chassis (Barrie/Halifax/Charlottetown searchable). EP search_players cached (gated len>=4)."
+frontend:
+  - task: "NCAA team page graceful omission (monogram logo, hide GF/GA strip & PTS, hide Leading the Way) + league-aware player page"
+    file: "/app/frontend/src/components/NhlLogo.tsx, /app/frontend/app/team/[id].tsx, /app/frontend/app/player/[id].tsx"
+    working: "NA"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "NhlLogo: monogram fallback (onError) so NCAA null logos never show a wrong NHL crest. Team page hides GF/GA/DIFF strip when goals null and hides PTS when record.points null. Denver page smoke-verified: NCAA>NCHC breadcrumb, '20-1 #1 NCHC', RECORD-only strip, LAST GAME WIS 1-2 DEN, inline Frozen Four highlight, no Leading the Way. Player page league-aware (EP-backed for non-nhl)."
+metadata:
+  provider_leagues: ["nhl","whl","ohl","qmjhl","ncaa"]
+test_plan:
+  current_focus:
+    - "Cross-league Draft Board: NHL+WHL+OHL+QMJHL+NCAA coexist; onboarding search, follow, personalization, team pages, NCAA scores/schedule/standings/video, NCAA EP player search, no NHL hardcoding"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+agent_communication:
+  - agent: "main"
+    message: "Test cross-league. NO auth. Concrete ids: NHL MTL; WHL KAM; OHL BAR; QMJHL Hal(Halifax)/Cha(Charlottetown); NCAA DEN(Denver)/MICH/MINN/BU. Backend: GET /api/search?q=Denver|Michigan|Minnesota|Boston University -> NCAA teams; q=Barrie->OHL; q=Halifax->QMJHL; q=Celebrini->EP players. GET /api/league/ncaa/standings (62 teams), /api/league/ncaa/team/DEN (record 20-1, goals null, recent finals, division_teams), /api/league/ncaa/scoreboard, /api/league/ncaa/game/{recent_id} has_video True, /api/league/ncaa/player/x?name=Macklin Celebrini -> ep block. POST /api/ticker/home_show and /api/ticker/home_segment with body {\"teams\":[{\"abbr\":\"MTL\",\"league\":\"nhl\",\"tier\":1},{\"abbr\":\"KAM\",\"league\":\"whl\",\"tier\":1},{\"abbr\":\"BAR\",\"league\":\"ohl\",\"tier\":2},{\"abbr\":\"Hal\",\"league\":\"qmjhl\",\"tier\":2},{\"abbr\":\"DEN\",\"league\":\"ncaa\",\"tier\":2}],\"players\":[]} -> personalized, all 5 leagues resolve, no error. Frontend: /team/DEN?league=ncaa (NCAA>NCHC breadcrumb, 20-1 #1 NCHC, RECORD-only strip i.e. NO GF/GA, monogram DEN not a wrong NHL logo, Last Game, inline highlight, NO 'Leading the Way'); /team/BAR?league=ohl and /team/Hal?league=qmjhl render; onboarding search shows NCAA teams. DO NOT test/modify Team Live Desk mic/converse (frozen). DO NOT test Home Sports Desk PLAY/TALK/STOP behavior changes (unchanged)."

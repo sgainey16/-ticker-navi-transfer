@@ -212,6 +212,36 @@ async def player_by_name(name: str, pos: str | None = None) -> dict | None:
         return None
 
 
+async def search_players(name: str, limit: int = 6) -> list[dict]:
+    """Name-based player DISCOVERY (cached). Light rows for onboarding/search where
+    no roster feed exists (e.g. NCAA). One EP call per NEW query; cached after."""
+    q = (name or "").strip()
+    if len(q) < 3 or not enabled():
+        return []
+    ckey = f"psearch:{q.lower()}"
+    hit = await _cache_get(ckey)
+    if hit is not None:
+        return hit.get("data") or []
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await _get(client, "/players", {"name": q, "limit": limit})
+        rows = (res or {}).get("data") or []
+        out = []
+        for p in rows:
+            latest = p.get("latestStats") or {}
+            lg = (latest.get("league") or {}).get("name") if isinstance(latest, dict) else None
+            tm = (latest.get("team") or {}).get("name") if isinstance(latest, dict) else None
+            sub = " · ".join(x for x in [p.get("position"), lg, tm] if x) or "Elite Prospects"
+            out.append({"ep_id": p.get("id"), "name": p.get("name"),
+                        "position": p.get("position"), "subtitle": sub,
+                        "image": p.get("imageUrl")})
+        await _cache_put(ckey, out, (CACHE_TTL if out else NEG_TTL))
+        return out
+    except Exception:
+        logger.exception("EP search_players failed for %r", q)
+        return []
+
+
 async def scorer_backgrounds(tp: dict, limit: int = 3) -> str:
     """A grounded fact-sheet snippet on a team's top scorers, for the Live Desk.
 

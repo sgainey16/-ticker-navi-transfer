@@ -52,7 +52,7 @@ def _side(card: dict, side: str) -> dict:
     pre = "Home" if side == "home" else "Visitor"
     final_or_live = card.get("GameStatus") in ("2", "3", "4")
     return {
-        "abbr": card.get(f"{pre}Code"),
+        "abbr": (card.get(f"{pre}Code") or "").upper() or None,
         "name": card.get(f"{pre}LongName") or f"{card.get(f'{pre}City','')} {card.get(f'{pre}Nickname','')}".strip(),
         "logo": card.get(f"{pre}Logo"),
         "score": _int(card.get(f"{pre}Goals")) if final_or_live else None,
@@ -88,7 +88,7 @@ class HockeyTechProvider(HockeyProvider):
             return self._team_cache["teams"]
         data = await _get(client, {**self._common("teamsbyseason")})
         teams = [{
-            "id": str(t.get("id")), "abbr": t.get("code"), "name": t.get("name"),
+            "id": str(t.get("id")), "abbr": (t.get("code") or "").upper(), "name": t.get("name"),
             "city": t.get("city"), "nickname": t.get("nickname"),
             "logo": t.get("team_logo_url"), "division": t.get("division_long_name"),
         } for t in data.get("Teamsbyseason", [])]
@@ -174,7 +174,7 @@ class HockeyTechProvider(HockeyProvider):
                     if not pid:
                         continue
                     name = (p.get("name") or f"{p.get('first_name','')} {p.get('last_name','')}").strip()
-                    abbr = p.get("current_team_code") or p.get("team_code") or ""
+                    abbr = (p.get("current_team_code") or p.get("team_code") or "").upper()
                     pos = p.get("position") or p.get("position_id") or ""
                     sub = LG + (f" · {pos}" if pos else "") + (f" · {abbr}" if abbr else "")
                     players_out.append({
@@ -229,7 +229,7 @@ class HockeyTechProvider(HockeyProvider):
         for section in (data[0].get("sections", []) if data else []):
             for entry in section.get("data", []):
                 row = entry.get("row", {})
-                abbr = row.get("team_code")
+                abbr = (row.get("team_code") or "").upper()
                 t = tindex.get(abbr, {})
                 div = (t.get("division") or "").lower()
                 conf_east = ("east" in div) or ("central" in div)
@@ -343,7 +343,7 @@ class HockeyTechProvider(HockeyProvider):
             rows = data.get("Statviewtype", []) if isinstance(data, dict) else []
         except Exception:
             return []
-        mine = [p for p in rows if (p.get("team_code") == tri)]
+        mine = [p for p in rows if ((p.get("team_code") or "").upper() == (tri or "").upper())]
         mine.sort(key=lambda x: _int(x.get("points")) or 0, reverse=True)
         out = []
         for p in mine[:limit]:
@@ -404,7 +404,7 @@ class HockeyTechProvider(HockeyProvider):
             data, people, scorers = await asyncio.gather(sb_task, roster_task, scorers_task)
 
             rows = data.get("Scorebar", []) if isinstance(data, dict) else []
-            mine = [c for c in rows if tri in (c.get("HomeCode"), c.get("VisitorCode"))]
+            mine = [c for c in rows if tri in ((c.get("HomeCode") or "").upper(), (c.get("VisitorCode") or "").upper())]
             finals = sorted([c for c in mine if c.get("GameStatus") == "4"], key=lambda c: c.get("GameDateISO8601") or "", reverse=True)
             upcoming = sorted([c for c in mine if c.get("GameStatus") == "1"], key=lambda c: c.get("GameDateISO8601") or "")
 
@@ -421,7 +421,7 @@ class HockeyTechProvider(HockeyProvider):
             last_game = None
             if finals:
                 fc = finals[0]
-                ha, aa = fc.get("HomeCode"), fc.get("VisitorCode")
+                ha, aa = (fc.get("HomeCode") or "").upper(), (fc.get("VisitorCode") or "").upper()
                 sc = await self._last_game_scorers(client, str(fc.get("ID")), ha, aa)
                 last_game = {
                     "id": str(fc.get("ID")), "date": fc.get("Date"),

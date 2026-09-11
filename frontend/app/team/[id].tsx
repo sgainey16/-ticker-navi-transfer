@@ -37,6 +37,7 @@ export default function TeamPage() {
   const { team, record, goals, form, scorers, goalie, recent, next: nextGame, roster } = q.data;
   const divisionTeams = (q.data as any).division_teams || [];
   const diff = goals.diff ?? 0;
+  const hasGoals = goals.gf != null || goals.ga != null;
   const gp = record.gp ?? ((record.wins || 0) + (record.losses || 0) + (record.ot || 0));
   const early = gp > 0 && gp < 10;
   const recForm = `${record.wins ?? 0}-${record.losses ?? 0}${record.ot ? `-${record.ot}` : ""}`;
@@ -70,7 +71,7 @@ export default function TeamPage() {
         <View style={styles.banner}>
           <NhlLogo abbr={team.abbr} url={team.logo} size={64} />
           <Text style={styles.name}>{team.name}</Text>
-          <Text style={styles.record}>{recForm}  ·  {record.points} PTS  ·  #{record.div_rank} {team.division}</Text>
+          <Text style={styles.record}>{recForm}{record.points != null ? `  ·  ${record.points} PTS` : ""}  ·  #{record.div_rank} {team.division}</Text>
         </View>
 
         {/* Reggie + Marc — ONE continuous desk: PLAY the show or TALK to join */}
@@ -85,10 +86,14 @@ export default function TeamPage() {
         {/* SEASON STRIP — stats support the story, they don't dominate */}
         <View style={styles.strip}>
           <StripStat label={early ? "START" : "RECORD"} value={recForm} />
-          <StripDivider />
-          <StripStat label="GF" value={goals.gf ?? "–"} />
-          <StripStat label="GA" value={goals.ga ?? "–"} />
-          <StripStat label="DIFF" value={`${diff > 0 ? "+" : ""}${diff}`} accent={diff >= 0 ? colors.blue : colors.red} />
+          {hasGoals ? (
+            <>
+              <StripDivider />
+              <StripStat label="GF" value={goals.gf ?? "–"} />
+              <StripStat label="GA" value={goals.ga ?? "–"} />
+              <StripStat label="DIFF" value={`${diff > 0 ? "+" : ""}${diff}`} accent={diff >= 0 ? colors.blue : colors.red} />
+            </>
+          ) : null}
           {hasL10 ? (<><StripDivider /><StripStat label="LAST 10" value={form.l10} /></>) : null}
         </View>
 

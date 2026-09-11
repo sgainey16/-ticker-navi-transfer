@@ -1,0 +1,64 @@
+{
+  "summary": "MOSTLY PASS with ONE real cross-cutting bug — QMJHL team routing is broken because HockeyTechProvider.team_page uppercases the tri-code, but QMJHL abbrs are mixed-case (Hal, BaC, SNB, Cha, She, VdO...). This single defect breaks BOTH /api/league/qmjhl/team/Hal (502) AND drops the QMJHL story from the mixed-league home_show rundown (via _home_personal_facts calling team_page('Hal')). Everything else is green. BACKEND (17/19 in /app/backend/tests/test_ncaa_multi_league.py, ~10s): NCAA search resolves Denver→DEN, Michigan→MICH, Minnesota→MINN, Boston University→BU; Barrie→OHL (BAR); Halifax→QMJHL (Hal); Celebrini→EP player. /api/league/ncaa/standings returns 62 Eastern[] rows + 6 conferences in groups[] (Big Ten, NCHC, Hockey East, ECAC Hockey, Atlantic Hockey, CCHA). /api/league/ncaa/team/DEN returns team.name='Denver Pioneers', record 20-1 with div_rank=1, goals.gf/ga=null (HONEST), scorers=[], division_teams length 9 (NCHC rail), recent[] has 6 finals including WIS @ DEN (2026-04-11), next=null (offseason as expected). /api/league/ncaa/scoreboard returns league_name='NCAA' + games[] non-empty. /api/league/ncaa/game/{finalId} returns {game:{status:'FINAL', home/away scores as ints, has_video:true}}. /api/league/ncaa/player/xyz?name=Macklin%20Celebrini returns an `ep` block with EP bio/draft/career. /api/ticker/home_segment with the 5-league mixed board returns state=ready + populated beats. /api/ticker/bridges?subject=DEN&league=ncaa returns non-empty lines[]. Regressions clean for WHL/KAM, OHL/BAR, NHL/MTL. FRONTEND (mobile 390x844): (a) /team/DEN?league=ncaa renders EXACTLY as specified — breadcrumb 'NCAA > NCHC > Denver Pioneers', identity '20-1 · #1 NCHC' with NO 'PTS' text, season strip shows RECORD only (NO GF / GA / DIFF cells), team logo is a 'DEN' monogram (no broken NHL crest network attempt — verified 0 nhle.com/DEN.svg image tags in DOM), LAST GAME shows WIS @ DEN Sat Apr 11, HIGHLIGHTS inline video block ('GAME RECAP · Denver vs Wisconsin · Verified video · Highlightly'), RECENT RESULTS list, AROUND THE NCHC rail with 9 conference teams, and NO 'Leading the Way' section. Reggie+Marc desk PLAY/TALK/STOP present (voice flow NOT exercised per freeze). (b) /team/BAR?league=ohl renders full page — breadcrumb 'OHL > Central Division > Colts', identity '2-2 · 4 PTS · #2 Central Division', season strip START|GF|GA|DIFF (2-2|13|15|-2), NEXT GAME, LEADING THE WAY scorers, IN GOAL, LAST GAME, AROUND THE CENTRAL DIVISION. (c) /team/Hal?league=qmjhl shows the 'Failed to load team — Tap to retry' error state (root cause: backend 502 from the uppercasing bug). (d) Onboarding /onboarding?reset=1 → welcome-go → onboard-search 'Denver' → result-team-DEN appears with 'Denver Pioneers' + 'NCAA · NCHC' subtitle + DEN monogram + selectable ADD button (testID confirmed). Console: 1 benign 'shadow*' style deprecation warning. Deprecated packages detected: none.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/league/qmjhl/team/{tri}",
+        "issue": "HockeyTechProvider.team_page uppercases `tri` (whl.py:383 `tri = (tri or ''"".upper()`) then does an exact-match lookup against standings abbrs. QMJHL feed abbrs are MIXED-CASE (Hal, BaC, SNB, Cha, She, VdO, ...), so the standings lookup never matches, raises ValueError('unknown WHL team'), and league_team wraps it into HTTPException 502. Reproduce: `curl {BASE}/api/league/qmjhl/team/Hal` → 502. Fix: either skip .upper() when self.code == 'qmjhl', or do a case-insensitive comparison in the standings lookup (`r['abbr'].lower() == tri.lower()`), or normalize the QMJHL abbrs at ingest. Reference: /app/backend/providers/whl.py:383, 389-391.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/ticker/home_show",
+        "issue": "Same root cause as above: with the 5-league Draft Board (MTL, KAM, BAR, Hal, DEN), the response is personalized:true with 4 stories but the QMJHL story for Hal is silently DROPPED because _home_personal_facts calls team_page('Hal') on the QMJHL provider and swallows the ValueError. Fix the whl.py uppercase and this test passes automatically.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "team/[id].tsx (QMJHL)",
+        "issue": "/team/Hal?league=qmjhl shows 'Failed to load team — Tap to retry' because the upstream /api/league/qmjhl/team/Hal returns 502. Not a frontend defect — the error state is the correct honest fallback — but user cannot open any QMJHL team page until the backend fix lands.",
+        "testID": "n/a",
+        "priority": "CRITICAL (blocked-by backend)"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Draft-Board home show (mixed 5-league)",
+        "issue": "QMJHL follow drops out of the story rundown because /api/league/qmjhl/team/{Hal} 502s inside _home_personal_facts. NHL/WHL/OHL/NCAA all resolve. Fix once at the whl.py case-normalization site.",
+        "affected_testIDs": ["home-show", "home-play"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "web-only style deprecation", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non-blocking, carry-over from prior iterations."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ncaa_multi_league.py",
+    "/app/test_reports/pytest/pytest_ncaa_multi_league.xml"
+  ],
+  "action_items": [
+    "Fix QMJHL abbr casing in HockeyTechProvider.team_page: remove the unconditional .upper() OR do case-insensitive lookup against standings abbrs. This single fix unblocks /api/league/qmjhl/team/Hal, /team/Hal?league=qmjhl frontend page, AND the missing QMJHL story in the mixed-league home_show rundown. Reference: /app/backend/providers/whl.py:383. Once fixed, re-run test_ncaa_multi_league.py — expect 19/19."
+  ],
+  "critical_code_review_comments": [
+    "providers/ncaa.py is a clean, HONEST adapter — goals gf/ga null, scorers=[], logo=None all propagate correctly to the team page and the UI hides those strips exactly as intended. Well done.",
+    "providers/registry.py:search_all now de-dupes by (type,id) so overlapping providers no longer produce React duplicate-key errors — a real fix from the iteration-20 finding.",
+    "providers/whl.py:377-391 has the ONE latent assumption that breaks QMJHL: `tri = tri.upper()` was safe for WHL/OHL (uppercase abbrs) but the QMJHL/HockeyTech feed uses mixed-case abbrs. Consider a per-league `abbr_norm` hook on the base provider rather than a hard uppercase in the shared chassis.",
+    "NhlLogo.tsx correctly derives its fallback from tri-code and falls back to a monogram on onError. For NCAA the network attempts a bogus nhle.com/DEN_light.svg but that image element is unmounted after onError before it's ever painted — verified 0 such <img> tags in the DOM after settle.",
+    "team/[id].tsx surface-toggles are gated correctly: no PTS in the identity strip when record.points is null; no GF/GA/DIFF cells when goals.gf/ga are null; no 'Leading the Way' when scorers is empty. All three NCAA omissions verified visually.",
+    "server.py:_home_show_stories tolerates a per-team ValueError and continues with the remaining follows — that's why QMJHL 502 silently drops one story rather than failing the whole response. Good defensive shape; the underlying provider bug is the real problem."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ncaa_multi_league.py (new — 19 pytest cases across 5 classes)",
+    "/app/test_reports/pytest/pytest_ncaa_multi_league.xml (new JUnit report)"
+  ],
+  "success_rate": {"backend": "89% (17/19; both failures share ONE root cause in whl.py)", "frontend": "75% (3/4 flows: DEN NCAA page PASS, BAR OHL page PASS, onboarding NCAA search PASS, Hal QMJHL page FAIL blocked by backend 502)"},
+  "seed_data_creation": "None — all live Highlightly + EP + HockeyTech data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 21 verified the NCAA thin-provider (Highlightly structure + EP people) end-to-end AND the shared HockeyTech chassis registration for OHL/QMJHL. The ONE outstanding bug is a case-normalization issue in providers/whl.py:383 where `tri = tri.upper()` silently breaks QMJHL (mixed-case abbrs like Hal, BaC, SNB). Fix that line and both /api/league/qmjhl/team/Hal (currently 502) and the missing-QMJHL-story issue in /api/ticker/home_show will resolve — re-run /app/backend/tests/test_ncaa_multi_league.py (expect 19/19) and re-visit /team/Hal?league=qmjhl on mobile (should render like /team/BAR?league=ohl). Everything else is green: DEN NCAA page renders exactly to spec (breadcrumb NCAA>NCHC>Denver Pioneers, 20-1 · #1 NCHC, RECORD-only strip, DEN monogram, LAST GAME, HIGHLIGHTS, NCHC conference rail, NO Leading the Way). Onboarding NCAA search selectable via testID result-team-DEN. Do NOT exercise Home Sports Desk PLAY/TALK/STOP or Team Live Desk mic (frozen per main-agent directive).",
+  "rca_of_issue": "ROOT CAUSE: /app/backend/providers/whl.py line 383 in HockeyTechProvider.team_page:\n    tri = (tri or '').upper()\nThe HockeyTech provider is registered for THREE leagues (WHL, OHL, QMJHL). WHL and OHL feeds use uppercase abbrs (KAM, BAR, PG) so the .upper() is a no-op. But the QMJHL/LHJMQ feed uses MIXED-CASE abbrs (Hal, BaC, SNB, Cha, She, VdO, Dru, Sha, BLB, Gat, Rou, Vic, Rim, Cap, NFL, Que, Mon, Chi). After .upper(), the row lookup at line 389 (`next((r for r in allrows if r['abbr'] == tri), None)`) never matches → raises ValueError('unknown WHL team') → league_team handler wraps into HTTPException 502.\n\nBLAST RADIUS:\n  1. /api/league/qmjhl/team/{any-tri} → 502 for every QMJHL team.\n  2. /team/Hal?league=qmjhl frontend → 'Failed to load team' error state.\n  3. /api/ticker/home_show with a QMJHL follow → the QMJHL story is silently dropped (personalized still true, other 4 stories return normally) because _home_personal_facts wraps team_page in try/except.\n\nMITIGATION (single-line fix, safe): replace line 383 with either\n  (a) `tri = (tri or '').strip()` (drop .upper() entirely — safe because line 389 already does exact-match compare with feed's own abbr casing), or\n  (b) case-insensitive lookup: change line 389 to `row = next((r for r in allrows if (r['abbr'] or '').lower() == (tri or '').lower()), None)`.\n\nOption (b) is more defensive against future feeds; option (a) is minimal-diff. After the fix, /api/league/qmjhl/team/Hal returns a valid team page and the home_show rundown will include the QMJHL story."
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 from providers.base import HockeyProvider
 from providers.nhl import NHLProvider
 from providers.whl import HockeyTechProvider
+from providers.ncaa import NCAAProvider
 
 DEFAULT_LEAGUE = "nhl"
 
@@ -17,6 +18,8 @@ _PROVIDERS: dict[str, HockeyProvider] = {
     "whl": HockeyTechProvider("whl", "Western Hockey League", "whl", "f1aa699db3d81487"),
     "ohl": HockeyTechProvider("ohl", "Ontario Hockey League", "ohl", "f1aa699db3d81487"),
     "qmjhl": HockeyTechProvider("qmjhl", "Quebec Maritimes Junior Hockey League", "lhjmq", "f322673b6bcae299"),
+    # Highlightly (structure/video) + Elite Prospects (people) — thin but honest.
+    "ncaa": NCAAProvider(),
 }
 
 

@@ -88,6 +88,99 @@ async def _recent_highlights(league: str, limit: int = 40) -> list[dict]:
     return data
 
 
+# --------------------------------------------------------------------------- structure (standings/schedule)
+_STRUCT_TTL = 900.0
+_SEASON_TTL = 24 * 3600.0
+
+
+async def _season(league: str):
+    """The latest season that actually HAS data (offseason-safe), cached a day."""
+    lid = HL_LEAGUES.get(league.lower())
+    if not lid or not enabled():
+        return None
+    ckey = f"season:{lid}"
+    hit = _CACHE.get(ckey)
+    if hit and (time.time() - hit["ts"] < _SEASON_TTL):
+        return hit["data"]
+    chosen = None
+    try:
+        async with httpx.AsyncClient() as client:
+            meta = await _get(client, f"/leagues/{lid}", {})
+            seasons: list[int] = []
+            if isinstance(meta, list) and meta:
+                seasons = [s.get("season") for s in (meta[0].get("seasons") or []) if s.get("season")]
+            for yr in sorted(set(seasons), reverse=True)[:3]:
+                r = await client.get(f"{BASE}/standings", params={"leagueId": lid, "season": yr},
+                                     headers={"x-rapidapi-key": _key()}, timeout=20)
+                if r.status_code == 200 and (r.json() or {}).get("groups"):
+                    chosen = yr
+                    break
+            if chosen is None and seasons:
+                chosen = max(seasons)
+    except Exception:
+        logger.exception("Highlightly season resolve failed for %s", league)
+    _CACHE[ckey] = {"ts": time.time(), "data": chosen}
+    return chosen
+
+
+async def standings(league: str) -> list[dict]:
+    """Conference standings groups for a league (cached). [] when unsupported."""
+    lid = HL_LEAGUES.get(league.lower())
+    if not lid or not enabled():
+        return []
+    season = await _season(league)
+    if not season:
+        return []
+    ckey = f"stand:{lid}:{season}"
+    hit = _CACHE.get(ckey)
+    if hit and (time.time() - hit["ts"] < _STRUCT_TTL):
+        return hit["data"]
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{BASE}/standings", params={"leagueId": lid, "season": season},
+                                 headers={"x-rapidapi-key": _key()}, timeout=20)
+            r.raise_for_status()
+            groups = (r.json() or {}).get("groups", [])
+    except Exception:
+        logger.exception("Highlightly standings failed for %s", league)
+        return hit["data"] if hit else []
+    _CACHE[ckey] = {"ts": time.time(), "data": groups}
+    return groups
+
+
+async def matches(league: str, limit: int = 300) -> list[dict]:
+    """Schedule + scores for a league's current-data season (cached). [] when none."""
+    lid = HL_LEAGUES.get(league.lower())
+    if not lid or not enabled():
+        return []
+    season = await _season(league)
+    if not season:
+        return []
+    ckey = f"matches:{lid}:{season}"
+    hit = _CACHE.get(ckey)
+    if hit and (time.time() - hit["ts"] < _STRUCT_TTL):
+        return hit["data"]
+    out: list[dict] = []
+    try:
+        async with httpx.AsyncClient() as client:
+            off = 0
+            while len(out) < limit:
+                page = await _get(client, "/matches",
+                                  {"leagueId": lid, "season": season, "limit": 100, "offset": off})
+                if not page:
+                    break
+                out.extend(page)
+                if len(page) < 100:
+                    break
+                off += 100
+    except Exception:
+        logger.exception("Highlightly matches failed for %s", league)
+        return hit["data"] if hit else []
+    out = out[:limit]
+    _CACHE[ckey] = {"ts": time.time(), "data": out}
+    return out
+
+
 # --------------------------------------------------------------------------- normalize
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "")
