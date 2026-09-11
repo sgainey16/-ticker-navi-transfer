@@ -34,7 +34,13 @@ async def _get(client: httpx.AsyncClient, params: dict) -> dict:
     return r.json().get("SiteKit", {})
 
 
+async def _noop_list():
+    return []
+
+
 _TEAM_CACHE: dict = {"ts": 0.0, "teams": []}
+_SEASON_CACHE: dict = {"ts": 0.0, "id": None}
+_TEAMPAGE_CACHE: dict = {}   # tri -> {"ts": float, "data": dict}
 
 
 async def _team_index(client: httpx.AsyncClient) -> list[dict]:
@@ -100,14 +106,21 @@ class WHLProvider(HockeyProvider):
     async def _active_season(self, client: httpx.AsyncClient) -> str:
         """Season whose date range contains today (preseason/regular), else newest."""
         from datetime import date
+        if _SEASON_CACHE["id"] and (time.time() - _SEASON_CACHE["ts"] < 3600):
+            return _SEASON_CACHE["id"]
         data = await _get(client, {**_common("seasons")})
         seasons = data.get("Seasons", []) if isinstance(data, dict) else []
         today = date.today().isoformat()
+        chosen = None
         for s in seasons:
             sd, ed = s.get("start_date"), s.get("end_date")
             if sd and ed and sd <= today <= ed:
-                return str(s.get("season_id"))
-        return str(seasons[0]["season_id"]) if seasons else "295"
+                chosen = str(s.get("season_id"))
+                break
+        if not chosen:
+            chosen = str(seasons[0]["season_id"]) if seasons else "295"
+        _SEASON_CACHE.update(ts=time.time(), id=chosen)
+        return chosen
 
     async def scoreboard_now(self) -> dict:
         """Upcoming/live WHL games (NEXT). Real HockeyTech scorebar."""
@@ -341,7 +354,8 @@ class WHLProvider(HockeyProvider):
         for p in mine[:limit]:
             out.append({"player_id": str(p.get("player_id") or ""), "name": p.get("name"),
                         "pos": p.get("position"), "goals": _int(p.get("goals")),
-                        "assists": _int(p.get("assists")), "points": _int(p.get("points"))})
+                        "assists": _int(p.get("assists")), "points": _int(p.get("points")),
+                        "gp": _int(p.get("games_played"))})
         return out
 
     async def _last_game_scorers(self, client: httpx.AsyncClient, game_id: str, home_abbr: str, away_abbr: str) -> list[dict]:
@@ -370,7 +384,11 @@ class WHLProvider(HockeyProvider):
         for the Live Desk — roster (with goalies), coach, team scorers, and the
         last game's goal scorers. Every field comes straight from HockeyTech;
         anything the feed doesn't have is simply omitted, never fabricated."""
+        import asyncio
         tri = (tri or "").upper()
+        hit = _TEAMPAGE_CACHE.get(tri)
+        if hit and (time.time() - hit["ts"] < 90):
+            return hit["data"]
         stand = await self.standings_now()
         allrows = stand["Eastern"] + stand["Western"]
         row = next((r for r in allrows if r["abbr"] == tri), None)
@@ -383,13 +401,18 @@ class WHLProvider(HockeyProvider):
             season = await self._active_season(client)
             tindex = {t["abbr"]: t for t in await _team_index(client)}
             team_id = (tindex.get(tri) or {}).get("id")
-            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 30, "numberofdaysback": 30})
+
+            # independent lookups run concurrently (biggest latency win)
+            sb_task = _get(client, {**_common("scorebar"), "numberofdaysahead": 30, "numberofdaysback": 30})
+            roster_task = self._roster(client, team_id, season) if team_id else _noop_list()
+            scorers_task = self._team_scorers(client, tri, season)
+            data, people, scorers = await asyncio.gather(sb_task, roster_task, scorers_task)
+
             rows = data.get("Scorebar", []) if isinstance(data, dict) else []
             mine = [c for c in rows if tri in (c.get("HomeCode"), c.get("VisitorCode"))]
             finals = sorted([c for c in mine if c.get("GameStatus") == "4"], key=lambda c: c.get("GameDateISO8601") or "", reverse=True)
             upcoming = sorted([c for c in mine if c.get("GameStatus") == "1"], key=lambda c: c.get("GameDateISO8601") or "")
 
-            people = await self._roster(client, team_id, season) if team_id else []
             players = [p for p in people if (p.get("position") and "Coach" not in (p.get("role") or ""))]
             coach = next((self._fullname(p) for p in people if "Coach" in (p.get("role") or "")), None)
 
@@ -399,8 +422,6 @@ class WHLProvider(HockeyProvider):
             goalies = [_mk(p) for p in players if (p.get("position") or "").upper() in ("G", "GOALIE", "GOALTENDER")]
             forwards = [_mk(p) for p in players if (p.get("position") or "").upper() in ("C", "LW", "RW", "F")]
             defensemen = [_mk(p) for p in players if (p.get("position") or "").upper() in ("D", "LD", "RD")]
-
-            scorers = await self._team_scorers(client, tri, season)
 
             last_game = None
             if finals:
@@ -417,16 +438,20 @@ class WHLProvider(HockeyProvider):
         gf, ga = row["gf"], row["ga"]
         goalie = ({"player_id": goalies[0]["player_id"], "name": goalies[0]["name"], "record": None,
                    "svpct": None, "gaa": None} if goalies else None)
-        return {
+        result = {
             "team": {"abbr": tri, "name": row["name"], "short": row["short"], "logo": row["logo"],
                      "division": row["division"], "conference": row["conference"]},
             "record": {"wins": row["wins"], "losses": row["losses"], "ot": row["ot"],
-                       "points": row["points"], "conf_rank": row["conf_rank"], "div_rank": div_rank},
+                       "points": row["points"], "gp": row.get("gp"), "conf_rank": row["conf_rank"], "div_rank": div_rank},
             "goals": {"gf": gf, "ga": ga, "diff": (gf - ga) if (gf is not None and ga is not None) else 0},
             "form": {"l10": "–", "streak": row.get("streak") or "–", "home": "–", "road": "–"},
             "coach": coach,
+            "division_teams": [{"abbr": r["abbr"], "name": r["name"], "short": r["short"], "logo": r["logo"],
+                                "wins": r["wins"], "losses": r["losses"], "ot": r["ot"], "points": r["points"],
+                                "gp": r.get("gp"), "div_rank": i + 1}
+                               for i, r in enumerate(divteams)],
             "scorers": [{"player_id": s["player_id"], "name": s["name"], "pos": s["pos"],
-                         "goals": s["goals"], "assists": s["assists"], "points": s["points"]} for s in scorers],
+                         "goals": s["goals"], "assists": s["assists"], "points": s["points"], "gp": s.get("gp")} for s in scorers],
             "goalie": goalie,
             "goalies": goalies,
             "recent": [self._card(c) for c in finals[:5]],
@@ -435,6 +460,8 @@ class WHLProvider(HockeyProvider):
             "roster": ({"forwards": forwards, "defensemen": defensemen, "goalies": goalies}
                        if (forwards or defensemen or goalies) else None),
         }
+        _TEAMPAGE_CACHE[tri] = {"ts": time.time(), "data": result}
+        return result
 
     async def player_page(self, pid: str) -> dict:
         raise ValueError("WHL player page not available yet")

@@ -465,9 +465,21 @@ async def team_page(tri: str) -> dict:
             "number": p.get("sweaterNumber"), "pos": p.get("positionCode"),
         } for p in roster.get(group, [])]
 
+    div_name = row.get("divisionName")
+    division_teams = []
+    for i, r in enumerate(sorted([x for x in standings_data.get("standings", []) if x.get("divisionName") == div_name],
+                                 key=lambda x: (x.get("divisionSequence") or 99))):
+        division_teams.append({
+            "abbr": _n(r.get("teamAbbrev")), "name": _n(r.get("teamName")),
+            "short": _n(r.get("teamCommonName")), "logo": r.get("teamLogo"),
+            "wins": r.get("wins"), "losses": r.get("losses"), "ot": r.get("otLosses"),
+            "points": r.get("points"), "gp": r.get("gamesPlayed"), "div_rank": r.get("divisionSequence"),
+        })
+
     return {
         "team": team, "record": record, "goals": goals, "form": form,
         "scorers": scorers, "goalie": goalie,
+        "division_teams": division_teams,
         "recent": recent, "next": nxt,
         "roster": {"forwards": _people("forwards"), "defensemen": _people("defensemen"), "goalies": _people("goalies")},
     }

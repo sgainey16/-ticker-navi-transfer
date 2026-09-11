@@ -1,0 +1,34 @@
+{
+  "summary": "PASS — Team Page Navigation + Energy + Performance pass verified end-to-end. BACKEND (10/10 in /app/backend/tests/test_team_nav.py, 2.28s): GET /api/league/whl/team/PG returns team{abbr:PG, division:'B.C. Division'}, record.gp=2, division_teams=[KAM,PEN,VAN,VIC,KEL,PG] with abbr+logo+div_rank per row, and scorers[].gp populated (int). GET /api/nhl/team/VGK returns team.division='Pacific', record.gp=82, and division_teams length == 8 including VGK,EDM,ANA,LAK,SJS,SEA,CGY,VAN. GET /api/league/whl/standings still 200. FRONTEND (mobile viewport 390x844, /team/PG?league=whl): (a) Breadcrumb rendered exactly 'WHL > B.C. Division > Cougars' with data-testid crumb-league and crumb-division as tappable chips. (b) crumb-league navigated to /league/whl and the hub renders 'Western Hockey League' + all four WHL divisions grouped, with a league-team-{abbr} row per team (league-team-KAM present + league-team-PG present); tapping league-team-KAM navigated to /team/KAM?league=whl and the KAM page mounted showing 'Kamloops Blazers' (2-0-1, #1 B.C. Division). (c) crumb-division navigated to /league/whl?division=B.C.%20Division and the division header order was ['B.C. Division','East Division','Central Division','U.S. Division'] — B.C. Division floated to top as required. (d) 'Next Game' card renders with testID team-next; the KAM opponent chip (testID next-team-KAM) navigated to /team/KAM. (e) 'Around the B.C. Division' rail rendered 6 cards with correct testIDs (division-team-KAM/PEN/VAN/VIC/KEL/PG); division-team-KEL tap → /team/KEL (Rockets); division-team-PG (self) is aria-disabled=true and has tabIndex=-1 (non-interactive). (f) 'Leading the Way' scorer row for Jonathan Bitonti navigated to /player/30690?league=whl. (g) Early-season intelligence CORRECT: read line = 'Cougars are 0-2 to start the season, #6 in the B.C. Division.' — contains 'to start the season', does NOT contain 'over their last 10'; season strip cells = START | GF | GA | DIFF (values 0-2 | 1 | 14 | -13) with NO 'LAST 10' cell (PG has 2 GP). (h) Desk safe zone: PLAY, TALK, STOP all present, visible, tappable; title 'PRINCE GEORGE COUGARS · ON THE DESK' sits above the button row (screenshot verified). Live Desk voice flow was NOT exercised per instruction. (i) NHL parity /team/VGK renders identity + Reggie+Marc desk + 'AROUND THE PACIFIC' rail with 8 division cards (VGK,EDM,ANA,LAK,SJS,SEA,CGY,VAN) + season strip that correctly switches to 'RECORD' (not START) and shows the 'LAST 10' cell (7-0-3) because VGK has 82 GP (>=10). Zero page errors, zero console errors across all 7 UI checks. Two benign deprecation warnings only (see react_native_issues). Deprecated packages detected: none.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "web-only style deprecation", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — web-only React Native shim complaint from some upstream style. Non-blocking; suggest sweeping styles to boxShadow at leisure."},
+      {"component": "web-only prop deprecation", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents.' — appears from LinearGradient overlay in TeamDesk.tsx:231 (pointerEvents=\"none\"). Non-blocking; move to style={{pointerEvents:'none'}} when convenient."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_team_nav.py",
+    "/app/test_reports/pytest/pytest_team_nav.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "team/[id].tsx: crumb-league and crumb-division are keyboard-focusable Pressables with distinct testIDs — good. division rail correctly disables the self-card via `disabled={here}` and skips both prefetch and router.push in onPress, and the visual `styles.divCardHere` treatment provides a clear 'you are here' cue. Verified aria-disabled=true on web.",
+    "team/[id].tsx: early-season logic `early = gp>0 && gp<10` gates BOTH the read-line copy AND the LAST 10 strip cell (`hasL10 = !early && !!form.l10 && form.l10 !== '–'`). Correct behavior confirmed on PG (2 GP -> no LAST 10) and VGK (82 GP -> LAST 10 shown).",
+    "league/[code].tsx: `division` query param floats matching division to the top via a stable sort (`a.name === division ? -1 : b.name === division ? 1 : 0`) — other divisions keep their natural order. Confirmed order on tap: [B.C. Division, East Division, Central Division, U.S. Division].",
+    "lib/cache.ts: 60s TTL map + `prefetchTeam` fired on `onPressIn` for both league-team-* rows and division-team-* cards makes sideways moves feel instant. Simple, correct, no memory leak (single Map keyed by `league:abbr`).",
+    "TeamDesk.tsx: PLAY/TALK/STOP controls sit inside a `.bottom` container with a protected `lowerThird` gradient behind them, and the title uses `numberOfLines={2}`. Buttons remain fully visible and tappable regardless of title length — verified visually on PG and VGK.",
+    "Live Desk voice flow (converse / TTS / recorder) was NOT invoked in this test pass per the freeze directive. Only visibility + disabled-state checks on PLAY/TALK/STOP were performed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_team_nav.py (new — 10 pytest cases across 3 classes)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (7/7 UI flows: crumb-league, crumb-division float, league-team row, division-team rail, next-team, player nav, NHL VGK parity)"},
+  "seed_data_creation": "None — live WHL PG (2 GP early season) and live NHL VGK (82 GP) endpoints drove all tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New routes: /league/[code] renders LEAGUE_NAMES[code] + standings grouped by division; supports ?division=<name> to float that division to top. Team page /team/[id]?league=<code> uses `league || 'nhl'` and appends `?league=<code>` (empty for nhl) to all downstream nav. testIDs to know: crumb-league, crumb-division, league-team-<ABBR>, division-team-<ABBR> (self-card is disabled + aria-disabled=true), team-next, next-team-<ABBR>, team-desk, desk-play, desk-talk, desk-stop. Early-season rule: `early = 0 < gp < 10` drives both read-line copy ('to start the season' vs 'over their last 10') and the LAST 10 season-strip cell (hidden when early). Backend contract confirmed: /api/league/whl/team/PG => {team, record{gp}, division_teams[{abbr,logo,div_rank,wins,losses,ot,short}], scorers[{player_id,name,pos,goals,assists,points,gp}], ...}; /api/nhl/team/VGK => division_teams length 8. Live Desk voice (desk-talk mic + /api/ticker/converse + /api/ticker/bridges) remains FROZEN — not exercised in this pass."
+}

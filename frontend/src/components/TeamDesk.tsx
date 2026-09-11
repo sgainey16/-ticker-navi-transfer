@@ -227,6 +227,8 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
       <View style={styles.panel}>
         <Image source={DESK} style={StyleSheet.absoluteFill} contentFit="cover" />
         <LinearGradient colors={["rgba(5,7,12,0.30)", "rgba(5,7,12,0.66)", "rgba(5,7,12,0.96)"]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+        {/* protected lower-third: keeps title + controls readable and off the hosts' faces */}
+        <LinearGradient colors={["rgba(5,7,12,0)", "rgba(5,7,12,0.9)", "rgba(5,7,12,0.99)"]} locations={[0, 0.4, 1]} style={[styles.lowerThird, { pointerEvents: "none" }]} />
 
         <View style={styles.top}>
           <View style={styles.deskTag}><Ionicons name="mic" size={11} color={colors.blue} /><Text style={styles.deskTagText}>REGGIE + MARC</Text></View>
@@ -332,7 +334,8 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 196, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
+  panel: { height: 216, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
+  lowerThird: { position: "absolute", left: 0, right: 0, bottom: 0, height: 150 },
   top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.md },
   deskTag: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
   deskTagText: { color: colors.white, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
@@ -340,9 +343,9 @@ const styles = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 4 },
   onairText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
 
-  bottom: { padding: spacing.lg, gap: 6 },
+  bottom: { padding: spacing.lg, paddingTop: spacing.md, gap: 7 },
   tag: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 2 },
-  title: { color: colors.white, fontFamily: fonts.display, fontSize: 23, fontWeight: "800", letterSpacing: 0.4 },
+  title: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
 
   levelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   levelTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },

@@ -141,3 +141,37 @@
 ## agent_communication:
 ##   - agent: "main"
 ##     message: "Please test: (1) GET /api/highlights?league=nhl&limit=5 returns clips with youtube_id+thumbnail+title. (2) GET /api/highlights/match for NHL game 2025030416 (home='Vegas Golden Knights' away='Carolina Hurricanes' date='2026-06-15T00:00:00Z') returns recap with youtube_id 3jbQ58HKtXA. (3) /api/leagues includes capabilities.video=true for nhl/whl. (4) unsupported/empty case: match with nonsense teams returns recap:null, clips:[]. (5) Frontend: /game/2025030416 shows HIGHLIGHTS section with recap thumbnail above GAME DESK; module renders nothing on a game with no match. Do NOT test Live Desk PLAY/TALK/STOP (frozen)."
+
+## user_problem_statement (Team Page pass): "Team Page Navigation + Energy + Performance. Prince George (WHL PG) is the test case. Add League→Division→Team→Game→Player navigation with sideways movement; protect the Reggie+Marc desk safe zone (no interaction change to PLAY·TALK·STOP); rethink below-desk energy (people/games/stories, stats support not dominate); fix early-season intelligence (no 'last 10' when <10 GP); improve performance."
+
+## backend:
+##   - task: "WHL/NHL team_page: division_teams + gp + parallelized fetch + cache"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/providers/whl.py, /app/backend/providers/nhl.py"
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "WHL team_page now parallelizes scorebar/roster/scorers (asyncio.gather), caches _active_season (1h) + team_page result (90s) -> PG cold 1.16s, warm 0.01s. Added record.gp, scorers[].gp, and division_teams (division standings). NHL team_page also returns division_teams for parity. Verified: PG division_teams=[KAM#1..PG#6], record.gp=2, scorer gp=2; VGK division_teams=8, gp=82."
+
+## frontend:
+##   - task: "Team page redesign: breadcrumb nav, desk safe zone, energy, early-season, division rail, cache/prefetch"
+##     implemented: true
+##     working: true
+##     file: "/app/frontend/app/team/[id].tsx, /app/frontend/app/league/[code].tsx, /app/frontend/src/components/TeamDesk.tsx, /app/frontend/src/lib/cache.ts"
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "Breadcrumb WHL > B.C. Division > Cougars (WHL->/league/whl, division->/league/whl?division=). Next-game opponent (KAM) individually tappable -> team; card -> game. 'Around the B.C. Division' rail: every rival tappable (prefetch on pressIn). Scorer/goalie/roster tappable -> player. Last Game section renders HighlightsModule (Highlightly video, nothing if unmatched). Early-season: shows '0-2 to start the season' + hides LAST 10 when gp<10 (generic via record.gp). Big GF/GA/DIFF grid replaced with compact season strip. Desk: added protected lower-third scrim + 1-line title (faces readable, PLAY/TALK/STOP fully visible) - NO interaction change. New reusable /league/[code] hub: standings by division, tappable teams, division param floats that division to top. Cache+prefetch make team<->team hops instant. Verified via screenshots on PG + league hub."
+
+## test_plan:
+##   current_focus:
+##     - "Team page redesign: breadcrumb nav, desk safe zone, energy, early-season, division rail, cache/prefetch"
+##     - "WHL/NHL team_page: division_teams + gp + parallelized fetch + cache"
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+
+## agent_communication:
+##   - agent: "main"
+##     message: "Test Prince George navigation flow (WHL, /team/PG?league=whl): (1) breadcrumb 'WHL' chip -> /league/whl hub; 'B.C. Division' chip -> hub with B.C. Division on top. (2) League hub rows tappable -> team pages. (3) Next Game: tapping KAM logo/abbr -> /team/KAM?league=whl; tapping elsewhere on card -> /game/{id}. (4) 'Around the B.C. Division' rail cards -> other team pages (Kelowna, Victoria, etc). (5) 'Leading the Way' scorer row -> /player/{id}. (6) Recent/Last Game card -> /game/{id}. (7) Early-season: read line says 'to start the season', NO 'over their last 10', season strip shows START/GF/GA/DIFF (no LAST 10 at gp<10). (8) Desk controls PLAY/TALK/STOP visible & tappable and title not obscuring — but DO NOT exercise the mic/converse (Live Desk FROZEN). (9) NHL parity: /team/VGK still renders with division rail. Backend: GET /api/league/whl/team/PG has division_teams+record.gp+scorers gp; GET /api/nhl/team/VGK has division_teams. Focus frontend nav + these backend fields; skip Live Desk voice interaction."

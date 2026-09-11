@@ -4,11 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
-import { api } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
+import { loadTeam, prefetchTeam } from "@/src/lib/cache";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { TeamDesk } from "@/src/components/TeamDesk";
+import { HighlightsModule } from "@/src/components/HighlightsModule";
 
 function niceDate(iso?: string) {
   if (!iso) return "";
@@ -28,60 +29,81 @@ export default function TeamPage() {
   const isNhl = lg === "nhl";
   const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
-  const q = useApi(() => (isNhl ? api.nhlTeam(id) : api.leagueTeam(lg, id)), [id, lg]);
+  const q = useApi(() => loadTeam(lg, id), [id, lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the team…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load team" onRetry={q.reload} /></Screen>;
 
   const { team, record, goals, form, scorers, goalie, recent, next: nextGame, roster } = q.data;
+  const divisionTeams = (q.data as any).division_teams || [];
   const diff = goals.diff ?? 0;
+  const gp = record.gp ?? ((record.wins || 0) + (record.losses || 0) + (record.ot || 0));
+  const early = gp > 0 && gp < 10;
+  const recForm = `${record.wins ?? 0}-${record.losses ?? 0}${record.ot ? `-${record.ot}` : ""}`;
+  const hasL10 = !early && !!form.l10 && form.l10 !== "–";
+  const readLine = early
+    ? `${team.short} are ${record.wins ?? 0}-${record.losses ?? 0} to start the season, #${record.div_rank} in the ${team.division}.`
+    : hasL10
+      ? `${team.short} sit #${record.div_rank} in the ${team.division}, ${form.l10} over their last 10.`
+      : `${team.short} sit #${record.div_rank} in the ${team.division} at ${recForm}.`;
+  const lastFinal = recent && recent.length ? recent[0] : null;
 
   return (
     <Screen>
       <BackBar />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* CONTEXT BREADCRUMB — move up & sideways, never trapped */}
+        <View style={styles.crumbs}>
+          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}`)} testID="crumb-league">
+            <Ionicons name="layers-outline" size={12} color={colors.blue} />
+            <Text style={styles.crumbText}>{lg.toUpperCase()}</Text>
+          </Pressable>
+          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
+          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}?division=${encodeURIComponent(team.division || "")}`)} testID="crumb-division">
+            <Text style={styles.crumbText} numberOfLines={1}>{team.division}</Text>
+          </Pressable>
+          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
+          <Text style={styles.crumbHere} numberOfLines={1}>{team.short}</Text>
+        </View>
+
         {/* IDENTITY */}
         <View style={styles.banner}>
-          <NhlLogo abbr={team.abbr} url={team.logo} size={68} />
+          <NhlLogo abbr={team.abbr} url={team.logo} size={64} />
           <Text style={styles.name}>{team.name}</Text>
-          <Text style={styles.meta}>#{record.div_rank} {team.division} · #{record.conf_rank} {team.conference}</Text>
-          <Text style={styles.record}>{record.wins}-{record.losses}-{record.ot}  ·  {record.points} PTS</Text>
+          <Text style={styles.record}>{recForm}  ·  {record.points} PTS  ·  #{record.div_rank} {team.division}</Text>
         </View>
 
         {/* Reggie + Marc — ONE continuous desk: PLAY the show or TALK to join */}
         <TeamDesk subject={id} league={lg} fallbackTitle={`${team.name.toUpperCase()} · ON THE DESK`} />
 
-        {/* TICKER READ — verified data restated, one line (no second host panel) */}
+        {/* TICKER READ — one grounded line, sample-size aware */}
         <View style={styles.read}>
           <Ionicons name="mic" size={13} color={colors.blue} />
-          <Text style={styles.readText}>
-            {team.short} sit #{record.div_rank} in the {team.division}, {form.l10} over their last 10 ({form.streak}).
-          </Text>
+          <Text style={styles.readText}>{readLine}</Text>
         </View>
 
-        {/* KEY NUMBERS */}
-        <View style={styles.grid}>
-          <Stat label="GF" value={goals.gf} />
-          <Stat label="GA" value={goals.ga} />
-          <Stat label="DIFF" value={`${diff > 0 ? "+" : ""}${diff}`} accent={diff >= 0 ? colors.blue : colors.red} />
-          <Stat label="L10" value={form.l10} />
-          <Stat label="HOME" value={form.home} />
-          <Stat label="ROAD" value={form.road} />
+        {/* SEASON STRIP — stats support the story, they don't dominate */}
+        <View style={styles.strip}>
+          <StripStat label={early ? "START" : "RECORD"} value={recForm} />
+          <StripDivider />
+          <StripStat label="GF" value={goals.gf ?? "–"} />
+          <StripStat label="GA" value={goals.ga ?? "–"} />
+          <StripStat label="DIFF" value={`${diff > 0 ? "+" : ""}${diff}`} accent={diff >= 0 ? colors.blue : colors.red} />
+          {hasL10 ? (<><StripDivider /><StripStat label="LAST 10" value={form.l10} /></>) : null}
         </View>
 
-        {/* NEXT GAME */}
+        {/* NEXT GAME — opponent tappable (jump straight to Kamloops), card opens the game */}
         {nextGame ? (
           <View style={styles.section}>
             <SectionTitle title="Next Game" accent={colors.blue} />
             <Pressable style={styles.card} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}${lq}`)}>
               <View style={styles.gRow}>
-                <NhlLogo abbr={nextGame.away.abbr} url={nextGame.away.logo} size={26} />
-                <Text style={styles.gAbbr}>{nextGame.away.abbr}</Text>
+                <TeamTap abbr={nextGame.away.abbr} logo={nextGame.away.logo} onPress={() => { prefetchTeam(lg, nextGame.away.abbr); router.push(`/team/${nextGame.away.abbr}${lq}`); }} />
                 <Text style={styles.gAt}>@</Text>
-                <Text style={styles.gAbbr}>{nextGame.home.abbr}</Text>
-                <NhlLogo abbr={nextGame.home.abbr} url={nextGame.home.logo} size={26} />
+                <TeamTap abbr={nextGame.home.abbr} logo={nextGame.home.logo} onPress={() => { prefetchTeam(lg, nextGame.home.abbr); router.push(`/team/${nextGame.home.abbr}${lq}`); }} />
                 <View style={{ flex: 1 }} />
                 <Text style={styles.gWhen}>{niceDate(nextGame.date)}{nextGame.start_utc ? `\n${fmtTime(nextGame.start_utc)}` : ""}</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textFaint} />
               </View>
             </Pressable>
           </View>
@@ -97,7 +119,7 @@ export default function TeamPage() {
                   <Text style={styles.pRank}>{i + 1}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pName}>{s.name}</Text>
-                    <Text style={styles.pMeta}>{s.pos} · {s.gp} GP</Text>
+                    <Text style={styles.pMeta}>{s.pos}{s.gp != null ? ` · ${s.gp} GP` : ""}</Text>
                   </View>
                   <Text style={styles.pPts}>{s.points}</Text>
                   <Text style={styles.pSub}>{s.goals}G {s.assists}A</Text>
@@ -124,14 +146,32 @@ export default function TeamPage() {
           </View>
         ) : null}
 
-        {/* TEAM HIGHLIGHTS — reserved future slot; renders nothing until a real source exists. */}
+        {/* LAST GAME — watch it: verified Highlightly video (renders nothing if none matched) */}
+        {lastFinal ? (
+          <View style={styles.section}>
+            <SectionTitle title="Last Game" accent={colors.blue} />
+            <Pressable style={styles.card} onPress={() => router.push(`/game/${lastFinal.id}${lq}`)}>
+              <View style={styles.gRow}>
+                <NhlLogo abbr={lastFinal.away.abbr} url={lastFinal.away.logo} size={24} />
+                <Text style={styles.gAbbr}>{lastFinal.away.abbr} {lastFinal.away.score ?? ""}</Text>
+                <Text style={styles.gAt}>–</Text>
+                <Text style={styles.gAbbr}>{lastFinal.home.score ?? ""} {lastFinal.home.abbr}</Text>
+                <NhlLogo abbr={lastFinal.home.abbr} url={lastFinal.home.logo} size={24} />
+                <View style={{ flex: 1 }} />
+                <Text style={styles.gWhen}>{niceDate(lastFinal.date)}</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textFaint} />
+              </View>
+            </Pressable>
+            <HighlightsModule league={lg} home={lastFinal.home?.name} away={lastFinal.away?.name} date={lastFinal.start_utc || lastFinal.date} />
+          </View>
+        ) : null}
 
-        {/* RECENT RESULTS */}
-        {recent?.length ? (
+        {/* RECENT RESULTS (older finals) */}
+        {recent && recent.length > 1 ? (
           <View style={styles.section}>
             <SectionTitle title="Recent Results" accent={colors.blue} />
             <View style={{ gap: spacing.sm }}>
-              {recent.map((g: any) => (
+              {recent.slice(1).map((g: any) => (
                 <Pressable key={g.id} style={styles.card} onPress={() => router.push(`/game/${g.id}${lq}`)}>
                   <View style={styles.gRow}>
                     <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={24} />
@@ -145,6 +185,33 @@ export default function TeamPage() {
                 </Pressable>
               ))}
             </View>
+          </View>
+        ) : null}
+
+        {/* AROUND THE DIVISION — sideways movement to every rival (incl. Kamloops) */}
+        {divisionTeams.length ? (
+          <View style={styles.section}>
+            <SectionTitle title={`Around the ${team.division}`} accent={colors.blue} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+              {divisionTeams.map((d: any) => {
+                const here = d.abbr === team.abbr;
+                return (
+                  <Pressable
+                    key={d.abbr}
+                    style={[styles.divCard, here && styles.divCardHere]}
+                    disabled={here}
+                    onPressIn={() => !here && prefetchTeam(lg, d.abbr)}
+                    onPress={() => !here && router.push(`/team/${d.abbr}${lq}`)}
+                    testID={`division-team-${d.abbr}`}
+                  >
+                    <NhlLogo abbr={d.abbr} url={d.logo} size={34} />
+                    <Text style={styles.divName} numberOfLines={1}>{d.short || d.abbr}</Text>
+                    <Text style={styles.divRec}>{d.wins ?? 0}-{d.losses ?? 0}{d.ot != null ? `-${d.ot}` : ""}</Text>
+                    <Text style={styles.divRank}>#{d.div_rank}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         ) : null}
 
@@ -176,12 +243,25 @@ export default function TeamPage() {
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: any; accent?: string }) {
+function StripStat({ label, value, accent }: { label: string; value: any; accent?: string }) {
   return (
-    <View style={styles.stat}>
-      <Text style={[styles.statVal, accent && { color: accent }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.stripCell}>
+      <Text style={[styles.stripVal, accent && { color: accent }]}>{value}</Text>
+      <Text style={styles.stripLabel}>{label}</Text>
     </View>
+  );
+}
+
+function StripDivider() {
+  return <View style={styles.stripDivider} />;
+}
+
+function TeamTap({ abbr, logo, onPress }: { abbr: string; logo?: string | null; onPress: () => void }) {
+  return (
+    <Pressable style={styles.teamTap} onPress={onPress} hitSlop={6} testID={`next-team-${abbr}`}>
+      <NhlLogo abbr={abbr} url={logo} size={26} />
+      <Text style={styles.gAbbr}>{abbr}</Text>
+    </Pressable>
   );
 }
 
@@ -203,18 +283,24 @@ const styles = StyleSheet.create({
   backText: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
 
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
-  banner: { alignItems: "center", paddingTop: spacing.sm, paddingBottom: spacing.md, gap: 4 },
-  name: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", letterSpacing: 0.5, marginTop: spacing.sm, textAlign: "center" },
-  meta: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 11, fontWeight: "600", letterSpacing: 1 },
-  record: { color: colors.white, fontFamily: fonts.display, fontSize: 16, fontWeight: "800", letterSpacing: 0.5, marginTop: 2 },
+
+  crumbs: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  crumb: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 160 },
+  crumbText: { color: colors.blue, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  crumbHere: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", flexShrink: 1 },
+
+  banner: { alignItems: "center", paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: 4 },
+  name: { color: colors.white, fontFamily: fonts.display, fontSize: 25, fontWeight: "800", letterSpacing: 0.5, marginTop: spacing.sm, textAlign: "center" },
+  record: { color: colors.textDim, fontFamily: fonts.display, fontSize: 13, fontWeight: "700", letterSpacing: 0.3, marginTop: 2, textAlign: "center" },
 
   read: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  readText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17, flex: 1 },
+  readText: { color: colors.text, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 18, flex: 1 },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, gap: spacing.sm },
-  stat: { width: "31%", flexGrow: 1, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, alignItems: "center", gap: 2 },
-  statVal: { color: colors.text, fontFamily: fonts.display, fontSize: 18, fontWeight: "800" },
-  statLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 9, fontWeight: "700", letterSpacing: 1 },
+  strip: { flexDirection: "row", alignItems: "center", marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
+  stripCell: { flex: 1, alignItems: "center", gap: 2, paddingHorizontal: 2 },
+  stripVal: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "800" },
+  stripLabel: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 8.5, fontWeight: "700", letterSpacing: 1 },
+  stripDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch", backgroundColor: colors.border, marginVertical: 2 },
 
   section: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
@@ -223,6 +309,15 @@ const styles = StyleSheet.create({
   gAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "800" },
   gAt: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 13, fontWeight: "700" },
   gWhen: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 0.5, textAlign: "right" },
+
+  teamTap: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 4, borderRadius: radius.sm },
+
+  rail: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingRight: spacing.xl },
+  divCard: { width: 96, alignItems: "center", gap: 3, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, paddingHorizontal: 6 },
+  divCardHere: { borderColor: colors.blue, backgroundColor: colors.bgElev },
+  divName: { color: colors.text, fontFamily: fonts.display, fontSize: 12.5, fontWeight: "700", marginTop: 2 },
+  divRec: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11 },
+  divRank: { color: colors.blue, fontFamily: fonts.accent, fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
 
   pRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   pRank: { color: colors.blue, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", width: 16 },
