@@ -406,3 +406,11 @@ VERIFIED (localhost + real public path):
 - Real-path screenshot /team/KAM?league=whl: voice "how big is their defense?" → 3-beat layered answer (honest + D corps names + standing context) + chips + ON AIR. Round-trip + continued listening intact.
 - WHL retrieval (iter18) still rich: coach, goalies, scorers, last-game scorers.
 EP READINESS (business note only, no code owed): the layer accepts Elite Prospects by implementing EliteProspectsSource.enrich_team() + setting a key; when it returns player_bio, D-line size / age / history questions answer automatically. Good moment to engage Ed at EP — the conversational desk is live and shows exactly where EP data unlocks the next level. (Contacting EP is a human/business action, not implemented here.)
+
+## Jun 2026 — Highlightly Utilization Audit (read-only)
+Live Desk V1 frozen (awaiting Elite Prospects). Audited Highlightly plan capability vs Ticker ingest/display.
+HEADLINE: Ticker ingests ZERO Highlightly data — runs on free NHL public API + HockeyTech(WHL/OHL/QMJHL). No key/client/calls (grep-clean).
+Video/highlights: media=False on every provider; nothing ingested or shown. AHL/ECHL/USHL/NCAA/PWHL not connected to any provider.
+Highlightly offers video highlights + scores/standings/momentum/match-stats across 170+ leagues incl AHL/ECHL/WHL/OHL/QMJHL/NCAA. Weak on play-by-play/lineups/injuries.
+Pricing = calls not depth: all paid tiers same data; 5k->25k only raises daily ceiling. Major-league highlights need a PAID tier (RapidAPI basic excludes NHL/AHL/OHL/NCAA highlights).
+Full report: /app/memory/highlightly_audit.md. No code changed.
