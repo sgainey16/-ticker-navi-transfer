@@ -115,7 +115,7 @@ export default function TeamPage() {
             <SectionTitle title="Leading the Way" accent={colors.blue} />
             <View style={styles.card}>
               {scorers.map((s: any, i: number) => (
-                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}${lq}`)}>
+                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}${lq}${lq ? "&" : "?"}name=${encodeURIComponent(s.name || "")}&pos=${encodeURIComponent(s.pos || "")}`)}>
                   <Text style={styles.pRank}>{i + 1}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pName}>{s.name}</Text>

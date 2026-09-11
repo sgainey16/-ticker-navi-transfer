@@ -31,9 +31,10 @@ function age(iso?: string) {
 }
 
 export default function PlayerPage() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, league, name, pos } = useLocalSearchParams<{ id: string; league?: string; name?: string; pos?: string }>();
+  const lg = (league || "nhl").toLowerCase();
   const router = useRouter();
-  const q = useApi(() => api.nhlPlayer(id), [id]);
+  const q = useApi(() => (lg === "nhl" ? api.nhlPlayer(id) : api.leaguePlayer(lg, id, name || "", pos || "")), [id, lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the player…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load player" onRetry={q.reload} /></Screen>;

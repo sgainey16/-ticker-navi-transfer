@@ -7,14 +7,16 @@ from __future__ import annotations
 
 from providers.base import HockeyProvider
 from providers.nhl import NHLProvider
-from providers.whl import WHLProvider
+from providers.whl import HockeyTechProvider
 
 DEFAULT_LEAGUE = "nhl"
 
 _PROVIDERS: dict[str, HockeyProvider] = {
     "nhl": NHLProvider(),
-    "whl": WHLProvider(),        # second real league — proves the universal chassis
-    # "chl": CHLProvider(),      # (Champions HL / Liiga / SHL via Elite Prospects — paid key, later)
+    # Same HockeyTech/Leaguestat chassis — three real CHL leagues by registration, not rebuild.
+    "whl": HockeyTechProvider("whl", "Western Hockey League", "whl", "f1aa699db3d81487"),
+    "ohl": HockeyTechProvider("ohl", "Ontario Hockey League", "ohl", "f1aa699db3d81487"),
+    "qmjhl": HockeyTechProvider("qmjhl", "Quebec Maritimes Junior Hockey League", "lhjmq", "f322673b6bcae299"),
 }
 
 

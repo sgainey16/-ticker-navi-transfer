@@ -494,7 +494,7 @@ async def _home_personal_facts(follows: HomeFollows) -> tuple[str, bool]:
         if not t.abbr:
             continue
         try:
-            d = await nhl.team_page(t.abbr)
+            d = await get_provider(t.league or "nhl").team_page(t.abbr)
             label = ROUND_LABEL.get(t.tier, "FOLLOWING")
             seg = f"{label}: {d['team']['name']} ({d['record']['wins']}-{d['record']['losses']}-{d['record']['ot']})"
             recent = d.get("recent") or []
@@ -510,7 +510,7 @@ async def _home_personal_facts(follows: HomeFollows) -> tuple[str, bool]:
         if not p.player_id:
             continue
         try:
-            d = await nhl.player_page(p.player_id)
+            d = await get_provider(p.league or "nhl").player_page(p.player_id)
             pl = d["player"]
             label = ROUND_LABEL.get(p.tier, "FOLLOWING")
             seg = f"{label}: {pl['name']} ({pl.get('pos')}, {pl.get('team_abbr')})"
@@ -574,7 +574,7 @@ async def _my_hockey_feed(follows: HomeFollows) -> dict:
         if not p.player_id:
             continue
         try:
-            d = await nhl.player_page(p.player_id)
+            d = await get_provider(p.league or "nhl").player_page(p.player_id)
             pl = d["player"]
             last5 = d.get("last5") or []
             if not last5:
@@ -1242,12 +1242,28 @@ async def league_game(code: str, gid: str):
 
 
 @api_router.get("/league/{code}/player/{pid}")
-async def league_player(code: str, pid: str):
+async def league_player(code: str, pid: str, name: str = "", pos: str = ""):
+    """Cross-league Player Page. HockeyTech doesn't expose player stats, so junior
+    player depth is EP-backed (bio/draft/career/styles) — league-agnostic, cached."""
+    data = None
     try:
-        return await get_provider(code).player_page(pid)
-    except Exception as e:
-        logger.exception("league_player failed")
-        raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
+        data = await get_provider(code).player_page(pid)
+    except Exception:
+        data = None
+    if not data:
+        data = {"player": {"id": pid, "name": name or "Player", "pos": pos or None,
+                           "team_abbr": None, "team_logo": None, "headshot": None},
+                "skater": None, "goalie": None, "last5": [], "next": None, "highlights": []}
+    try:
+        pl = data.get("player") or {}
+        ep = await eliteprospects.player_by_name(pl.get("name") or name, pl.get("pos") or pos)
+        if ep:
+            data["ep"] = ep
+            if not pl.get("pos") and ep.get("position"):
+                pl["pos"] = ep["position"]
+    except Exception:
+        logger.exception("league_player EP enrich failed (non-fatal)")
+    return data
 
 
 @api_router.get("/nhl/home")

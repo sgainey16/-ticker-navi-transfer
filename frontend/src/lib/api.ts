@@ -204,6 +204,7 @@ export const api = {
   voicesSelected: () => get<{ rayo: string | null; casey: string | null }>("/voices/selected"),
   tts: (text: string, voice_id: string, speed?: number) => post<{ audio: string }>("/tts", { text, voice_id, speed }),
   bridges: (subject: string, league?: string) => get<{ lines: DeskBeat[]; voices: { reggie: string | null; marc: string | null } }>(`/ticker/bridges?subject=${encodeURIComponent(subject)}&league=${league || "nhl"}`),
+  leaguePlayer: (league: string, id: string, name = "", pos = "") => get<any>(`/league/${league}/player/${id}?name=${encodeURIComponent(name)}&pos=${encodeURIComponent(pos)}`),
   homeShow: (follows: any) => post<{ stories: HomeStory[]; voices: { reggie: string | null; marc: string | null }; personalized: boolean }>(`/ticker/home_show`, follows),
   leagueHighlights: (league: string, limit = 20) => get<{ league: string; clips: HighlightClip[] }>(`/highlights?league=${league}&limit=${limit}`),
   matchHighlights: (opts: { league: string; home: string; away: string; date?: string }) =>

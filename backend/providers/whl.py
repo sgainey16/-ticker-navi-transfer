@@ -20,12 +20,6 @@ from providers.base import HockeyProvider
 logger = logging.getLogger("ticker.whl")
 
 BASE = "https://lscluster.hockeytech.com/feed/index.php"
-KEY = "f1aa699db3d81487"
-CLIENT = "whl"
-
-
-def _common(view: str) -> dict:
-    return {"feed": "modulekit", "key": KEY, "client_code": CLIENT, "fmt": "json", "lang": "en", "view": view}
 
 
 async def _get(client: httpx.AsyncClient, params: dict) -> dict:
@@ -36,29 +30,6 @@ async def _get(client: httpx.AsyncClient, params: dict) -> dict:
 
 async def _noop_list():
     return []
-
-
-_TEAM_CACHE: dict = {"ts": 0.0, "teams": []}
-_SEASON_CACHE: dict = {"ts": 0.0, "id": None}
-_TEAMPAGE_CACHE: dict = {}   # tri -> {"ts": float, "data": dict}
-
-
-async def _team_index(client: httpx.AsyncClient) -> list[dict]:
-    if _TEAM_CACHE["teams"] and (time.time() - _TEAM_CACHE["ts"] < 3600):
-        return _TEAM_CACHE["teams"]
-    data = await _get(client, {**_common("teamsbyseason")})
-    teams = [{
-        "id": str(t.get("id")),
-        "abbr": t.get("code"),
-        "name": t.get("name"),
-        "city": t.get("city"),
-        "nickname": t.get("nickname"),
-        "logo": t.get("team_logo_url"),
-        "division": t.get("division_long_name"),
-    } for t in data.get("Teamsbyseason", [])]
-    if teams:
-        _TEAM_CACHE.update(ts=time.time(), teams=teams)
-    return teams
 
 
 def _int(v):
@@ -89,26 +60,48 @@ def _side(card: dict, side: str) -> dict:
     }
 
 
-class WHLProvider(HockeyProvider):
-    code = "whl"
-    name = "Western Hockey League"
+class HockeyTechProvider(HockeyProvider):
+    """One adapter, many HockeyTech/Leaguestat leagues (WHL/OHL/QMJHL). The only
+    per-league differences are client_code + feed key + season lookback; everything
+    else is identical, which is exactly why this scales by registration, not rebuild."""
+
     capabilities = {
-        "standings": True,       # WHL conference standings (HockeyTech)
-        "leaders": True,         # scoring + goalie leaders
-        "recaps": True,          # finals available via scorebar
-        "schedule": True,        # NEXT
-        "team_page": True,       # identity + record + schedule (verified)
-        "player_page": False,    # HockeyTech player stats not reliably available yet — link stays gated
-        "search": True,
-        "media": False,
+        "standings": True, "leaders": True, "recaps": True, "schedule": True,
+        "team_page": True, "player_page": True, "search": True, "media": False,
     }
+
+    def __init__(self, code: str, name: str, client_code: str, key: str):
+        self.code = code
+        self.name = name
+        self._client_code = client_code
+        self._key = key
+        self._team_cache: dict = {"ts": 0.0, "teams": []}
+        self._season_cache: dict = {"ts": 0.0, "id": None}
+        self._teampage_cache: dict = {}
+
+    def _common(self, view: str) -> dict:
+        return {"feed": "modulekit", "key": self._key, "client_code": self._client_code,
+                "fmt": "json", "lang": "en", "view": view}
+
+    async def _team_index(self, client: httpx.AsyncClient) -> list[dict]:
+        if self._team_cache["teams"] and (time.time() - self._team_cache["ts"] < 3600):
+            return self._team_cache["teams"]
+        data = await _get(client, {**self._common("teamsbyseason")})
+        teams = [{
+            "id": str(t.get("id")), "abbr": t.get("code"), "name": t.get("name"),
+            "city": t.get("city"), "nickname": t.get("nickname"),
+            "logo": t.get("team_logo_url"), "division": t.get("division_long_name"),
+        } for t in data.get("Teamsbyseason", [])]
+        if teams:
+            self._team_cache.update(ts=time.time(), teams=teams)
+        return teams
 
     async def _active_season(self, client: httpx.AsyncClient) -> str:
         """Season whose date range contains today (preseason/regular), else newest."""
         from datetime import date
-        if _SEASON_CACHE["id"] and (time.time() - _SEASON_CACHE["ts"] < 3600):
-            return _SEASON_CACHE["id"]
-        data = await _get(client, {**_common("seasons")})
+        if self._season_cache["id"] and (time.time() - self._season_cache["ts"] < 3600):
+            return self._season_cache["id"]
+        data = await _get(client, {**self._common("seasons")})
         seasons = data.get("Seasons", []) if isinstance(data, dict) else []
         today = date.today().isoformat()
         chosen = None
@@ -119,14 +112,15 @@ class WHLProvider(HockeyProvider):
                 break
         if not chosen:
             chosen = str(seasons[0]["season_id"]) if seasons else "295"
-        _SEASON_CACHE.update(ts=time.time(), id=chosen)
+        self._season_cache.update(ts=time.time(), id=chosen)
         return chosen
+
 
     async def scoreboard_now(self) -> dict:
         """Upcoming/live WHL games (NEXT). Real HockeyTech scorebar."""
         from datetime import date
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
-            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 21, "numberofdaysback": 2})
+            data = await _get(client, {**self._common("scorebar"), "numberofdaysahead": 21, "numberofdaysback": 2})
         rows = data.get("Scorebar", []) if isinstance(data, dict) else []
         games = []
         for c in rows:
@@ -158,22 +152,23 @@ class WHLProvider(HockeyProvider):
         if len(q) < 2:
             return []
         ql = q.lower()
+        LG = self.code.upper()
         teams_out: list[dict] = []
         players_out: list[dict] = []
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
             try:
-                for t in await _team_index(client):
+                for t in await self._team_index(client):
                     hay = f"{t['name']} {t['city']} {t['nickname']} {t['abbr']}".lower()
                     if ql in hay:
                         teams_out.append({
                             "type": "team", "id": t["abbr"], "team_abbr": t["abbr"],
-                            "name": t["name"], "subtitle": "WHL", "logo": t["logo"],
-                            "league": "WHL", "league_code": "whl",
+                            "name": t["name"], "subtitle": LG, "logo": t["logo"],
+                            "league": LG, "league_code": self.code,
                         })
             except Exception:
-                logger.exception("WHL team search failed")
+                logger.exception("%s team search failed", LG)
             try:
-                data = await _get(client, {**_common("searchplayers"), "search_term": q})
+                data = await _get(client, {**self._common("searchplayers"), "search_term": q})
                 for p in (data.get("Searchplayers") or []):
                     pid = str(p.get("person_id") or p.get("id") or "")
                     if not pid:
@@ -181,14 +176,14 @@ class WHLProvider(HockeyProvider):
                     name = (p.get("name") or f"{p.get('first_name','')} {p.get('last_name','')}").strip()
                     abbr = p.get("current_team_code") or p.get("team_code") or ""
                     pos = p.get("position") or p.get("position_id") or ""
-                    sub = "WHL" + (f" · {pos}" if pos else "") + (f" · {abbr}" if abbr else "")
+                    sub = LG + (f" · {pos}" if pos else "") + (f" · {abbr}" if abbr else "")
                     players_out.append({
                         "type": "player", "id": pid, "player_id": pid, "team_abbr": abbr,
-                        "name": name or "WHL Player", "pos": pos, "subtitle": sub,
-                        "headshot": None, "logo": None, "league": "WHL", "league_code": "whl",
+                        "name": name or f"{LG} Player", "pos": pos, "subtitle": sub,
+                        "headshot": None, "logo": None, "league": LG, "league_code": self.code,
                     })
             except Exception:
-                logger.exception("WHL player search failed")
+                logger.exception("%s player search failed", LG)
         return (teams_out + players_out)[:limit]
 
     # --- surfaces not wired in this proof cut (kept honest / minimal) ------
@@ -201,7 +196,7 @@ class WHLProvider(HockeyProvider):
     async def recent_finals_now(self, limit: int = 15) -> list[dict]:
         """Recently COMPLETED WHL games (RECAP) — own scorebar lookback."""
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
-            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 0, "numberofdaysback": 21})
+            data = await _get(client, {**self._common("scorebar"), "numberofdaysahead": 0, "numberofdaysback": 21})
         rows = data.get("Scorebar", []) if isinstance(data, dict) else []
         finals = []
         for c in rows:
@@ -222,10 +217,10 @@ class WHLProvider(HockeyProvider):
         west: list[dict] = []
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
             season = await self._active_season(client)
-            tindex = {t["abbr"]: t for t in await _team_index(client)}
+            tindex = {t["abbr"]: t for t in await self._team_index(client)}
             url = ("https://lscluster.hockeytech.com/feed/index.php?feed=statviewfeed&view=teams"
                    "&groupTeamsBy=division&context=overall&site_id=0&special=false&league_id=&conference=-1&division=-1"
-                   f"&season={season}&key={KEY}&client_code={CLIENT}&fmt=json")
+                   f"&season={season}&key={self._key}&client_code={self._client_code}&fmt=json")
             r = await client.get(url, timeout=20, follow_redirects=True)
             raw = r.text.strip()
             if raw.startswith("("):
@@ -265,7 +260,7 @@ class WHLProvider(HockeyProvider):
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
             season = await self._active_season(client)
             try:
-                data = await _get(client, {**_common("statviewtype"), "type": "topscorers",
+                data = await _get(client, {**self._common("statviewtype"), "type": "topscorers",
                                            "season_id": season, "first": 0, "limit": limit})
                 sc = data.get("Statviewtype", []) if isinstance(data, dict) else []
                 out["skaters"]["points"] = [{**_row(p), "value": _int(p.get("points"))} for p in sc]
@@ -276,7 +271,7 @@ class WHLProvider(HockeyProvider):
             except Exception:
                 logger.exception("WHL topscorers failed")
             try:
-                data = await _get(client, {**_common("statviewtype"), "type": "topgoalies",
+                data = await _get(client, {**self._common("statviewtype"), "type": "topgoalies",
                                            "season_id": season, "first": 0, "limit": limit})
                 gl = data.get("Statviewtype", []) if isinstance(data, dict) else []
                 out["goalies"]["wins"] = [{**_row(p), "value": _int(p.get("wins"))} for p in gl]
@@ -298,7 +293,7 @@ class WHLProvider(HockeyProvider):
         Scoring plays / stars / team stats are not exposed by HockeyTech here,
         so those modules simply don't render — never fabricated."""
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
-            data = await _get(client, {**_common("scorebar"), "numberofdaysahead": 45, "numberofdaysback": 45})
+            data = await _get(client, {**self._common("scorebar"), "numberofdaysahead": 45, "numberofdaysback": 45})
         rows = data.get("Scorebar", []) if isinstance(data, dict) else []
         c = next((x for x in rows if str(x.get("ID")) == str(game_id)), None)
         if not c:
@@ -327,7 +322,7 @@ class WHLProvider(HockeyProvider):
 
     async def _roster(self, client: httpx.AsyncClient, team_id: str, season: str) -> list[dict]:
         try:
-            data = await _get(client, {**_common("roster"), "team_id": team_id, "season_id": season})
+            data = await _get(client, {**self._common("roster"), "team_id": team_id, "season_id": season})
         except Exception:
             return []
         people: list[dict] = []
@@ -343,7 +338,7 @@ class WHLProvider(HockeyProvider):
 
     async def _team_scorers(self, client: httpx.AsyncClient, tri: str, season: str, limit: int = 6) -> list[dict]:
         try:
-            data = await _get(client, {**_common("statviewtype"), "type": "topscorers",
+            data = await _get(client, {**self._common("statviewtype"), "type": "topscorers",
                                        "season_id": season, "first": 0, "limit": 400})
             rows = data.get("Statviewtype", []) if isinstance(data, dict) else []
         except Exception:
@@ -360,7 +355,7 @@ class WHLProvider(HockeyProvider):
 
     async def _last_game_scorers(self, client: httpx.AsyncClient, game_id: str, home_abbr: str, away_abbr: str) -> list[dict]:
         try:
-            r = await client.get(BASE, params={"feed": "gc", "key": KEY, "client_code": CLIENT,
+            r = await client.get(BASE, params={"feed": "gc", "key": self._key, "client_code": self._client_code,
                                                 "fmt": "json", "tab": "gamesummary", "game_id": game_id},
                                  timeout=20, follow_redirects=True)
             gs = r.json().get("GC", {}).get("Gamesummary", {})
@@ -386,7 +381,7 @@ class WHLProvider(HockeyProvider):
         anything the feed doesn't have is simply omitted, never fabricated."""
         import asyncio
         tri = (tri or "").upper()
-        hit = _TEAMPAGE_CACHE.get(tri)
+        hit = self._teampage_cache.get(tri)
         if hit and (time.time() - hit["ts"] < 90):
             return hit["data"]
         stand = await self.standings_now()
@@ -399,11 +394,11 @@ class WHLProvider(HockeyProvider):
         div_rank = divteams.index(row) + 1
         async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
             season = await self._active_season(client)
-            tindex = {t["abbr"]: t for t in await _team_index(client)}
+            tindex = {t["abbr"]: t for t in await self._team_index(client)}
             team_id = (tindex.get(tri) or {}).get("id")
 
             # independent lookups run concurrently (biggest latency win)
-            sb_task = _get(client, {**_common("scorebar"), "numberofdaysahead": 30, "numberofdaysback": 30})
+            sb_task = _get(client, {**self._common("scorebar"), "numberofdaysahead": 30, "numberofdaysback": 30})
             roster_task = self._roster(client, team_id, season) if team_id else _noop_list()
             scorers_task = self._team_scorers(client, tri, season)
             data, people, scorers = await asyncio.gather(sb_task, roster_task, scorers_task)
@@ -460,7 +455,7 @@ class WHLProvider(HockeyProvider):
             "roster": ({"forwards": forwards, "defensemen": defensemen, "goalies": goalies}
                        if (forwards or defensemen or goalies) else None),
         }
-        _TEAMPAGE_CACHE[tri] = {"ts": time.time(), "data": result}
+        self._teampage_cache[tri] = {"ts": time.time(), "data": result}
         return result
 
     async def player_page(self, pid: str) -> dict:
