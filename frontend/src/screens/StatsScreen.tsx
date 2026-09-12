@@ -12,6 +12,7 @@ import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
 import { TickerDesk } from "@/src/components/TickerDesk";
+import { useContextLeague } from "@/src/lib/context";
 
 const CATS = [
   { key: "points", label: "Points", group: "skaters" as const },
@@ -39,7 +40,7 @@ export default function Stats() {
   const router = useRouter();
   const { follows } = useFollows();
   const [cat, setCat] = useState("points");
-  const [league, setLeague] = useState("nhl");
+  const [league, setLeague] = useContextLeague();
   const isNhl = league === "nhl";
   const leaders = useApi(() => (isNhl ? api.nhlLeaders() : api.leagueLeaders(league)), [league]);
   const standings = useApi(() => (isNhl ? api.nhlStandings() : api.leagueStandings(league)), [league]);

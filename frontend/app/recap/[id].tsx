@@ -10,6 +10,7 @@ import { Screen, Loader, ErrorState } from "@/src/components/ui";
 import { BackBar } from "@/app/team/[id]";
 import { playDataUri, stopAudio } from "@/src/lib/audio";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { setContextLeague } from "@/src/lib/context";
 
 const HOSTS: Record<string, { name: string; role: string; accent: string }> = {
   reggie: { name: "Reggie Banks", role: "THE INSTIGATOR", accent: colors.green },
@@ -20,6 +21,7 @@ export default function Recap() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const gameId = id || "latest";
   const q = useApi(() => api.recap(gameId), [gameId]);
+  React.useEffect(() => { setContextLeague("nhl"); }, []);
 
   const [playing, setPlaying] = useState(false);
   const [idx, setIdx] = useState(-1);

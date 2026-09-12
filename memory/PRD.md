@@ -478,3 +478,10 @@ tabnav.ts: queues the requested tab when the host isn't mounted (deep-link OUT t
 Contextual web preserved + strengthened: NHL/Atlantic breadcrumbs already tappable; player->team, player->next/last5 game now carry ?league (no more non-NHL dead ends); Stats league leaders un-gated for non-NHL (openPlayer league-aware with name/pos). NO league-page redesign (deferred).
 Testing agent iteration_22: PASS in natural in-app flow — rail present on team/league/player/game; out-stats/out-home escape detail and activate the right tab; breadcrumbs + player/game taps work; Back intact; top tabs switch. Non-blocker noted: last scroll row can sit flush under rail on 390x844 (cosmetic, deferred).
 STILL DEFERRED (net-new destinations, next passes): Conference/Division as a first-class destination; CHL parent-competition surface + backend grouping; league-WORLD redesign (host/show, not standings); team-page identity hierarchy; depth-vs-breadth + intentional NEXT.
+
+## Jun 2026 — NAV PASS TWO: context-aware tabs (no silent NHL fallback). VERIFIED.
+Problem: OUT rail existed but RECAP/NEXT/STATS each used useState('nhl') and ignored the league the user was in.
+Fix: src/lib/context.ts session store (getContextLeague/setContextLeague/subscribe + useContextLeague hook). Detail routes league/team/player/game set setContextLeague(lg) on mount (recap->nhl); the 3 context tabs use useContextLeague() so they inherit the current league; a tab's own switcher also updates context. HOME stays global. Context carried by stable ?league id + team/player/game ids — never by city name (no 'Boston' ambiguity, no NHL fallback).
+Also fixed NEXT hardcoded 'WHL' label -> league.toUpperCase() (LiteMatchup now takes league).
+Testing agent iteration_23: PASS all 5 leagues (WHL/NCAA/OHL/QMJHL/NHL) — enter team -> out-recap/out-tonight/out-stats inherit that league, zero NHL fallback; OUT rail + Back on team/league routes; HOME global; top tabs switch.
+STILL DEFERRED: Conference/Division first-class destination; CHL parent surface + backend grouping; league-WORLD redesign; team-page identity hierarchy; depth-vs-breadth + intentional NEXT.

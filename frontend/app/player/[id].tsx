@@ -10,6 +10,7 @@ import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { BackBar } from "@/app/team/[id]";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { setContextLeague } from "@/src/lib/context";
 
 function niceDate(iso?: string) {
   if (!iso) return "";
@@ -36,6 +37,7 @@ export default function PlayerPage() {
   const lq = lg !== "nhl" ? `?league=${lg}` : "";
   const router = useRouter();
   const q = useApi(() => (lg === "nhl" ? api.nhlPlayer(id) : api.leaguePlayer(lg, id, name || "", pos || "")), [id, lg]);
+  React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the player…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load player" onRetry={q.reload} /></Screen>;

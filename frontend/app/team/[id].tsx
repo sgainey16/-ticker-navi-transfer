@@ -10,6 +10,7 @@ import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { TeamDesk } from "@/src/components/TeamDesk";
 import { HighlightsModule } from "@/src/components/HighlightsModule";
+import { setContextLeague } from "@/src/lib/context";
 
 function niceDate(iso?: string) {
   if (!iso) return "";
@@ -30,6 +31,7 @@ export default function TeamPage() {
   const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
   const q = useApi(() => loadTeam(lg, id), [id, lg]);
+  React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the team…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load team" onRetry={q.reload} /></Screen>;

@@ -1,0 +1,25 @@
+{
+  "summary": "NAV PASS TWO context-inheritance verified end-to-end. Onboarded (Boston Bruins). For each league (WHL/NCAA/OHL/QMJHL/NHL): went STATS -> tapped league segment (via LeagueSwitcher) -> tapped a team in that league's standings -> team detail page -> tapped OUT rail 'out-recap' -> confirmed RECAP shows that league (LeagueSwitcher's active-blue segment matched). Then via toptab-tonight and toptab-stats confirmed NEXT and STATS still hold that league (context singleton is preserved). Additionally, tapped 'out-tonight' and 'out-stats' DIRECTLY from a WHL team page and both landed on NEXT/STATS still in WHL (not NHL). Zero silent NHL fallback observed. OUT rail (out-home/out-recap/out-tonight/out-stats) and back-button confirmed present on Team and League detail routes. HOME stays global — home-show renders on toptab-home. Top tabs (toptab-home/recap/tonight/stats) still switch. All acceptance criteria in the review request pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "src/lib/context.ts: module-level singleton with subscribe/notify. Detail routes call setContextLeague(lg) in a useEffect on mount; RECAP/NEXT/STATS read via useContextLeague(). Simple and correct. Note: the context is not persisted across full reloads (module state resets to 'nhl'); acceptable per spec since context is a session concept.",
+    "TonightScreen.tsx line 90: renders a static 'WHL' kicker label whenever !isNhl, so on NCAA/OHL/QMJHL the top-right kicker reads 'WHL' regardless of the actual league. Not blocking (kicker is decorative and does not indicate wrong league — the segment + content are correct), but should be replaced with league.toUpperCase() for consistency.",
+    "TonightScreen.tsx LiteMatchup note text is hard-coded 'Reggie & Marc have the WHL desk up top.' — same nit; should reflect the current league label.",
+    "team/[id].tsx line 34 calls setContextLeague(lg) which is exactly the mechanism that fixes the bug; verified working via WHL/OHL/QMJHL/NCAA teams and via direct out-tonight/out-stats taps from the team page."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% — 5/5 leagues (WHL, NCAA, OHL, QMJHL, NHL) each pass RECAP+NEXT+STATS context inheritance; direct out-tonight/out-stats taps from WHL team page also pass; OUT rail + Back verified on Team and League pages; HOME regression passes."},
+  "seed_data_creation": "None — completed real onboarding (search 'Boston' -> Boston Bruins -> Next through remaining onboarding steps).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Onboarding is 2 steps: welcome-go -> onboard-search + result-team-BOS -> onboard-next (repeat until toptab-stats appears). Use page.keyboard.type (not page.fill) for onboard-search. In STATS the standings row shows the team's SHORT name (e.g. 'Blazers', 'Colts', 'Mooseheads'), not the full 'Kamloops Blazers' / 'Barrie Colts' — searching by 'Kamloops' text will miss the standings row. NCAA standings render only the full name (e.g. 'Sacred Heart Pioneers'). LeagueSwitcher segments carry testID='league-{code}' — but Tonight's inline segmented control uses the SAME testID, so with Stack routing multiple screens may be mounted and querying by testID returns duplicates; always filter by visibility. Active segment has backgroundColor rgb(46,107,255) (colors.blue). OUT rail testIDs: out-home, out-recap, out-tonight (label 'NEXT'), out-stats. Context store: /app/frontend/src/lib/context.ts is a module singleton (getContextLeague/setContextLeague/useContextLeague); persists only for session. On team page /app/frontend/app/team/[id].tsx line 34 setContextLeague(lg) is called on every mount, so opening any non-NHL team is sufficient to lock context to that league.",
+  "rca_of_issue": "N/A — no bug reproduced. The NAV PASS TWO fix (context singleton set by detail routes, consumed by RECAP/NEXT/STATS) is functioning; no NHL fallback observed for any non-NHL league."
+}

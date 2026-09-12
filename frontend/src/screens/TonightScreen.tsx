@@ -12,6 +12,7 @@ import { TickerDesk } from "@/src/components/TickerDesk";
 import { GameRail } from "@/src/components/GameRail";
 import { GameDepth } from "@/src/components/GameDepth";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { useContextLeague } from "@/src/lib/context";
 
 function niceDate(iso?: string | null) {
   if (!iso) return "";
@@ -27,7 +28,7 @@ export default function Next() {
   // Available leagues (NHL always; WHL etc. appear once registered on the backend).
   const leaguesQ = useApi(() => api.leagues());
   const leagues = leaguesQ.data?.leagues || [{ code: "nhl", name: "National Hockey League", capabilities: {} }];
-  const [league, setLeague] = useState("nhl");
+  const [league, setLeague] = useContextLeague();
 
   const board = useApi(() => (league === "nhl" ? api.nhlScoreboard() : api.leagueScoreboard(league)), [league]);
 
@@ -86,7 +87,7 @@ export default function Next() {
               <View style={styles.section}>
                 <View style={styles.railHead}>
                   <SectionTitle title={isFuture ? "The Slate Ahead" : "Today's Slate"} accent={colors.blue} />
-                  <Text style={styles.kicker}>{isNhl ? slateLabel(games[0]?.game_type) : "WHL"}</Text>
+                  <Text style={styles.kicker}>{isNhl ? slateLabel(games[0]?.game_type) : league.toUpperCase()}</Text>
                 </View>
                 <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} />
               </View>
@@ -103,7 +104,7 @@ export default function Next() {
               isNhl ? (
                 <View style={styles.section}><GameDepth summary={selected} /></View>
               ) : (
-                <View style={styles.section}><LiteMatchup game={selected} onOpen={() => router.push(`/game/${selected.id}?league=${league}`)} /></View>
+                <View style={styles.section}><LiteMatchup game={selected} league={league} onOpen={() => router.push(`/game/${selected.id}?league=${league}`)} /></View>
               )
             ) : null}
           </>
@@ -115,7 +116,7 @@ export default function Next() {
   );
 }
 
-function LiteMatchup({ game, onOpen }: { game: any; onOpen: () => void }) {
+function LiteMatchup({ game, league, onOpen }: { game: any; league: string; onOpen: () => void }) {
   const upcoming = game.group === "upcoming";
   const when = game.start_utc
     ? new Date(game.start_utc).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -139,7 +140,7 @@ function LiteMatchup({ game, onOpen }: { game: any; onOpen: () => void }) {
       </View>
       <Text style={styles.liteNote}>
         {game.away.record && game.home.record ? `${game.away.abbr} ${game.away.record}  ·  ${game.home.abbr} ${game.home.record}\n` : ""}
-        {when ? `${when}. ` : ""}Reggie &amp; Marc have the WHL desk up top.
+        {when ? `${when}. ` : ""}Reggie &amp; Marc have the {league.toUpperCase()} desk up top.
       </Text>
     </Pressable>
   );

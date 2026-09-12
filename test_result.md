@@ -243,3 +243,16 @@ frontend:
 agent_communication:
   - agent: "main"
     message: "FRONTEND ONLY. Must onboard first (open app, complete onboarding: search 'Boston' pick Boston Bruins as a team, finish) so index shows the Home tab shell. Then run acceptance path and verify the OUT rail at EVERY step: Home -> tap into NHL league (via a team's breadcrumb or league) -> Atlantic (division chip) -> Boston Bruins team -> a player (Leading the Way) -> a game (Next Game or Last Game) -> STATS (via OUT rail) -> HOME (via OUT rail). At each detail screen confirm: (1) the bottom OUT rail shows HOME/RECAP/NEXT/STATS; (2) tapping STATS/HOME/RECAP/NEXT leaves the detail route and lands on that tab of the main shell (NOT onboarding, since already onboarded); (3) Back still works; (4) breadcrumb NHL and Atlantic are tappable; (5) player->team and player->game keep working. Base URL uses EXPO_PUBLIC_BACKEND_URL from frontend/.env. Do NOT test Team Live Desk mic/PLAY/TALK/STOP. Do NOT test league-page redesign (out of scope this pass)."
+
+## NAV PASS TWO — context-aware tabs (no silent NHL fallback) — needs testing
+frontend:
+  - task: "RECAP/NEXT/STATS inherit the current hockey league context via a session store; detail routes set context by stable ?league id; no routing by city name"
+    file: "/app/frontend/src/lib/context.ts (new), /app/frontend/app/{team,player,game,league,recap}/*.tsx (setContextLeague on mount), /app/frontend/src/screens/{RecapScreen,TonightScreen,StatsScreen}.tsx (useContextLeague)"
+    working: "NA"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added src/lib/context.ts: module store getContextLeague/setContextLeague/subscribe + useContextLeague hook. league/team/player/game routes call setContextLeague(lg) on mount (recap->nhl). The 3 context tabs now use useContextLeague() instead of useState('nhl'), so tapping OUT->RECAP/NEXT/STATS from a WHL/OHL/QMJHL/NCAA surface keeps that league. HOME stays global. A tab's own LeagueSwitcher also updates context. Smoke: /team/KAM?league=whl renders WHL, OUT rail present, no crash."
+agent_communication:
+  - agent: "main"
+    message: "FRONTEND ONLY. Verify NO silent NHL fallback. Onboard first (search 'Boston', pick Boston Bruins, finish). Deterministic entry uses the STATS tab league switcher (segments: NHL/WHL/OHL/QMJHL/NCAA). ACCEPTANCE per league: (1) STATS tab -> tap the league segment (e.g. WHL) -> tap a team in its standings (WHL: Kamloops; NCAA: Boston University/Denver; OHL: Barrie; QMJHL: any) to open the team page (context set). (2) On that team page tap OUT rail 'out-recap' -> RECAP tab must show THAT league (its LeagueSwitcher segment active = that league, desk title 'THE TICKER RECAP'/'AROUND THE X' referencing that league, content is that league's finals) NOT NHL. (3) From RECAP tap 'out-tonight' (NEXT) -> must still be that league. (4) 'out-stats' -> STATS shows that league's standings/leaders. Repeat for WHL, OHL, QMJHL, NCAA, and confirm NHL (Boston Bruins) stays NHL. The bug we're checking: RECAP/NEXT/STATS previously always reset to NHL regardless of context. Also confirm OUT rail still present on all detail routes and Back still works. Do NOT test Team Live Desk mic/PLAY/TALK/STOP. Do NOT flag league page being 'just standings' (out of scope)."

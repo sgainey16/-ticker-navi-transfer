@@ -11,10 +11,11 @@ import { GameRail } from "@/src/components/GameRail";
 import { GameDepth } from "@/src/components/GameDepth";
 import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { useContextLeague } from "@/src/lib/context";
 
 export default function Recap() {
   const router = useRouter();
-  const [league, setLeague] = useState("nhl");
+  const [league, setLeague] = useContextLeague();
   const isNhl = league === "nhl";
   const q = useApi(() => (isNhl ? api.nhlRecaps() : api.leagueRecaps(league)), [league]);
 

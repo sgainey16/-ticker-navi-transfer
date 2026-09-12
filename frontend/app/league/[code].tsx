@@ -10,6 +10,7 @@ import { Screen, Loader, ErrorState } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { BackBar } from "@/app/team/[id]";
 import { prefetchTeam } from "@/src/lib/cache";
+import { setContextLeague } from "@/src/lib/context";
 
 const LEAGUE_NAMES: Record<string, string> = {
   nhl: "National Hockey League", whl: "Western Hockey League",
@@ -24,6 +25,7 @@ export default function LeagueHub() {
   const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
   const q = useApi(() => api.leagueStandings(lg), [lg]);
+  React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
   const groups = useMemo(() => {
     if (!q.data) return [];

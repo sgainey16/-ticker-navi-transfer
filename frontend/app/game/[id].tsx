@@ -12,6 +12,7 @@ import { BackBar } from "@/app/team/[id]";
 import { TickerDesk } from "@/src/components/TickerDesk";
 import { HighlightsModule } from "@/src/components/HighlightsModule";
 import { NhlLogo } from "@/src/components/NhlLogo";
+import { setContextLeague } from "@/src/lib/context";
 
 const FINAL = ["OFF", "FINAL"];
 
@@ -78,6 +79,7 @@ export default function GameDetail() {
   const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
   const q = useApi(() => (isNhl ? api.nhlGame(id) : api.leagueGame(lg, id)), [id, lg]);
+  React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the game…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load game" onRetry={q.reload} /></Screen>;
