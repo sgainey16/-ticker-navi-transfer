@@ -485,3 +485,14 @@ Fix: src/lib/context.ts session store (getContextLeague/setContextLeague/subscri
 Also fixed NEXT hardcoded 'WHL' label -> league.toUpperCase() (LiteMatchup now takes league).
 Testing agent iteration_23: PASS all 5 leagues (WHL/NCAA/OHL/QMJHL/NHL) — enter team -> out-recap/out-tonight/out-stats inherit that league, zero NHL fallback; OUT rail + Back on team/league routes; HOME global; top tabs switch.
 STILL DEFERRED: Conference/Division first-class destination; CHL parent surface + backend grouping; league-WORLD redesign; team-page identity hierarchy; depth-vs-breadth + intentional NEXT.
+
+## Jun 2026 — NAV FOUNDATION PASS 1: onboarding = personalization, not access. VERIFIED (iteration_24).
+Kept routing/data as-is (already follow-independent). Built the missing DOORS:
+- /hockey (Hockey World): browse NHL / CHL(WHL,OHL,QMJHL) / NCAA from api.leagues(), independent of follows; each -> /league/[code]; includes a Search entry.
+- /search (universal in-app search): exposes search_all; results navigate by STABLE id + league_code (team-> /team/{abbr}?league=, player-> /player/{id}?league=&name=&pos=) — never by name.
+- Global entry icons (globe -> /hockey, search -> /search) in TopTabBar (tab screens) AND BackBar (detail routes) => reachable from anywhere.
+- Follow/Unfollow: FollowPill (src/components/ui.tsx) on team + player pages via follows.toggleTeam/togglePlayer. Personalization only; never gates access. Draft Board unchanged until Follow pressed.
+- CHL parent: lightweight chip on WHL/OHL/QMJHL league hub -> /hockey?parent=chl, enabling OHL->CHL->WHL->Kamloops travel.
+Preserved: league-context persistence (out-recap stays WHL), zero-NHL-fallback, OUT rail, Back.
+Verified travel with ONLY Boston Bruins followed: OHL->CHL->WHL->Kamloops; Search->Boston University(NCAA); NCAA->Hockey World->NHL — none required following first.
+HELD (per user): onboarding skip/zero-follow entry; conference/division destination pages; league-page redesign; broader CHL redesign.

@@ -55,6 +55,13 @@ export default function LeagueHub() {
           <Text style={styles.kicker}>LEAGUE</Text>
           <Text style={styles.name}>{LEAGUE_NAMES[lg] || lg.toUpperCase()}</Text>
           <Text style={styles.sub}>Tap any team to jump in — wander the whole league.</Text>
+          {["whl", "ohl", "qmjhl"].includes(lg) ? (
+            <Pressable style={styles.parentChip} onPress={() => router.push("/hockey?parent=chl")} testID="league-parent-chl">
+              <Ionicons name="git-branch-outline" size={12} color={colors.blue} />
+              <Text style={styles.parentText}>CHL · switch to WHL / OHL / QMJHL</Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.textFaint} />
+            </Pressable>
+          ) : null}
         </View>
 
         {groups.map((g) => (
@@ -95,6 +102,8 @@ const styles = StyleSheet.create({
   kicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 2 },
   name: { color: colors.white, fontFamily: fonts.display, fontSize: 24, fontWeight: "800", letterSpacing: 0.3 },
   sub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5 },
+  parentChip: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: 12, paddingVertical: 6 },
+  parentText: { color: colors.blue, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
 
   section: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   sectionHi: {},

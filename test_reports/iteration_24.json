@@ -1,0 +1,28 @@
+{
+  "summary": "NAVIGATION FOUNDATION PASS 1 verified end-to-end. Fresh onboarding with ONLY Boston Bruins (WHL/OHL/QMJHL/NCAA NOT followed) — confirmed via localStorage.ticker.follows containing only {abbr:'BOS'}. From Home, nav-hockey opens /hockey with all sections: NHL (National Hockey League), CHL group (WHL/OHL/QMJHL), and NCAA. OHL hub loads and shows league-parent-chl chip; tapping it returns to Hockey World; from there WHL hub loads and league-team-KAM (Kamloops Blazers, never followed) opens fully with roster/scorers/next game. Universal search (nav-search -> search-input) with 'Boston University' returns a NCAA result whose stable id navigates to /team/BU?league=ncaa loading the Terriers page (never followed — follows still only BOS after tapping). NCAA -> nav-hockey -> Hockey World -> world-league-nhl loads NHL hub with 32 teams and any team opens. FollowPill on Kamloops team page toggles FOLLOW -> FOLLOWING -> FOLLOW; same verified on a Kamloops player page reached via 'Leading the Way' (both were NOT pre-followed). BackBar shows nav-hockey + nav-search + back-button on every detail route; OUT rail (out-home/out-recap/out-tonight/out-stats) present on team and league detail routes. Regression: from a WHL team page tapping out-recap shows WHL context (kicker 'WHL' present in body). Top tabs (toptab-home/recap/tonight/stats) still switch and HOME remains global. ALL acceptance criteria pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "app/hockey.tsx: clean, purely additive; PARENTS constant is well-scoped and 'others' fallback handles unknown leagues gracefully.",
+    "app/search.tsx: navigates by stable id + league (team_abbr / player_id + league_code) as intended; NHL kept clean of query string; NCAA/WHL/OHL/QMJHL correctly include ?league=<code>. 250ms debounce and runId guard are correct.",
+    "app/team/[id].tsx BackBar exports both back-button and nav-hockey/nav-search icons — reused by /hockey, /search, /league, /player. Consistent global entry.",
+    "components/ui.tsx FollowPill uses testID='follow-toggle' and label swaps FOLLOW <-> FOLLOWING via internal state via useFollows — behavior verified as toggle-only (no gating).",
+    "lib/follows.tsx toggleTeam/togglePlayer default tier=2 for new follows and preserve existing entries; onboarded flag is untouched by these toggles so no accidental re-onboarding.",
+    "app/league/[code].tsx: league-parent-chl chip only renders for whl/ohl/qmjhl (correct); navigates to /hockey?parent=chl, matching the highlight prop consumed by hockey.tsx.",
+    "Stack routing keeps prior screens mounted-hidden which means bare testID selectors match multiple DOM nodes across the stack. All tests here use visible=true filter — main agent's testIDs are fine, but future test agents must filter for visibility."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% — 9/9 acceptance flows pass"},
+  "seed_data_creation": "None — real onboarding executed: welcome-go -> onboard-search 'Boston' -> result-team-BOS -> onboard-next/onboard-skip through remaining steps. Verified via localStorage.ticker.follows = {teams:[{abbr:'BOS'}], players:[]}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Stack keeps previous screens mounted with display:none; ALWAYS filter locators by visible=true (e.g., page.locator('[data-testid=X]').locator('visible=true').first). Fresh onboarding: clear localStorage then reload; onboarding flow is welcome-go -> onboard-search (keyboard.type, not fill) -> result-team-BOS -> loop onboard-next/onboard-skip/onboard-done. Universal search uses testID 'search-input' inside /search; results carry testID 'search-result-{id}'. Boston University lives at /team/BU?league=ncaa. Kamloops Blazers uses abbr KAM in WHL. CHL parent chip testID 'league-parent-chl' appears only on WHL/OHL/QMJHL league pages. Hockey World items: 'world-league-{code}' (nhl/whl/ohl/qmjhl/ncaa). BackBar globals: nav-hockey, nav-search on every detail route. OUT rail: out-home, out-recap, out-tonight (label NEXT), out-stats. FollowPill testID 'follow-toggle' on both team and player pages; label swaps 'FOLLOW' <-> 'FOLLOWING'. One non-blocking 502 was logged for an unrelated resource; did not affect any flow.",
+  "rca_of_issue": "N/A — no defects reproduced. NAVIGATION FOUNDATION PASS 1 works as designed: access is universal (nothing behind follow), personalization is explicit (Follow toggles only Draft Board membership)."
+}

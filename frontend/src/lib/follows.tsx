@@ -28,6 +28,8 @@ type Ctx = {
   playerTier: (playerId: string) => Tier | undefined;
   isTeam: (abbr: string) => boolean;
   isPlayer: (playerId: string) => boolean;
+  toggleTeam: (t: TeamFollow) => void;
+  togglePlayer: (p: PlayerFollow) => void;
   saveFollows: (next: Follows) => Promise<void>;
   completeOnboarding: (next: Follows) => Promise<void>;
   resetOnboarding: () => Promise<void>;
@@ -74,11 +76,23 @@ export function FollowsProvider({ children }: { children: React.ReactNode }) {
   const isTeam = useCallback((abbr: string) => follows.teams.some((t) => t.abbr === abbr), [follows]);
   const isPlayer = useCallback((pid: string) => follows.players.some((p) => p.player_id === pid), [follows]);
 
+  // Follow toggles for in-app discovery (team/player pages). Personalization only — never access.
+  const toggleTeam = useCallback((t: TeamFollow) => {
+    const exists = follows.teams.some((x) => x.abbr === t.abbr);
+    const teams = exists ? follows.teams.filter((x) => x.abbr !== t.abbr) : [...follows.teams, { ...t, tier: t.tier ?? 2 }];
+    saveFollows({ ...follows, teams });
+  }, [follows, saveFollows]);
+  const togglePlayer = useCallback((p: PlayerFollow) => {
+    const exists = follows.players.some((x) => x.player_id === p.player_id);
+    const players = exists ? follows.players.filter((x) => x.player_id !== p.player_id) : [...follows.players, { ...p, tier: p.tier ?? 2 }];
+    saveFollows({ ...follows, players });
+  }, [follows, saveFollows]);
+
   const value = useMemo<Ctx>(() => ({
     ready, onboarded, follows,
-    teamTier, playerTier, isTeam, isPlayer,
+    teamTier, playerTier, isTeam, isPlayer, toggleTeam, togglePlayer,
     saveFollows, completeOnboarding, resetOnboarding,
-  }), [ready, onboarded, follows, teamTier, playerTier, isTeam, isPlayer, saveFollows, completeOnboarding, resetOnboarding]);
+  }), [ready, onboarded, follows, teamTier, playerTier, isTeam, isPlayer, toggleTeam, togglePlayer, saveFollows, completeOnboarding, resetOnboarding]);
 
   return <FollowsContext.Provider value={value}>{children}</FollowsContext.Provider>;
 }

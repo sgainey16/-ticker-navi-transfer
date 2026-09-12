@@ -2,9 +2,11 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 
 import { colors, fonts, spacing, radius } from "@/src/theme";
 import { TickerMark } from "./TickerLogo";
+import { useRouter } from "expo-router";
 
 export type TopTab = { key: string; label: string };
 
@@ -18,6 +20,7 @@ export function TopTabBar({
   onSelect: (key: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const layouts = useRef<Record<string, { x: number; w: number }>>({});
 
@@ -33,7 +36,7 @@ export function TopTabBar({
           <TickerMark size={26} />
           <View style={styles.logoDivider} />
         </View>
-        <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.tabs}>
           {tabs.map((t) => {
             const isActive = t.key === active;
             return (
@@ -49,6 +52,14 @@ export function TopTabBar({
             );
           })}
         </ScrollView>
+        <View style={styles.worldBox}>
+          <Pressable testID="nav-hockey" onPress={() => { Haptics.selectionAsync(); router.push("/hockey"); }} style={styles.worldBtn} hitSlop={8}>
+            <Ionicons name="globe-outline" size={20} color={colors.textDim} />
+          </Pressable>
+          <Pressable testID="nav-search" onPress={() => { Haptics.selectionAsync(); router.push("/search"); }} style={styles.worldBtn} hitSlop={8}>
+            <Ionicons name="search" size={19} color={colors.textDim} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -64,4 +75,6 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.surfaceAlt },
   tabText: { color: colors.textDim, fontFamily: fonts.display, fontSize: 16, fontWeight: "700", letterSpacing: 1 },
   tabTextActive: { color: colors.white },
+  worldBox: { flexDirection: "row", alignItems: "center", paddingRight: spacing.md, paddingLeft: spacing.xs, borderLeftWidth: 1, borderLeftColor: colors.borderStrong, marginLeft: 2 },
+  worldBtn: { paddingHorizontal: 8, paddingVertical: 6 },
 });

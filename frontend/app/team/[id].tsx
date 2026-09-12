@@ -9,6 +9,8 @@ import { loadTeam, prefetchTeam } from "@/src/lib/cache";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { TeamDesk } from "@/src/components/TeamDesk";
+import { FollowPill } from "@/src/components/ui";
+import { useFollows } from "@/src/lib/follows";
 import { HighlightsModule } from "@/src/components/HighlightsModule";
 import { setContextLeague } from "@/src/lib/context";
 
@@ -30,6 +32,7 @@ export default function TeamPage() {
   const isNhl = lg === "nhl";
   const lq = isNhl ? "" : `?league=${lg}`;
   const router = useRouter();
+  const { isTeam, toggleTeam } = useFollows();
   const q = useApi(() => loadTeam(lg, id), [id, lg]);
   React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
@@ -74,6 +77,9 @@ export default function TeamPage() {
           <NhlLogo abbr={team.abbr} url={team.logo} size={64} />
           <Text style={styles.name}>{team.name}</Text>
           <Text style={styles.record}>{recForm}{record.points != null ? `  ·  ${record.points} PTS` : ""}  ·  #{record.div_rank} {team.division}</Text>
+          <View style={{ marginTop: spacing.sm }}>
+            <FollowPill following={isTeam(team.abbr)} onPress={() => toggleTeam({ abbr: team.abbr, name: team.name, league: lg, logo: team.logo })} />
+          </View>
         </View>
 
         {/* Reggie + Marc — ONE continuous desk: PLAY the show or TALK to join */}
@@ -280,14 +286,22 @@ export function BackBar() {
         <Ionicons name="chevron-back" size={22} color={colors.text} />
         <Text style={styles.backText}>Back</Text>
       </Pressable>
+      <View style={{ flex: 1 }} />
+      <Pressable testID="nav-hockey" onPress={() => router.push("/hockey")} style={styles.navIcon} hitSlop={10}>
+        <Ionicons name="globe-outline" size={20} color={colors.textDim} />
+      </Pressable>
+      <Pressable testID="nav-search" onPress={() => router.push("/search")} style={styles.navIcon} hitSlop={10}>
+        <Ionicons name="search" size={19} color={colors.textDim} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  backBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start" },
   backText: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
+  navIcon: { paddingHorizontal: 8, paddingVertical: 4 },
 
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
 

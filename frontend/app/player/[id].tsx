@@ -9,6 +9,8 @@ import { api } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { Screen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
 import { BackBar } from "@/app/team/[id]";
+import { FollowPill } from "@/src/components/ui";
+import { useFollows } from "@/src/lib/follows";
 import { NhlLogo } from "@/src/components/NhlLogo";
 import { setContextLeague } from "@/src/lib/context";
 
@@ -36,6 +38,7 @@ export default function PlayerPage() {
   const lg = (league || "nhl").toLowerCase();
   const lq = lg !== "nhl" ? `?league=${lg}` : "";
   const router = useRouter();
+  const { isPlayer, togglePlayer } = useFollows();
   const q = useApi(() => (lg === "nhl" ? api.nhlPlayer(id) : api.leaguePlayer(lg, id, name || "", pos || "")), [id, lg]);
   React.useEffect(() => { setContextLeague(lg); }, [lg]);
 
@@ -73,6 +76,9 @@ export default function PlayerPage() {
             <Text style={styles.bio}>
               {[a != null ? `Age ${a}` : null, [p.birth_city, p.birth_country].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}
             </Text>
+            <View style={{ marginTop: spacing.sm, alignSelf: "flex-start" }}>
+              <FollowPill following={isPlayer(id)} onPress={() => togglePlayer({ player_id: id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, league: lg })} />
+            </View>
           </View>
         </View>
 

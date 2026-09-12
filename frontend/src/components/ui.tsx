@@ -101,6 +101,22 @@ export function Loader({ label }: { label?: string }) {
   );
 }
 
+export function FollowPill({ following, onPress }: { following: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={() => { Haptics.selectionAsync(); onPress(); }} testID="follow-toggle" style={[fp.pill, following ? fp.on : fp.off]}>
+      <Ionicons name={following ? "checkmark" : "add"} size={16} color={following ? colors.bg : colors.white} />
+      <Text style={[fp.text, { color: following ? colors.bg : colors.white }]}>{following ? "FOLLOWING" : "FOLLOW"}</Text>
+    </Pressable>
+  );
+}
+
+const fp = StyleSheet.create({
+  pill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 8, alignSelf: "center", borderWidth: 1 },
+  on: { backgroundColor: colors.blue, borderColor: colors.blue },
+  off: { backgroundColor: "transparent", borderColor: colors.blue },
+  text: { fontFamily: fonts.display, fontSize: 12.5, fontWeight: "800", letterSpacing: 1 },
+});
+
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <View style={styles.loader}>
