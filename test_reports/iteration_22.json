@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only test of the new persistent global OUT rail (HOME/RECAP/NEXT/STATS) on all detail routes. Onboarded (Boston Bruins). OUT rail is present with correct testIDs (out-home, out-recap, out-tonight, out-stats) on Team, League, Player, and Game pages, and Back button remains present. In-app tap of out-stats from a team page returns to the main shell with the STATS tab active (verified via color state), and out-home returns with the HOME tab active (home-show visible). Breadcrumbs (crumb-league -> /league/nhl and crumb-division -> /league/nhl?division=Atlantic) work. Player tap navigates to /player/{id}. Main top tabs still switch. All acceptance criteria for this NAV PASS ONE pass in the standard user flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Team page (bottom)", "issues": ["Last row of 'Leading the Way' (David Pastrnak) sits directly under the OUT rail on 390x844; last row can appear partially occluded until the user scrolls a bit. Consider adding bottom safe-area padding equal to OUT rail height (~52px) on Screen content so the last card clears the rail."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional edge case, not in scope for this pass) Deep-linking directly to /team/BOS (hard page load) then tapping out-stats currently lands on the HOME tab of the shell (not STATS). Root cause: goToTab uses a module-level handler set by TabsHost useEffect; when the team page is the first mounted route, the handler is null, so setActive('stats') never runs before router.dismissAll() reveals the shell with default active='home'. If deep-link parity is desired later, persist the desired tab (AsyncStorage / URL param / a queue in tabnav.ts that is replayed once setTabHandler is called) so that when TabsHost mounts it can immediately select the requested tab.",
+    "(Optional polish) Bump ScrollView contentContainerStyle.paddingBottom on detail routes (team/player/game/league) by ~56px so the final row of scroll content isn't visually pinned under the persistent OUT rail."
+  ],
+  "critical_code_review_comments": [
+    "src/components/ui.tsx OutRail: jump() correctly calls goToTab(key) BEFORE router.dismissAll(), so the tab is selected while TabsHost is still (or will be) mounted. For the normal in-app flow this is correct and observed to work.",
+    "src/lib/tabnav.ts is a fire-and-forget module singleton — if no TabsHost has mounted yet (deep link into a detail route), the goToTab call is a no-op. Consider queueing the last requested key and replaying it in setTabHandler(h) when a handler is finally provided."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% for the in-app flow specified"},
+  "seed_data_creation": "None — completed real onboarding in the app (search 'Boston' -> Boston Bruins).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Onboarding search input requires page.keyboard.type (page.fill does not trigger the RN TextInput onChangeText). testIDs of interest: welcome-go, onboard-search, result-team-BOS, onboard-skip, onboard-next, toptab-home/recap/tonight/stats, out-home/out-recap/out-tonight/out-stats, back-button, crumb-league, crumb-division, team-next, next-team-{ABBR}, league-team-{ABBR}, leader-{playerId}, open-game, game-play-the-call. NEXT tab's testID is 'out-tonight' (label 'NEXT'). To reach the team page in-app, click toptab-stats and scroll the standings ScrollView until 'Bruins' text is on-screen. Player rows in 'Leading the Way' have no testID; click via JS-walk-up to the pressable (role=button / cursor:pointer). Multiple OUT rails may appear in DOM at once when Stack keeps previous detail routes mounted on web — visually only one is shown; treat as expected React Navigation Stack behavior on web, not a bug.",
+  "rca_of_issue": "N/A — no reproduced bugs from the review request. Only optional/edge-case items above."
+}

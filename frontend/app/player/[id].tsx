@@ -33,6 +33,7 @@ function age(iso?: string) {
 export default function PlayerPage() {
   const { id, league, name, pos } = useLocalSearchParams<{ id: string; league?: string; name?: string; pos?: string }>();
   const lg = (league || "nhl").toLowerCase();
+  const lq = lg !== "nhl" ? `?league=${lg}` : "";
   const router = useRouter();
   const q = useApi(() => (lg === "nhl" ? api.nhlPlayer(id) : api.leaguePlayer(lg, id, name || "", pos || "")), [id, lg]);
 
@@ -60,7 +61,7 @@ export default function PlayerPage() {
           {p.headshot ? <Image source={p.headshot} style={styles.headshot} contentFit="cover" /> : <View style={styles.headshot} />}
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{p.name}</Text>
-            <Pressable style={styles.teamRow} onPress={() => router.push(`/team/${p.team_abbr}`)} testID="player-team">
+            <Pressable style={styles.teamRow} onPress={() => p.team_abbr && router.push(`/team/${p.team_abbr}${lq}`)} testID="player-team">
               <NhlLogo abbr={p.team_abbr} url={p.team_logo} size={20} />
               <Text style={styles.teamText}>#{p.number} · {p.pos} · {p.team_abbr}</Text>
             </Pressable>
@@ -143,7 +144,7 @@ export default function PlayerPage() {
         {nextGame ? (
           <View style={styles.section}>
             <SectionTitle title="Next Game" accent={colors.blue} />
-            <Pressable style={styles.card} onPress={() => router.push(`/game/${nextGame.id}`)}>
+            <Pressable style={styles.card} onPress={() => router.push(`/game/${nextGame.id}${lq}`)}>
               <View style={styles.gRow}>
                 <NhlLogo abbr={nextGame.away.abbr} url={nextGame.away.logo} size={24} />
                 <Text style={styles.gAbbr}>{nextGame.away.abbr}</Text>
@@ -163,7 +164,7 @@ export default function PlayerPage() {
             <SectionTitle title="Last 5 Games" accent={colors.blue} />
             <View style={styles.card}>
               {last5.map((g: any, i: number) => (
-                <Pressable key={i} style={styles.lgRow} onPress={() => router.push(`/game/${g.game_id}`)}>
+                <Pressable key={i} style={styles.lgRow} onPress={() => router.push(`/game/${g.game_id}${lq}`)}>
                   <Text style={styles.lgOpp}>{g.home_road === "R" ? "@" : "vs"} {g.opp}</Text>
                   <Text style={styles.lgDate}>{niceDate(g.date)}</Text>
                   <View style={{ flex: 1 }} />

@@ -1,12 +1,55 @@
 import React from "react";
-import { View, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator, Pressable } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { goToTab } from "@/src/lib/tabnav";
 import { colors, fonts, spacing, radius, fontSize } from "@/src/theme";
+
+// The four global Ticker areas. Present on EVERY detail route so the network
+// shell never disappears — Back stops being the only way out. (NEXT tab key = "tonight".)
+const OUT_TABS = [
+  { key: "home", label: "HOME", icon: "home" as const },
+  { key: "recap", label: "RECAP", icon: "play-back" as const },
+  { key: "tonight", label: "NEXT", icon: "calendar-outline" as const },
+  { key: "stats", label: "STATS", icon: "stats-chart" as const },
+];
+
+// Persistent global-navigation rail. Rendered by Screen, so it lives in the shared
+// screen architecture rather than being pasted onto individual pages. Tapping a tab
+// selects it on the underlying tab host and dismisses the detail stack to reveal it.
+export function OutRail() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const jump = (key: string) => {
+    Haptics.selectionAsync();
+    goToTab(key);
+    const r = router as any;
+    try {
+      if (typeof r.dismissAll === "function" && (r.canDismiss?.() ?? true)) r.dismissAll();
+      else router.navigate("/");
+    } catch {
+      router.navigate("/");
+    }
+  };
+  return (
+    <View style={[railStyles.wrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {OUT_TABS.map((t) => (
+        <Pressable key={t.key} testID={`out-${t.key}`} style={railStyles.item} onPress={() => jump(t.key)} hitSlop={6}>
+          <Ionicons name={t.icon} size={19} color={colors.textDim} />
+          <Text style={railStyles.label}>{t.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
       <View style={[{ flex: 1 }, style]}>{children}</View>
+      <OutRail />
     </SafeAreaView>
   );
 }
@@ -68,6 +111,12 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
     </View>
   );
 }
+
+const railStyles = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgElev, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 },
+  item: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 2 },
+  label: { color: colors.textDim, fontFamily: fonts.display, fontSize: 10, fontWeight: "700", letterSpacing: 1 },
+});
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },

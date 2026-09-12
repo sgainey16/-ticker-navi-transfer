@@ -45,7 +45,8 @@ export default function Stats() {
   const standings = useApi(() => (isNhl ? api.nhlStandings() : api.leagueStandings(league)), [league]);
 
   const openTeam = (abbr: string) => router.push(`/team/${abbr}${isNhl ? "" : `?league=${league}`}`);
-  const openPlayer = (pid: string) => { if (isNhl) router.push(`/player/${pid}`); };
+  const openPlayer = (p: NhlLeader) =>
+    router.push(`/player/${p.id}${isNhl ? "" : `?league=${league}&name=${encodeURIComponent(p.name || "")}&pos=${encodeURIComponent(p.pos || "")}`}`);
 
   const followTeams = useMemo(() => new Set(follows.teams.map((t) => t.abbr)), [follows]);
   const followPlayers = useMemo(() => new Set(follows.players.map((p) => p.player_id)), [follows]);
@@ -114,7 +115,7 @@ export default function Stats() {
             {rows.map((p, i) => {
               const mine = followPlayers.has(p.id) || followTeams.has(p.team_abbr);
               return (
-                <Pressable key={p.id} style={[styles.leader, mine && styles.rowMine]} onPress={() => openPlayer(p.id)} testID={`leader-${p.id}`}>
+                <Pressable key={p.id} style={[styles.leader, mine && styles.rowMine]} onPress={() => openPlayer(p)} testID={`leader-${p.id}`}>
                   <Text style={[styles.rank, i === 0 && { color: colors.gold }]}>{i + 1}</Text>
                   {p.headshot ? <Image source={p.headshot} style={styles.shot} contentFit="cover" /> : <View style={styles.shot} />}
                   <View style={{ flex: 1 }}>
