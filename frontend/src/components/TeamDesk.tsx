@@ -12,7 +12,7 @@ import { playDataUri, beginSession, endSession, currentSession, subscribeSession
 import { useVoiceRecorder } from "@/src/lib/recorder";
 import { useFollows, TeamFollow, PlayerFollow } from "@/src/lib/follows";
 
-const DESK = require("../../assets/images/broadcast-desk.png");
+const DESK = require("../../assets/images/broadcast-desk-tight.png");
 
 const SHOW_CONTINUE =
   "Keep the show rolling: raise ONE genuinely interesting player or storyline on this team " +
@@ -231,7 +231,6 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
         <LinearGradient colors={["rgba(5,7,12,0)", "rgba(5,7,12,0.9)", "rgba(5,7,12,0.99)"]} locations={[0, 0.4, 1]} style={[styles.lowerThird, { pointerEvents: "none" }]} />
 
         <View style={styles.top}>
-          <View style={styles.deskTag}><Ionicons name="mic" size={11} color={colors.blue} /><Text style={styles.deskTagText}>REGGIE + MARC</Text></View>
           {status ? (
             <View style={styles.onair}>
               <View style={[styles.dot, { backgroundColor: rec.listening ? colors.red : speaking ? colors.blue : colors.gold }]} />
@@ -241,7 +240,6 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
         </View>
 
         <View style={styles.bottom}>
-          <Text style={styles.tag}>LIVE DESK</Text>
           <Text style={styles.title} numberOfLines={2}>{title}</Text>
 
           {rec.listening ? (
@@ -336,15 +334,12 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
 const styles = StyleSheet.create({
   panel: { height: 198, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
   lowerThird: { position: "absolute", left: 0, right: 0, bottom: 0, height: 138 },
-  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.md },
-  deskTag: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  deskTagText: { color: colors.white, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
+  top: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", padding: spacing.md },
   onair: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
   dot: { width: 7, height: 7, borderRadius: 4 },
   onairText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
 
   bottom: { padding: spacing.lg, paddingTop: spacing.md, gap: 7 },
-  tag: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 2 },
   title: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
 
   levelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
