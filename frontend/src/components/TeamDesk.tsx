@@ -30,7 +30,7 @@ const HOST_NAME: Record<string, string> = { reggie: "REGGIE", marc: "MARC", you:
  * again); STOP always, immediately silences. Everything shares the single global
  * audio session and is grounded only in this team's verified facts.
  */
-export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; league: string; fallbackTitle?: string }) {
+export function TeamDesk({ subject, league }: { subject: string; league: string; fallbackTitle?: string }) {
   const router = useRouter();
   const { follows, saveFollows, isTeam, isPlayer } = useFollows();
   const rec = useVoiceRecorder();
@@ -217,7 +217,6 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
 
   const active = mode !== "idle";
   const status = rec.listening ? "LISTENING" : busy ? "THINKING" : speaking ? "ON AIR" : "";
-  const title = seg?.title || fallbackTitle || "ON THE DESK";
   const ready = !!seg && seg.state === "ready" && seg.beats.length > 0;
   const denied = rec.permission === "denied";
 
@@ -227,7 +226,7 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
       <View style={styles.panel}>
         <Image source={DESK} style={StyleSheet.absoluteFill} contentFit="cover" />
         <LinearGradient colors={["rgba(5,7,12,0.30)", "rgba(5,7,12,0.66)", "rgba(5,7,12,0.96)"]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
-        {/* protected lower-third: keeps title + controls readable and off the hosts' faces */}
+        {/* protected lower-third: keeps controls readable and off the hosts' faces (no permanent text) */}
         <LinearGradient colors={["rgba(5,7,12,0)", "rgba(5,7,12,0.9)", "rgba(5,7,12,0.99)"]} locations={[0, 0.4, 1]} style={[styles.lowerThird, { pointerEvents: "none" }]} />
 
         <View style={styles.top}>
@@ -240,8 +239,6 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
         </View>
 
         <View style={styles.bottom}>
-          <Text style={styles.title} numberOfLines={2}>{title}</Text>
-
           {rec.listening ? (
             <View style={styles.levelRow}>
               <View style={styles.levelTrack}><View style={[styles.levelFill, { width: `${Math.round(20 + rec.level * 80)}%` }]} /></View>
@@ -340,7 +337,6 @@ const styles = StyleSheet.create({
   onairText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
 
   bottom: { padding: spacing.lg, paddingTop: spacing.md, gap: 7 },
-  title: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
 
   levelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   levelTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
