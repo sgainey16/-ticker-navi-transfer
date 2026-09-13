@@ -429,10 +429,36 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
       : `${team.short} sit #${record.div_rank} in the ${team.division} at ${recForm}.`;
   const lastFinal = recent && recent.length ? recent[0] : null;
 
+  // ---- team-level section navigation (separate from global bottom nav) ----
+  const scrollRef = React.useRef<ScrollView>(null);
+  const offs = React.useRef<Record<string, number>>({ overview: 0 });
+  const railYRef = React.useRef<number>(0);
+  const [active, setActive] = React.useState<string>("overview");
+  const [sticky, setSticky] = React.useState(false);
+  const RAIL_H = 46;
+  const setOff = (key: string) => (e: any) => { offs.current[key] = e.nativeEvent.layout.y; };
+  const onScroll = (e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const nextSticky = y >= railYRef.current - 1;
+    setSticky((p) => (p === nextSticky ? p : nextSticky));
+    const order = ["overview", "stats", "games", "roster", "news"].filter((k) => offs.current[k] != null);
+    const probe = y + RAIL_H + 14;
+    let cur = "overview";
+    for (const k of order) { if (offs.current[k] <= probe) cur = k; }
+    setActive((p) => (p === cur ? p : cur));
+  };
+  const goTo = (key: string) => {
+    if (key !== "overview" && offs.current[key] == null) return;
+    const target = key === "overview" ? 0 : Math.max(0, offs.current[key] - RAIL_H);
+    scrollRef.current?.scrollTo({ y: target, animated: true });
+    setActive(key);
+  };
+
   return (
     <Screen>
       <BackBar />
-      <ScrollView contentContainerStyle={v2.content} showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
+      <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={v2.content} showsVerticalScrollIndicator={false}>
         {/* STRONG TEAM IDENTITY — name / record+pts / rank */}
         <View style={v2.header}>
           <NhlLogo abbr={team.abbr} url={team.logo} size={54} />
@@ -457,9 +483,14 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
           <Text style={styles.readText}>{readLine}</Text>
         </View>
 
+        {/* TEAM NAVIGATION RAIL — team-level sections (sticks under BackBar on scroll) */}
+        <View onLayout={(e) => { railYRef.current = e.nativeEvent.layout.y; }}>
+          <TeamNavRail active={active} onSelect={goTo} />
+        </View>
+
         {/* TEAM STATS — swipeable rail, large readable numbers + NHL rank */}
         {core_stats?.length ? (
-          <View style={v2.statsWrap}>
+          <View style={v2.statsWrap} onLayout={setOff("stats")}>
             <View style={v2.statsHead}>
               <Text style={v2.statsKicker}>TEAM STATS</Text>
               <Text style={v2.statsHint}>swipe →</Text>
@@ -479,7 +510,7 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
 
         {/* NEXT GAME — an event: two strong logos, date/time, venue/broadcast */}
         {nextGame ? (
-          <View style={v2.ngSection}>
+          <View style={v2.ngSection} onLayout={setOff("games")}>
             <SectionTitle title="Next Game" accent={colors.green} />
             <Pressable style={v2.ngCard} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}`)}>
               <View style={v2.ngTop}>
@@ -585,7 +616,7 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
 
         {/* ROSTER */}
         {roster ? (
-          <View style={styles.section}>
+          <View style={styles.section} onLayout={setOff("roster")}>
             <SectionTitle title="Roster" accent={colors.green} />
             {(["forwards", "defensemen", "goalies"] as const).map((grp) =>
               roster[grp]?.length ? (
@@ -605,14 +636,59 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
           </View>
         ) : null}
 
+        {/* NEWS — honest empty state until a verified feed is connected */}
+        <View style={v2.ngSection} onLayout={setOff("news")}>
+          <SectionTitle title="News" accent={colors.green} />
+          <View style={styles.card}>
+            <Text style={v2.newsEmpty}>No verified news feed is connected yet — coming soon.</Text>
+          </View>
+        </View>
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
+
+      {sticky ? (
+        <View style={v2.stickyWrap} pointerEvents="box-none">
+          <TeamNavRail active={active} onSelect={goTo} sticky />
+        </View>
+      ) : null}
+      </View>
     </Screen>
+  );
+}
+
+function TeamNavRail({ active, onSelect, sticky }: { active: string; onSelect: (k: string) => void; sticky?: boolean }) {
+  const items: [string, string][] = [
+    ["overview", "OVERVIEW"], ["games", "GAMES"], ["stats", "STATS"], ["roster", "ROSTER"], ["news", "NEWS"],
+  ];
+  return (
+    <View style={[v2.navWrap, sticky && v2.navSticky]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={v2.navRail}>
+        {items.map(([key, label]) => {
+          const on = active === key;
+          return (
+            <Pressable key={key} onPress={() => onSelect(key)} style={[v2.navItem, on && v2.navItemOn]} testID={`teamnav-${key}${sticky ? "-sticky" : ""}`}>
+              <Text style={[v2.navText, on && v2.navTextOn]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const v2 = StyleSheet.create({
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
+
+  navWrap: { backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 8 },
+  navSticky: { shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  navRail: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: "center" },
+  navItem: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: radius.pill },
+  navItemOn: { backgroundColor: colors.blueDim },
+  navText: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 12, fontWeight: "700", letterSpacing: 1 },
+  navTextOn: { color: colors.blue },
+  stickyWrap: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 20 },
+  newsEmpty: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, padding: spacing.md },
 
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.sm },
   name: { color: colors.white, fontFamily: fonts.display, fontSize: 21, fontWeight: "800", letterSpacing: 0.3 },
