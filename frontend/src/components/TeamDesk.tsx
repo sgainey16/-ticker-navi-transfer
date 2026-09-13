@@ -334,8 +334,8 @@ export function TeamDesk({ subject, league, fallbackTitle }: { subject: string; 
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 216, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
-  lowerThird: { position: "absolute", left: 0, right: 0, bottom: 0, height: 150 },
+  panel: { height: 198, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
+  lowerThird: { position: "absolute", left: 0, right: 0, bottom: 0, height: 138 },
   top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.md },
   deskTag: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
   deskTagText: { color: colors.white, fontFamily: fonts.accent, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
@@ -353,13 +353,13 @@ const styles = StyleSheet.create({
   levelHint: { color: "rgba(255,255,255,0.7)", fontFamily: fonts.body, fontSize: 11 },
 
   controls: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs },
-  btn: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 11 },
+  btn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 8 },
   playBtn: { backgroundColor: colors.blue },
   talkBtn: { backgroundColor: colors.green },
   talkActive: { backgroundColor: colors.red },
   btnDim: { opacity: 0.45 },
-  btnText: { color: colors.white, fontFamily: fonts.display, fontSize: 13.5, fontWeight: "800", letterSpacing: 1 },
-  iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  btnText: { color: colors.white, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   loadRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: spacing.xs },
   loadText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
   quietText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },

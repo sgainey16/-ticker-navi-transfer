@@ -39,6 +39,10 @@ export default function TeamPage() {
   if (q.loading) return <Screen><BackBar /><Loader label="Loading the team…" /></Screen>;
   if (q.error || !q.data) return <Screen><BackBar /><ErrorState message="Failed to load team" onRetry={q.reload} /></Screen>;
 
+  // TEAM PAGE V2 — new premium mobile layout for NHL (validated on Minnesota first,
+  // not yet propagated to other leagues, which keep the existing layout below).
+  if (isNhl) return <NhlTeamV2 data={q.data} id={String(id)} />;
+
   const { team, record, goals, form, scorers, goalie, recent, next: nextGame, roster } = q.data;
   const divisionTeams = (q.data as any).division_teams || [];
   const diff = goals.diff ?? 0;
@@ -353,4 +357,308 @@ const styles = StyleSheet.create({
   chip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 6 },
   chipNum: { color: colors.blue, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", minWidth: 16 },
   chipName: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "600", maxWidth: 120 },
+});
+
+/* ------------------------------------------------------------------ */
+/* TEAM PAGE V2 — premium NHL layout (Minnesota prototype).            */
+/* Energy first: compact identity -> desk -> swipeable core stats ->   */
+/* event-style Next Game -> big-logo recent games -> depth below.      */
+/* ------------------------------------------------------------------ */
+const STAT_LABELS: Record<string, string> = {
+  "PP%": "POWER PLAY", "PK%": "PENALTY KILL", "FACEOFF%": "FACEOFF WINS",
+  "GF/GAME": "GOALS / GAME", "GA/GAME": "GOALS AGAINST / GM",
+};
+
+function rankColor(rank?: number | null) {
+  if (!rank) return colors.textDim;
+  if (rank <= 8) return colors.green;
+  if (rank >= 23) return colors.red;
+  return colors.textDim;
+}
+
+function StatCard({ s }: { s: any }) {
+  const isPct = s.label === "PP%" || s.label === "PK%" || s.label === "FACEOFF%";
+  const val = isPct ? `${s.value}%` : `${s.value}`;
+  const label = STAT_LABELS[s.label] || s.label;
+  const rc = rankColor(s.rank);
+  return (
+    <View style={v2.statCard} testID={`stat-${s.label}`}>
+      <View style={[v2.statTop, { backgroundColor: rc }]} />
+      <Text style={v2.statVal} numberOfLines={1} adjustsFontSizeToFit>{val}</Text>
+      <Text style={v2.statLabel} numberOfLines={1}>{label}</Text>
+      {s.rank ? <Text style={[v2.statRank, { color: rc }]}>NHL #{s.rank}</Text>
+              : <Text style={v2.statRankDim}>NHL —</Text>}
+    </View>
+  );
+}
+
+function GameLine({ g, lg }: { g: any; lg: string }) {
+  const router = useRouter();
+  const lq = lg === "nhl" ? "" : `?league=${lg}`;
+  return (
+    <Pressable style={v2.gCard} onPress={() => router.push(`/game/${g.id}${lq}`)} testID={`recent-${g.id}`}>
+      <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={34} />
+      <Text style={v2.gAbbr}>{g.away.abbr}</Text>
+      <Text style={v2.gScore}>{g.away.score ?? ""}</Text>
+      <Text style={v2.gDash}>–</Text>
+      <Text style={v2.gScore}>{g.home.score ?? ""}</Text>
+      <Text style={v2.gAbbr}>{g.home.abbr}</Text>
+      <NhlLogo abbr={g.home.abbr} url={g.home.logo} size={34} />
+      <View style={{ flex: 1 }} />
+      <Text style={v2.gWhen}>{niceDate(g.date)}</Text>
+      <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
+    </Pressable>
+  );
+}
+
+function NhlTeamV2({ data, id }: { data: any; id: string }) {
+  const router = useRouter();
+  const { isTeam, toggleTeam } = useFollows();
+  const lg = "nhl";
+  const { team, record, goals, form, core_stats, scorers, goalie, recent, next: nextGame, roster } = data;
+  const divisionTeams = data.division_teams || [];
+  const diff = goals.diff ?? 0;
+  const gp = record.gp ?? ((record.wins || 0) + (record.losses || 0) + (record.ot || 0));
+  const early = gp > 0 && gp < 10;
+  const recForm = `${record.wins ?? 0}-${record.losses ?? 0}${record.ot ? `-${record.ot}` : ""}`;
+  const hasL10 = !early && !!form.l10 && form.l10 !== "–";
+  const readLine = early
+    ? `${team.short} are ${record.wins ?? 0}-${record.losses ?? 0} to start the season, #${record.div_rank} in the ${team.division}.`
+    : hasL10
+      ? `${team.short} sit #${record.div_rank} in the ${team.division}, ${form.l10} over their last 10.`
+      : `${team.short} sit #${record.div_rank} in the ${team.division} at ${recForm}.`;
+  const lastFinal = recent && recent.length ? recent[0] : null;
+
+  return (
+    <Screen>
+      <BackBar />
+      <ScrollView contentContainerStyle={v2.content} showsVerticalScrollIndicator={false}>
+        {/* context breadcrumb — compact, sideways travel preserved */}
+        <View style={styles.crumbs}>
+          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}`)} testID="crumb-league">
+            <Ionicons name="layers-outline" size={12} color={colors.blue} />
+            <Text style={styles.crumbText}>{lg.toUpperCase()}</Text>
+          </Pressable>
+          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
+          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}?division=${encodeURIComponent(team.division || "")}`)} testID="crumb-division">
+            <Text style={styles.crumbText} numberOfLines={1}>{team.division}</Text>
+          </Pressable>
+          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
+          <Text style={styles.crumbHere} numberOfLines={1}>{team.short}</Text>
+        </View>
+
+        {/* COMPACT IDENTITY — no giant banner; reach the energy fast */}
+        <View style={v2.header}>
+          <NhlLogo abbr={team.abbr} url={team.logo} size={46} />
+          <View style={{ flex: 1 }}>
+            <Text style={v2.name} numberOfLines={1}>{team.name}</Text>
+            <Text style={v2.sub} numberOfLines={1}>
+              {recForm}{record.points != null ? ` · ${record.points} PTS` : ""} · #{record.div_rank} {team.division}
+            </Text>
+          </View>
+          <FollowPill following={isTeam(team.abbr)} onPress={() => toggleTeam({ abbr: team.abbr, name: team.name, league: lg, logo: team.logo })} />
+        </View>
+
+        {/* REGGIE + MARC — the desk (faces unobstructed, slimmer controls) */}
+        <View style={v2.deskWrap}>
+          <TeamDesk subject={id} league={lg} fallbackTitle={`${team.name.toUpperCase()} · ON THE DESK`} />
+        </View>
+
+        {/* TICKER READ — one grounded line, sample-size aware */}
+        <View style={styles.read}>
+          <Ionicons name="mic" size={13} color={colors.blue} />
+          <Text style={styles.readText}>{readLine}</Text>
+        </View>
+
+        {/* TEAM STATS — swipeable rail, large readable numbers + NHL rank */}
+        {core_stats?.length ? (
+          <View style={v2.statsWrap}>
+            <View style={v2.statsHead}>
+              <Text style={v2.statsKicker}>TEAM STATS</Text>
+              <Text style={v2.statsHint}>swipe →</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={v2.statsRail}
+              snapToInterval={136}
+              decelerationRate="fast"
+              testID="team-stats-rail"
+            >
+              {core_stats.map((s: any) => <StatCard key={s.label} s={s} />)}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* NEXT GAME — an event: two strong logos, date/time, venue/broadcast */}
+        {nextGame ? (
+          <View style={v2.ngSection}>
+            <SectionTitle title="Next Game" accent={colors.green} />
+            <Pressable style={v2.ngCard} testID="team-next" onPress={() => router.push(`/game/${nextGame.id}`)}>
+              <View style={v2.ngTop}>
+                <Pressable style={v2.ngTeam} hitSlop={6} onPress={() => { prefetchTeam(lg, nextGame.away.abbr); router.push(`/team/${nextGame.away.abbr}`); }}>
+                  <NhlLogo abbr={nextGame.away.abbr} url={nextGame.away.logo} size={58} />
+                  <Text style={v2.ngAbbr}>{nextGame.away.abbr}</Text>
+                </Pressable>
+                <View style={v2.ngMid}>
+                  <Text style={v2.ngAt}>AT</Text>
+                  <Text style={v2.ngDate}>{niceDate(nextGame.date)}</Text>
+                  {nextGame.start_utc ? <Text style={v2.ngTime}>{fmtTime(nextGame.start_utc)}</Text> : null}
+                </View>
+                <Pressable style={v2.ngTeam} hitSlop={6} onPress={() => { prefetchTeam(lg, nextGame.home.abbr); router.push(`/team/${nextGame.home.abbr}`); }}>
+                  <NhlLogo abbr={nextGame.home.abbr} url={nextGame.home.logo} size={58} />
+                  <Text style={v2.ngAbbr}>{nextGame.home.abbr}</Text>
+                </Pressable>
+              </View>
+              {(nextGame.venue || nextGame.broadcast) ? (
+                <Text style={v2.ngMeta} numberOfLines={1}>
+                  {[nextGame.venue, nextGame.broadcast].filter(Boolean).join("  ·  ")}
+                </Text>
+              ) : null}
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* LAST GAME — big logos + score, verified highlights when matched */}
+        {lastFinal ? (
+          <View style={v2.ngSection}>
+            <SectionTitle title="Last Game" accent={colors.green} />
+            <GameLine g={lastFinal} lg={lg} />
+            <HighlightsModule league={lg} home={lastFinal.home?.name} away={lastFinal.away?.name} date={lastFinal.start_utc || lastFinal.date} />
+          </View>
+        ) : null}
+
+        {/* RECENT RESULTS */}
+        {recent && recent.length > 1 ? (
+          <View style={v2.ngSection}>
+            <SectionTitle title="Recent Results" accent={colors.green} />
+            <View style={{ gap: spacing.sm }}>
+              {recent.slice(1).map((g: any) => <GameLine key={g.id} g={g} lg={lg} />)}
+            </View>
+          </View>
+        ) : null}
+
+        {/* LEADING THE WAY — people first */}
+        {scorers?.length ? (
+          <View style={styles.section}>
+            <SectionTitle title="Leading the Way" accent={colors.green} />
+            <View style={styles.card}>
+              {scorers.map((s: any, i: number) => (
+                <Pressable key={s.player_id ?? i} style={styles.pRow} onPress={() => s.player_id && router.push(`/player/${s.player_id}?name=${encodeURIComponent(s.name || "")}&pos=${encodeURIComponent(s.pos || "")}`)}>
+                  <Text style={styles.pRank}>{i + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pName}>{s.name}</Text>
+                    <Text style={styles.pMeta}>{s.pos}{s.gp != null ? ` · ${s.gp} GP` : ""}</Text>
+                  </View>
+                  <Text style={styles.pPts}>{s.points}</Text>
+                  <Text style={styles.pSub}>{s.goals}G {s.assists}A</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* IN GOAL */}
+        {goalie ? (
+          <View style={styles.section}>
+            <SectionTitle title="In Goal" accent={colors.green} />
+            <View style={styles.card}>
+              <Pressable style={styles.pRow} onPress={() => goalie.player_id && router.push(`/player/${goalie.player_id}`)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pName}>{goalie.name}</Text>
+                  <Text style={styles.pMeta}>{goalie.record}{goalie.so ? ` · ${goalie.so} SO` : ""}</Text>
+                </View>
+                <Text style={styles.pPts}>{goalie.svpct ?? "–"}</Text>
+                <Text style={styles.pSub}>{goalie.gaa ?? "–"} GAA</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {/* AROUND THE DIVISION */}
+        {divisionTeams.length ? (
+          <View style={styles.section}>
+            <SectionTitle title={`Around the ${team.division}`} accent={colors.green} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+              {divisionTeams.map((d: any) => {
+                const here = d.abbr === team.abbr;
+                return (
+                  <Pressable key={d.abbr} style={[styles.divCard, here && styles.divCardHere]} disabled={here}
+                    onPressIn={() => !here && prefetchTeam(lg, d.abbr)} onPress={() => !here && router.push(`/team/${d.abbr}`)} testID={`division-team-${d.abbr}`}>
+                    <NhlLogo abbr={d.abbr} url={d.logo} size={34} />
+                    <Text style={styles.divName} numberOfLines={1}>{d.short || d.abbr}</Text>
+                    <Text style={styles.divRec}>{d.wins ?? 0}-{d.losses ?? 0}{d.ot != null ? `-${d.ot}` : ""}</Text>
+                    <Text style={styles.divRank}>#{d.div_rank}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* ROSTER */}
+        {roster ? (
+          <View style={styles.section}>
+            <SectionTitle title="Roster" accent={colors.green} />
+            {(["forwards", "defensemen", "goalies"] as const).map((grp) =>
+              roster[grp]?.length ? (
+                <View key={grp} style={styles.rosterBlock}>
+                  <Text style={styles.rosterLabel}>{grp.toUpperCase()}</Text>
+                  <View style={styles.rosterWrap}>
+                    {roster[grp].map((p: any) => (
+                      <Pressable key={p.player_id} style={styles.chip} onPress={() => p.player_id && router.push(`/player/${p.player_id}`)}>
+                        <Text style={styles.chipNum}>{p.number ?? "–"}</Text>
+                        <Text style={styles.chipName} numberOfLines={1}>{p.name}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null
+            )}
+          </View>
+        ) : null}
+
+        <View style={{ height: spacing.xxxl }} />
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const v2 = StyleSheet.create({
+  content: { paddingBottom: spacing.xxxl, gap: spacing.md },
+
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xs },
+  name: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
+  sub: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", letterSpacing: 0.2, marginTop: 2 },
+
+  deskWrap: { marginHorizontal: spacing.lg },
+
+  statsWrap: { gap: spacing.sm },
+  statsHead: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: spacing.lg },
+  statsKicker: { color: colors.green, fontFamily: fonts.accent, fontSize: 12, fontWeight: "700", letterSpacing: 2 },
+  statsHint: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 11 },
+  statsRail: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingRight: spacing.xl },
+  statCard: { width: 128, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingTop: spacing.lg, paddingBottom: spacing.md, paddingHorizontal: spacing.md, gap: 3, overflow: "hidden" },
+  statTop: { position: "absolute", top: 0, left: 0, right: 0, height: 3 },
+  statVal: { color: colors.white, fontFamily: fonts.display, fontSize: 36, fontWeight: "800", letterSpacing: 0.5 },
+  statLabel: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 10.5, fontWeight: "700", letterSpacing: 1 },
+  statRank: { fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginTop: 2 },
+  statRankDim: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginTop: 2 },
+
+  ngSection: { gap: spacing.sm, paddingHorizontal: spacing.lg },
+  ngCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.blueDim, padding: spacing.lg, gap: spacing.md },
+  ngTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  ngTeam: { alignItems: "center", gap: 6, width: 92 },
+  ngAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  ngMid: { alignItems: "center", gap: 1, flex: 1 },
+  ngAt: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", letterSpacing: 2 },
+  ngDate: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", marginTop: 2 },
+  ngTime: { color: colors.blue, fontFamily: fonts.display, fontSize: 14, fontWeight: "800" },
+  ngMeta: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, textAlign: "center" },
+
+  gCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  gAbbr: { color: colors.text, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 0.3 },
+  gScore: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800" },
+  gDash: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 14, fontWeight: "700" },
+  gWhen: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 10, fontWeight: "600", letterSpacing: 0.5 },
 });

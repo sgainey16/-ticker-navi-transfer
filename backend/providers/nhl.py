@@ -389,9 +389,67 @@ def _sched_card(g: dict) -> dict:
         "date": g.get("gameDate"),
         "start_utc": g.get("startTimeUTC"),
         "state": g.get("gameState"),
+        "venue": _n(g.get("venue")) or None,
+        "broadcast": ", ".join(
+            [b.get("network") for b in (g.get("tvBroadcasts") or []) if b.get("network")]
+        ) or None,
         "away": _score_team(g.get("awayTeam", {})),
         "home": _score_team(g.get("homeTeam", {})),
     }
+
+
+async def _core_team_stats(team_name: str, season_id) -> list | None:
+    """Additive, non-fatal: verified NHL team rate stats + league rank (1..N).
+    Powers the Team Page core-stat rail. Returns None (rail simply omitted) if
+    the stats service is unavailable — never fabricates values."""
+    if not season_id:
+        return None
+    try:
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            r = await client.get(
+                "https://api.nhle.com/stats/rest/en/team/summary",
+                params={"isAggregate": "false", "isGame": "false", "start": "0", "limit": "100",
+                        "cayenneExp": f"gameTypeId=2 and seasonId={season_id}"},
+                follow_redirects=True, timeout=20,
+            )
+            r.raise_for_status()
+            data = r.json().get("data", [])
+    except Exception:
+        logger.warning("NHL team summary stats unavailable (non-fatal)")
+        return None
+    if not data:
+        return None
+    total = len(data)
+    me = next((d for d in data if d.get("teamFullName") == team_name), None)
+    if not me:
+        return None
+
+    def rank_of(key: str, higher: bool) -> int | None:
+        vals = [(d.get("teamFullName"), d.get(key)) for d in data if d.get(key) is not None]
+        vals.sort(key=lambda x: x[1], reverse=higher)
+        for i, (nm, _) in enumerate(vals):
+            if nm == team_name:
+                return i + 1
+        return None
+
+    def pct(v):
+        return round(v * 100, 1) if v is not None else None
+
+    def num(v):
+        return round(v, 2) if v is not None else None
+
+    core: list = []
+
+    def add(label, value, rank):
+        if value is not None:
+            core.append({"label": label, "value": value, "rank": rank, "of": total})
+
+    add("PP%", pct(me.get("powerPlayPct")), rank_of("powerPlayPct", True))
+    add("PK%", pct(me.get("penaltyKillPct")), rank_of("penaltyKillPct", True))
+    add("FACEOFF%", pct(me.get("faceoffWinPct")), rank_of("faceoffWinPct", True))
+    add("GF/GAME", num(me.get("goalsForPerGame")), rank_of("goalsForPerGame", True))
+    add("GA/GAME", num(me.get("goalsAgainstPerGame")), rank_of("goalsAgainstPerGame", False))
+    return core or None
 
 
 async def team_page(tri: str) -> dict:
@@ -424,6 +482,7 @@ async def team_page(tri: str) -> dict:
         "point_pct": row.get("pointPctg"),
     }
     goals = {"gf": row.get("goalFor"), "ga": row.get("goalAgainst"), "diff": row.get("goalDifferential")}
+    core_stats = await _core_team_stats(team["name"], row.get("seasonId"))
     form = {
         "l10": f"{row.get('l10Wins', 0)}-{row.get('l10Losses', 0)}-{row.get('l10OtLosses', 0)}",
         "streak": f"{row.get('streakCode', '') or ''}{row.get('streakCount', '') or ''}",
@@ -478,6 +537,7 @@ async def team_page(tri: str) -> dict:
 
     return {
         "team": team, "record": record, "goals": goals, "form": form,
+        "core_stats": core_stats,
         "scorers": scorers, "goalie": goalie,
         "division_teams": division_teams,
         "recent": recent, "next": nxt,
