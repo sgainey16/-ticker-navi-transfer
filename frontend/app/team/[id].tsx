@@ -680,12 +680,12 @@ function TeamNavRail({ active, onSelect, sticky }: { active: string; onSelect: (
 const v2 = StyleSheet.create({
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
 
-  navWrap: { backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 8 },
-  navSticky: { shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
-  navRail: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: "center" },
-  navItem: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: radius.pill },
-  navItemOn: { backgroundColor: colors.blueDim },
-  navText: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 12, fontWeight: "700", letterSpacing: 1 },
+  navWrap: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingTop: 4 },
+  navSticky: { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 8, paddingTop: 8 },
+  navRail: { paddingHorizontal: spacing.lg, gap: spacing.lg, alignItems: "flex-end" },
+  navItem: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  navItemOn: { borderBottomColor: colors.blue },
+  navText: { color: colors.text, fontFamily: fonts.accent, fontSize: 12.5, fontWeight: "700", letterSpacing: 0.8 },
   navTextOn: { color: colors.blue },
   stickyWrap: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 20 },
   newsEmpty: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, padding: spacing.md },
