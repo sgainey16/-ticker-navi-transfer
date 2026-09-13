@@ -252,7 +252,7 @@ export function TeamDesk({ subject, league }: { subject: string; league: string;
               style={[styles.btn, styles.playBtn, (!ready || busy) && styles.btnDim]}
               onPress={startShow}
             >
-              <Ionicons name="play" size={15} color={colors.white} />
+              <Ionicons name="play" size={13} color={colors.white} />
               <Text style={styles.btnText}>{mode === "show" ? "SHOW" : "PLAY"}</Text>
             </Pressable>
 
@@ -262,19 +262,20 @@ export function TeamDesk({ subject, league }: { subject: string; league: string;
               style={[styles.btn, styles.talkBtn, rec.listening && styles.talkActive]}
               onPress={startTalk}
             >
-              <Ionicons name="mic" size={15} color={colors.white} />
+              <Ionicons name="mic" size={13} color={colors.white} />
               <Text style={styles.btnText}>{rec.listening ? "LISTENING" : "TALK"}</Text>
             </Pressable>
 
-            <Pressable
-              testID="desk-stop"
-              disabled={!active && !speaking}
-              style={[styles.iconBtn, (!active && !speaking) && styles.btnDim]}
-              hitSlop={8}
-              onPress={stopAll}
-            >
-              <Ionicons name="stop" size={16} color={colors.white} />
-            </Pressable>
+            {(active || speaking) ? (
+              <Pressable
+                testID="desk-stop"
+                style={styles.iconBtn}
+                hitSlop={8}
+                onPress={stopAll}
+              >
+                <Ionicons name="stop" size={15} color={colors.white} />
+              </Pressable>
+            ) : null}
           </View>
         )}
         {!loading && !ready ? <Text style={styles.quietText}>The desk is quiet right now.</Text> : null}
@@ -336,13 +337,13 @@ const styles = StyleSheet.create({
   levelHint: { color: "rgba(255,255,255,0.7)", fontFamily: fonts.body, fontSize: 11 },
 
   controls: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs },
-  btn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 8 },
+  btn: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
   playBtn: { backgroundColor: colors.blue },
   talkBtn: { backgroundColor: colors.green },
   talkActive: { backgroundColor: colors.red },
   btnDim: { opacity: 0.45 },
-  btnText: { color: colors.white, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.8 },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  btnText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
+  iconBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   loadRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: spacing.xs },
   loadText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
   quietText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },

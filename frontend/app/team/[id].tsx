@@ -456,7 +456,7 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
               {recForm}{record.points != null ? ` · ${record.points} PTS` : ""} · #{record.div_rank} {team.division}
             </Text>
           </View>
-          <FollowPill following={isTeam(team.abbr)} onPress={() => toggleTeam({ abbr: team.abbr, name: team.name, league: lg, logo: team.logo })} />
+          <FollowPill compact following={isTeam(team.abbr)} onPress={() => toggleTeam({ abbr: team.abbr, name: team.name, league: lg, logo: team.logo })} />
         </View>
 
         {/* REGGIE + MARC — the desk (faces unobstructed, slimmer controls) */}

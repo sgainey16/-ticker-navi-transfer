@@ -101,20 +101,22 @@ export function Loader({ label }: { label?: string }) {
   );
 }
 
-export function FollowPill({ following, onPress }: { following: boolean; onPress: () => void }) {
+export function FollowPill({ following, onPress, compact }: { following: boolean; onPress: () => void; compact?: boolean }) {
   return (
-    <Pressable onPress={() => { Haptics.selectionAsync(); onPress(); }} testID="follow-toggle" style={[fp.pill, following ? fp.on : fp.off]}>
-      <Ionicons name={following ? "checkmark" : "add"} size={16} color={following ? colors.bg : colors.white} />
-      <Text style={[fp.text, { color: following ? colors.bg : colors.white }]}>{following ? "FOLLOWING" : "FOLLOW"}</Text>
+    <Pressable onPress={() => { Haptics.selectionAsync(); onPress(); }} testID="follow-toggle" hitSlop={compact ? 8 : undefined} style={[fp.pill, compact && fp.pillCompact, following ? fp.on : fp.off]}>
+      <Ionicons name={following ? "checkmark" : "add"} size={compact ? 12 : 16} color={following ? colors.bg : colors.white} />
+      <Text style={[fp.text, compact && fp.textCompact, { color: following ? colors.bg : colors.white }]}>{following ? "FOLLOWING" : "FOLLOW"}</Text>
     </Pressable>
   );
 }
 
 const fp = StyleSheet.create({
   pill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 8, alignSelf: "center", borderWidth: 1 },
+  pillCompact: { gap: 3, paddingHorizontal: 10, paddingVertical: 4 },
   on: { backgroundColor: colors.blue, borderColor: colors.blue },
   off: { backgroundColor: "transparent", borderColor: colors.blue },
   text: { fontFamily: fonts.display, fontSize: 12.5, fontWeight: "800", letterSpacing: 1 },
+  textCompact: { fontSize: 10.5, letterSpacing: 0.6 },
 });
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {

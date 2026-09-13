@@ -526,3 +526,10 @@ Per feedback: deleted the persistent title Text ("MINNESOTA WILD · ON THE DESK"
 
 ## Jun 2026 — TEAM PAGE V2 desk (phone review 3): panel = clean hero image.
 Per feedback: removed BOTH LinearGradient overlays (full wash + lower-third) and moved PLAY/SHOW, TALK, Stop controls + ON AIR/LISTENING status + level meter + loading OUT of the panel into a new controlBar rendered directly BELOW the hero image. Panel now renders only <Image contentFit=cover> at full brightness. Removed unused LinearGradient import and unused styles (top/bottom/lowerThird, panel justifyContent). Functionality fully preserved (same handlers: startShow/startTalk/stopAll) — controls just relocated; TODO from user: decide cleanest GLOBAL way to access Show/Talk later. Baked-in artwork wordmark (THE TICKER / AI SPORTS NETWORK / NO INTERMISSION) intentionally kept. Nothing else changed; Minnesota only; not propagated.
+
+## Jun 2026 — TEAM PAGE V2 header/controls refinement (phone review 4).
+1. FollowPill: added `compact` prop (smaller pill: pad 10x4, icon 12, text 10.5, hitSlop 8 keeps tap target); NhlTeamV2 header uses <FollowPill compact/>. Shared default unchanged elsewhere (no propagation).
+2. Play/Talk shrunk (btn pad 11x6, icon 13, text 11) — no container added, just the pill row below the hero.
+3. Stop now conditionally rendered only when (active || speaking) — hidden at idle. iconBtn 36->32.
+All handlers (startShow/startTalk/stopAll) unchanged; functionality preserved. Hero artwork LOCKED (no further changes). Header structure, insight line, stats rail, Next Game, nav, data untouched. Minnesota only; not propagated.
+NEXT REVIEW (per user): move DOWN the page — Next Game, matchup/pregame info, recent games, deeper Stats experience. Stop modifying the Reggie+Marc hero.
