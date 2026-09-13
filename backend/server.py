@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Form, File, UploadFile
+from fastapi import FastAPI, APIRouter, HTTPException, Form, File, UploadFile, Depends, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -30,6 +30,7 @@ from retrieval import assemble_team_context
 from ticker_hosts import host_voice
 import highlightly
 import eliteprospects
+import limits
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -239,12 +240,14 @@ async def get_talk_history(session_id: str):
     return {"session_id": session_id, "turns": doc.get("turns", [])}
 
 
-@api_router.post("/talk")
+@api_router.post("/talk", dependencies=[Depends(limits.rate_limit("talk", 20))])
 async def talk(req: TalkRequest):
     session_id = req.session_id or str(uuid.uuid4())
     user_text = (req.message or "").strip()
     if not user_text:
         raise HTTPException(status_code=400, detail="Empty message")
+    if len(user_text) > limits.MAX_TALK_TEXT:
+        raise HTTPException(status_code=422, detail="Message too long.")
 
     doc = await db.talk_sessions.find_one({"session_id": session_id})
     prior = doc.get("turns", []) if doc else []
@@ -255,19 +258,26 @@ async def talk(req: TalkRequest):
         system_message=build_system_prompt(),
     ).with_model("anthropic", "claude-sonnet-4-6")
 
-    # Replay recent history so the booth keeps context across turns.
-    for t in prior[-8:]:
-        if t.get("role") == "user":
-            try:
-                await chat.send_message(UserMessage(text=t.get("text", "")))
-            except Exception:
-                pass
+    async with limits.slot(limits.LLM_SEM):
+        # Replay recent history so the booth keeps context across turns.
+        for t in prior[-8:]:
+            if t.get("role") == "user":
+                try:
+                    await limits.run_provider(
+                        chat.send_message(UserMessage(text=t.get("text", ""))),
+                        limits.LLM_TIMEOUT, "Broadcast booth")
+                except Exception:
+                    pass
 
-    try:
-        reply = await chat.send_message(UserMessage(text=user_text))
-    except Exception as e:
-        logger.exception("LLM error")
-        raise HTTPException(status_code=502, detail=f"Broadcast booth unavailable: {e}")
+        try:
+            reply = await limits.run_provider(
+                chat.send_message(UserMessage(text=user_text)),
+                limits.LLM_TIMEOUT, "Broadcast booth")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("LLM error")
+            raise HTTPException(status_code=502, detail="Broadcast booth unavailable.")
 
     rayo, casey = _parse_hosts(reply if isinstance(reply, str) else str(reply))
 
@@ -309,22 +319,30 @@ async def voices_briefs():
     return {k: {"name": v["name"], "description": v["description"], "sample": v["sample"]} for k, v in data.VOICE_BRIEFS.items()}
 
 
-@api_router.post("/voices/design")
+@api_router.post("/voices/design", dependencies=[Depends(limits.rate_limit("voices_design", 5))])
 async def voices_design(req: DesignRequest):
     if not eleven:
         raise HTTPException(status_code=503, detail="Voice engine not configured")
     brief = data.VOICE_BRIEFS.get(req.host)
     if not brief:
         raise HTTPException(status_code=404, detail="Unknown host")
-    try:
-        res = eleven.text_to_voice.design(
+
+    def _design():
+        return eleven.text_to_voice.design(
             voice_description=brief["description"],
             text=brief["sample"],
             model_id="eleven_multilingual_ttv_v2",
         )
-    except Exception as e:
+
+    try:
+        async with limits.slot(limits.DESIGN_SEM):
+            res = await limits.run_provider(
+                asyncio.to_thread(_design), limits.DESIGN_TIMEOUT, "Voice design")
+    except HTTPException:
+        raise
+    except Exception:
         logger.exception("Voice design error")
-        raise HTTPException(status_code=502, detail=f"Voice design failed: {getattr(e, 'body', str(e))}")
+        raise HTTPException(status_code=502, detail="Voice design failed.")
     previews = [
         {
             "generated_voice_id": p.generated_voice_id,
@@ -336,22 +354,30 @@ async def voices_design(req: DesignRequest):
     return {"host": req.host, "previews": previews}
 
 
-@api_router.post("/voices/select")
+@api_router.post("/voices/select", dependencies=[Depends(limits.rate_limit("voices_select", 5))])
 async def voices_select(req: SelectRequest):
     if not eleven:
         raise HTTPException(status_code=503, detail="Voice engine not configured")
     brief = data.VOICE_BRIEFS.get(req.host)
     if not brief:
         raise HTTPException(status_code=404, detail="Unknown host")
-    try:
-        voice = eleven.text_to_voice.create(
+
+    def _create():
+        return eleven.text_to_voice.create(
             voice_name=f"{brief['name']} {req.generated_voice_id[:6]}",
             voice_description=brief["description"],
             generated_voice_id=req.generated_voice_id,
         )
-    except Exception as e:
+
+    try:
+        async with limits.slot(limits.DESIGN_SEM):
+            voice = await limits.run_provider(
+                asyncio.to_thread(_create), limits.DESIGN_TIMEOUT, "Voice save")
+    except HTTPException:
+        raise
+    except Exception:
         logger.exception("Voice select error")
-        raise HTTPException(status_code=502, detail=f"Voice save failed: {getattr(e, 'body', str(e))}")
+        raise HTTPException(status_code=502, detail="Voice save failed.")
     await db.settings.update_one({"_id": "voices"}, {"$set": {req.host: voice.voice_id}}, upsert=True)
     return {"host": req.host, "voice_id": voice.voice_id}
 
@@ -378,13 +404,15 @@ async def voices_set(req: SetVoiceRequest):
     return {"ok": True, "host": req.host, "voice_id": req.voice_id}
 
 
-@api_router.post("/tts")
+@api_router.post("/tts", dependencies=[Depends(limits.rate_limit("tts", 90))])
 async def tts(req: TtsRequest):
     if not eleven:
         raise HTTPException(status_code=503, detail="Voice engine not configured")
     text = (req.text or "").strip()
     if not text or not req.voice_id:
         raise HTTPException(status_code=400, detail="text and voice_id required")
+    if len(text) > limits.MAX_TTS_TEXT:
+        raise HTTPException(status_code=422, detail="Text too long for synthesis.")
     speed = req.speed if req.speed else 1.0
     speed = max(0.7, min(1.2, speed))
     key = hashlib.md5(f"{req.voice_id}:{speed}:{text}".encode()).hexdigest()
@@ -408,10 +436,14 @@ async def tts(req: TtsRequest):
     try:
         # Run the blocking ElevenLabs SDK call OFF the event loop so it never
         # freezes other API requests (the Ticker-1 blocking-TTS lesson).
-        audio_bytes = await asyncio.to_thread(_convert)
-    except Exception as e:
+        async with limits.slot(limits.TTS_SEM):
+            audio_bytes = await limits.run_provider(
+                asyncio.to_thread(_convert), limits.TTS_TIMEOUT, "TTS")
+    except HTTPException:
+        raise
+    except Exception:
         logger.exception("TTS error")
-        raise HTTPException(status_code=502, detail=f"TTS failed: {getattr(e, 'body', str(e))}")
+        raise HTTPException(status_code=502, detail="TTS failed.")
     try:
         fpath.write_bytes(audio_bytes)
     except Exception:
@@ -1402,8 +1434,9 @@ async def ticker_bridges(subject: str, league: str = "nhl"):
             "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")}}
 
 
-@api_router.post("/ticker/converse")
+@api_router.post("/ticker/converse", dependencies=[Depends(limits.rate_limit("converse", 20))])
 async def ticker_converse(
+    request: Request,
     subject: str = Form(...),
     league: str = Form("nhl"),
     conversation_id: Optional[str] = Form(None),
@@ -1411,6 +1444,16 @@ async def ticker_converse(
     directive: Optional[str] = Form(None),
     audio: Optional[UploadFile] = File(None),
 ):
+    # Reject oversized payloads up front (before reading the upload into memory).
+    try:
+        clen = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        clen = 0
+    if clen and clen > limits.MAX_AUDIO_BYTES + (1 * 1024 * 1024):
+        raise HTTPException(status_code=413, detail="Upload too large.")
+    if text and len(text) > limits.MAX_CONVERSE_TEXT:
+        raise HTTPException(status_code=422, detail="Message too long.")
+
     prov = get_provider(league)
     lname = getattr(prov, "name", "NHL")
     try:
@@ -1433,7 +1476,15 @@ async def ticker_converse(
     if audio is not None:
         if not stt:
             raise HTTPException(status_code=503, detail="speech-to-text not available")
-        raw = await audio.read()
+        # Bounded read — abort before pulling an oversized clip fully into memory.
+        raw = b""
+        while True:
+            chunk = await audio.read(1024 * 1024)
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > limits.MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="Audio clip too large.")
         logger.info("[converse] audio received: filename=%s content_type=%s bytes=%d subject=%s league=%s",
                     audio.filename, audio.content_type, len(raw or b""), subject, league)
         if not raw:
@@ -1449,7 +1500,10 @@ async def ticker_converse(
                 tmp_path = f.name
             # litellm/OpenAI needs a file object (or bytes/PathLike) — NOT a str path.
             with open(tmp_path, "rb") as fh:
-                result = await stt.transcribe(fh, response_format="text")
+                async with limits.slot(limits.STT_SEM):
+                    result = await limits.run_provider(
+                        stt.transcribe(fh, response_format="text"),
+                        limits.STT_TIMEOUT, "Transcription")
             if isinstance(result, str):
                 user_text = result.strip()
             elif isinstance(result, dict):
@@ -1457,6 +1511,8 @@ async def ticker_converse(
             else:
                 user_text = str(getattr(result, "text", "") or "").strip()
             logger.info("[converse] transcript: %r", user_text[:200])
+        except HTTPException:
+            raise
         except Exception:
             logger.exception("[converse] transcription failed (suffix=%s bytes=%d)", suffix, len(raw or b""))
             raise HTTPException(status_code=502, detail="could not transcribe audio")
@@ -1473,7 +1529,10 @@ async def ticker_converse(
 
     if is_directive:
         # Internal show-continuation — NOT a fan utterance.
-        out = await converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, directive, directive=True)
+        async with limits.slot(limits.LLM_SEM):
+            out = await limits.run_provider(
+                converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, directive, directive=True),
+                limits.LLM_TIMEOUT, "Booth")
         for t in out["turns"]:
             history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
         last_follow = None
@@ -1497,7 +1556,10 @@ async def ticker_converse(
         action = {"type": "follow", "kind": lf["kind"], "entity": lf["entity"], "label": lf.get("label")}
 
     history.append({"role": "user", "text": user_text})
-    out = await converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, user_text)
+    async with limits.slot(limits.LLM_SEM):
+        out = await limits.run_provider(
+            converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, user_text),
+            limits.LLM_TIMEOUT, "Booth")
     for t in out["turns"]:
         history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
 

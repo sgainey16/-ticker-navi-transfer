@@ -496,3 +496,16 @@ Kept routing/data as-is (already follow-independent). Built the missing DOORS:
 Preserved: league-context persistence (out-recap stays WHL), zero-NHL-fallback, OUT rail, Back.
 Verified travel with ONLY Boston Bruins followed: OHL->CHL->WHL->Kamloops; Search->Boston University(NCAA); NCAA->Hockey World->NHL — none required following first.
 HELD (per user): onboarding skip/zero-follow entry; conference/division destination pages; league-page redesign; broader CHL redesign.
+
+## Jun 2026 — SEC-001: server-side budget controls on paid AI endpoints. VERIFIED.
+Context: security audit flagged the paid provider surfaces as unauthenticated + uncapped (cost drain / DoS). Per user: NO hardcoded client/app secret (no accounts yet); protect purely at the backend. Scope = SEC-001 only (no CORS/SEC-002/keys/Atlas).
+New: backend/limits.py (dependency-free) — per-IP sliding-window rate_limit dependency, size caps, bounded-concurrency semaphores + per-provider timeouts (async with slot(...) releases cleanly; run_provider -> 504 on timeout, saturated slot -> 503).
+Wired into server.py (only these 5, ordinary browsing untouched):
+- /api/talk: 20/min/IP, text cap 2000, LLM_SEM(4)+45s.
+- /api/tts: 90/min/IP, text cap 1200, TTS_SEM(4)+45s.
+- /api/voices/design: 5/min/IP, DESIGN_SEM(1)+60s, moved blocking SDK call to thread.
+- /api/voices/select: 5/min/IP, DESIGN_SEM(1)+60s, threaded.
+- /api/ticker/converse: 20/min/IP, Content-Length 413 gate + bounded chunked read (10MB cap, 413) before full in-memory read, typed-text cap 2000, Whisper STT_SEM(3)+45s, Claude converse LLM_SEM(4)+45s.
+Also stopped echoing raw upstream exception text in these handlers' 502s (generic messages).
+Proof (local): normal /talk 200 (both hosts) + normal /tts 200 (real 26KB audio); oversized /talk & /tts text -> 422 before provider; 12MB /converse audio -> 413; 21st rapid /talk -> 429; unit: saturated semaphore -> 503 + released cleanly, slow provider -> 504.
+Reggie/Marc behavior, voices, playback, navigation, UI unchanged. HELD for later small pass: SEC-002 error-detail cleanup (broad), CORS allowlist.
