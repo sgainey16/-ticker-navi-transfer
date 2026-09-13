@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -222,67 +221,63 @@ export function TeamDesk({ subject, league }: { subject: string; league: string;
 
   return (
     <View testID="team-desk">
-      {/* the desk panel — Reggie + Marc together, one panel */}
+      {/* the desk — a clean, bright Ticker broadcast hero image (no overlay, no controls) */}
       <View style={styles.panel}>
         <Image source={DESK} style={StyleSheet.absoluteFill} contentFit="cover" />
-        <LinearGradient colors={["rgba(5,7,12,0.30)", "rgba(5,7,12,0.66)", "rgba(5,7,12,0.96)"]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
-        {/* protected lower-third: keeps controls readable and off the hosts' faces (no permanent text) */}
-        <LinearGradient colors={["rgba(5,7,12,0)", "rgba(5,7,12,0.9)", "rgba(5,7,12,0.99)"]} locations={[0, 0.4, 1]} style={[styles.lowerThird, { pointerEvents: "none" }]} />
+      </View>
 
-        <View style={styles.top}>
-          {status ? (
-            <View style={styles.onair}>
-              <View style={[styles.dot, { backgroundColor: rec.listening ? colors.red : speaking ? colors.blue : colors.gold }]} />
-              <Text style={styles.onairText}>{status}</Text>
-            </View>
-          ) : null}
-        </View>
+      {/* live status + controls live OUTSIDE the hero image (functionality preserved) */}
+      <View style={styles.controlBar}>
+        {status ? (
+          <View style={styles.onair}>
+            <View style={[styles.dot, { backgroundColor: rec.listening ? colors.red : speaking ? colors.blue : colors.gold }]} />
+            <Text style={styles.onairText}>{status}</Text>
+          </View>
+        ) : null}
 
-        <View style={styles.bottom}>
-          {rec.listening ? (
-            <View style={styles.levelRow}>
-              <View style={styles.levelTrack}><View style={[styles.levelFill, { width: `${Math.round(20 + rec.level * 80)}%` }]} /></View>
-              <Text style={styles.levelHint}>go ahead — I’m listening</Text>
-            </View>
-          ) : null}
+        {rec.listening ? (
+          <View style={styles.levelRow}>
+            <View style={styles.levelTrack}><View style={[styles.levelFill, { width: `${Math.round(20 + rec.level * 80)}%` }]} /></View>
+            <Text style={styles.levelHint}>go ahead — I’m listening</Text>
+          </View>
+        ) : null}
 
-          {loading ? (
-            <View style={styles.loadRow}><ActivityIndicator size="small" color={colors.blue} /><Text style={styles.loadText}>Cueing the desk…</Text></View>
-          ) : (
-            <View style={styles.controls}>
-              <Pressable
-                testID="desk-play"
-                disabled={!ready || busy}
-                style={[styles.btn, styles.playBtn, (!ready || busy) && styles.btnDim]}
-                onPress={startShow}
-              >
-                <Ionicons name="play" size={15} color={colors.white} />
-                <Text style={styles.btnText}>{mode === "show" ? "SHOW" : "PLAY"}</Text>
-              </Pressable>
+        {loading ? (
+          <View style={styles.loadRow}><ActivityIndicator size="small" color={colors.blue} /><Text style={styles.loadText}>Cueing the desk…</Text></View>
+        ) : (
+          <View style={styles.controls}>
+            <Pressable
+              testID="desk-play"
+              disabled={!ready || busy}
+              style={[styles.btn, styles.playBtn, (!ready || busy) && styles.btnDim]}
+              onPress={startShow}
+            >
+              <Ionicons name="play" size={15} color={colors.white} />
+              <Text style={styles.btnText}>{mode === "show" ? "SHOW" : "PLAY"}</Text>
+            </Pressable>
 
-              <Pressable
-                testID="desk-talk"
-                disabled={busy && mode !== "convo"}
-                style={[styles.btn, styles.talkBtn, rec.listening && styles.talkActive]}
-                onPress={startTalk}
-              >
-                <Ionicons name="mic" size={15} color={colors.white} />
-                <Text style={styles.btnText}>{rec.listening ? "LISTENING" : "TALK"}</Text>
-              </Pressable>
+            <Pressable
+              testID="desk-talk"
+              disabled={busy && mode !== "convo"}
+              style={[styles.btn, styles.talkBtn, rec.listening && styles.talkActive]}
+              onPress={startTalk}
+            >
+              <Ionicons name="mic" size={15} color={colors.white} />
+              <Text style={styles.btnText}>{rec.listening ? "LISTENING" : "TALK"}</Text>
+            </Pressable>
 
-              <Pressable
-                testID="desk-stop"
-                disabled={!active && !speaking}
-                style={[styles.iconBtn, (!active && !speaking) && styles.btnDim]}
-                hitSlop={8}
-                onPress={stopAll}
-              >
-                <Ionicons name="stop" size={16} color={colors.white} />
-              </Pressable>
-            </View>
-          )}
-          {!loading && !ready ? <Text style={styles.quietText}>The desk is quiet right now.</Text> : null}
-        </View>
+            <Pressable
+              testID="desk-stop"
+              disabled={!active && !speaking}
+              style={[styles.iconBtn, (!active && !speaking) && styles.btnDim]}
+              hitSlop={8}
+              onPress={stopAll}
+            >
+              <Ionicons name="stop" size={16} color={colors.white} />
+            </Pressable>
+          </View>
+        )}
+        {!loading && !ready ? <Text style={styles.quietText}>The desk is quiet right now.</Text> : null}
       </View>
 
       {/* connected extension: mic-permission help, compact thread, webbing chips */}
@@ -329,15 +324,12 @@ export function TeamDesk({ subject, league }: { subject: string; league: string;
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 198, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border, justifyContent: "space-between" },
-  lowerThird: { position: "absolute", left: 0, right: 0, bottom: 0, height: 138 },
-  top: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", padding: spacing.md },
-  onair: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  panel: { height: 198, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  onair: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(11,14,21,0.72)", borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start" },
   dot: { width: 7, height: 7, borderRadius: 4 },
   onairText: { color: colors.white, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
 
-  bottom: { padding: spacing.lg, paddingTop: spacing.md, gap: 7 },
-
+  controlBar: { paddingTop: spacing.md, gap: spacing.sm },
   levelRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   levelTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
   levelFill: { height: 4, borderRadius: 2, backgroundColor: colors.red },
