@@ -533,3 +533,6 @@ Per feedback: removed BOTH LinearGradient overlays (full wash + lower-third) and
 3. Stop now conditionally rendered only when (active || speaking) — hidden at idle. iconBtn 36->32.
 All handlers (startShow/startTalk/stopAll) unchanged; functionality preserved. Hero artwork LOCKED (no further changes). Header structure, insight line, stats rail, Next Game, nav, data untouched. Minnesota only; not propagated.
 NEXT REVIEW (per user): move DOWN the page — Next Game, matchup/pregame info, recent games, deeper Stats experience. Stop modifying the Reggie+Marc hero.
+
+## Jun 2026 — TEAM PAGE V2 header refinement (phone review 5).
+Removed the NHL>Central>Wild breadcrumb row from NhlTeamV2 (recovers vertical space; legacy crumbs styles kept for non-NHL). Strengthened identity to 3 tiers: name (21) / record+PTS bright white (v2.record 15/800) / rank secondary dim (v2.rank #3 CENTRAL 11 accent). Crest 46->54. Removed unused v2.sub. FollowPill stays compact. Header not taller; page flows strong identity -> hero -> insight -> Team Stats -> Next Game, with Next Game now higher on first screen. Minnesota only; not propagated; hero still locked.

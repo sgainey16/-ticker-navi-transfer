@@ -433,28 +433,15 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
     <Screen>
       <BackBar />
       <ScrollView contentContainerStyle={v2.content} showsVerticalScrollIndicator={false}>
-        {/* context breadcrumb — compact, sideways travel preserved */}
-        <View style={styles.crumbs}>
-          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}`)} testID="crumb-league">
-            <Ionicons name="layers-outline" size={12} color={colors.blue} />
-            <Text style={styles.crumbText}>{lg.toUpperCase()}</Text>
-          </Pressable>
-          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
-          <Pressable style={styles.crumb} onPress={() => router.push(`/league/${lg}?division=${encodeURIComponent(team.division || "")}`)} testID="crumb-division">
-            <Text style={styles.crumbText} numberOfLines={1}>{team.division}</Text>
-          </Pressable>
-          <Ionicons name="chevron-forward" size={11} color={colors.textFaint} />
-          <Text style={styles.crumbHere} numberOfLines={1}>{team.short}</Text>
-        </View>
-
-        {/* COMPACT IDENTITY — no giant banner; reach the energy fast */}
+        {/* STRONG TEAM IDENTITY — name / record+pts / rank */}
         <View style={v2.header}>
-          <NhlLogo abbr={team.abbr} url={team.logo} size={46} />
+          <NhlLogo abbr={team.abbr} url={team.logo} size={54} />
           <View style={{ flex: 1 }}>
             <Text style={v2.name} numberOfLines={1}>{team.name}</Text>
-            <Text style={v2.sub} numberOfLines={1}>
-              {recForm}{record.points != null ? ` · ${record.points} PTS` : ""} · #{record.div_rank} {team.division}
+            <Text style={v2.record} numberOfLines={1}>
+              {recForm}{record.points != null ? `  ·  ${record.points} PTS` : ""}
             </Text>
+            <Text style={v2.rank} numberOfLines={1}>#{record.div_rank} {String(team.division || "").toUpperCase()}</Text>
           </View>
           <FollowPill compact following={isTeam(team.abbr)} onPress={() => toggleTeam({ abbr: team.abbr, name: team.name, league: lg, logo: team.logo })} />
         </View>
@@ -627,9 +614,10 @@ function NhlTeamV2({ data, id }: { data: any; id: string }) {
 const v2 = StyleSheet.create({
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
 
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xs },
-  name: { color: colors.white, fontFamily: fonts.display, fontSize: 20, fontWeight: "800", letterSpacing: 0.3 },
-  sub: { color: colors.textDim, fontFamily: fonts.display, fontSize: 12, fontWeight: "700", letterSpacing: 0.2, marginTop: 2 },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.sm },
+  name: { color: colors.white, fontFamily: fonts.display, fontSize: 21, fontWeight: "800", letterSpacing: 0.3 },
+  record: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 0.3, marginTop: 3 },
+  rank: { color: colors.textDim, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 1.2, marginTop: 3 },
 
   deskWrap: { marginHorizontal: spacing.lg },
 
