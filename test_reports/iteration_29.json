@@ -1,0 +1,38 @@
+{
+  "summary": "REELS surface (GAMES -> REELS) tested end-to-end, backend + frontend. Backend: 11/11 pytest cases PASS in test_reels_surface.py. /api/reels returns the correct {league, collections, total, enabled} shape for nhl/whl/ncaa; NHL surfaces GAME HIGHLIGHTS with playable YouTube clips (youtube_id + playable=true); WHL surfaces GAME HIGHLIGHTS; NCAA surfaces real GOALS + SAVES + FIGHTS with the youtube_id-null => playable=false invariant holding, and some NCAA clips carry a resolved game_id. Empty collections are omitted by design (verified). /api/reels/search Silvertips at league=whl returns Silvertips WHL clips; Silvertips at league=nhl scope=league returns honest empty; Silvertips at league=nhl scope=all bridges via All-Hockey and returns WHL clips (league_code=whl); 'ncaa goals' at scope=all routes to category=goals with all NCAA results; q=x (<2 chars) returns empty results without error. Regressions clean: /api/search montreal -> Canadiens, /api/highlights 200, /api/nhl/standings 200. Frontend: Onboarding welcome-go -> region-usa -> interest-nhl -> interests-next -> onboard-search 'Minnesota' -> result-team-MIN -> skip x3 lands on tabs shell. nav-games -> games-seg-reels loads REELS pane with the four top modes (NEXT/RECAP/REELS/STATS), a reels-search input, a visible LeagueSwitcher (NHL/WHL/OHL/QMJHL/NCAA), a GAME HIGHLIGHTS collection with 40 real clip cards (reel-<id>), and the 'Verified video · Highlightly' credit. Playback: tapping a clip opens the modal with an inline YouTube player (iframe rendered) plus reels-close for NHL clips; NCAA clips without youtube_id fall back to OPEN VIDEO. Content-is-navigation: crest-<ABBR> chip on a clip card routes to /team/CAR correctly, independent from the play tap. Search: 'Silvertips' at league=NHL shows honest empty state ('No verified video' + 'Search All Hockey' link) and the reels-scope toggle switches to All Hockey and returns 13 Silvertips clips; 'Hurricanes' at league=NHL returns 15 verified clip rows. League rail switching within REELS: NHL/WHL/NCAA all reload collections without leaving REELS (WHL -> GAME HIGHLIGHTS, NCAA -> GOALS/SAVES/FIGHTS). Four LeagueSwitcher instances mounted (one per Games pane) confirmed by testID collisions (4 elements per league key, 1 visible in the REELS pane) — matched using visible-only filter as advised. No red-screen errors. Deprecated packages detected: none. Only pre-existing RN Web deprecation warnings (shadow*, props.pointerEvents) carry over from prior iterations — non-blocking.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation", "issue": "'shadow* style props are deprecated. Use boxShadow.' warning still emitted on RN web (multiple screens). Non-blocking, carry-over from prior iterations."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reels_surface.py",
+    "/app/test_reports/pytest/pytest_reels_surface.xml"
+  ],
+  "action_items": [
+    "(Optional carry-over) Migrate remaining shadow* style props to boxShadow to silence the RN web deprecation warning across screens."
+  ],
+  "critical_code_review_comments": [
+    "ReelsHub.tsx cleanly separates browse-feed (api.reels with useEffect on [league]) from search (debounced 220ms on [q, league, scopeAll]) with abort guards via `alive` flag — good pattern, no races observed.",
+    "ClipCard and ClipRow both expose testID=`reel-<id>` on the play Pressable and testID=`crest-<ABBR>` on the crest chip Pressables; independent from the parent card so play tap != crest tap by construction. Modal also exposes navChips with reels-viewgame testID when game_id resolved.",
+    "Playback path: youtube_id -> YoutubeInline (iframe); else -> OPEN VIDEO Pressable that Linking.openURL(active.url). Non-embeddable sources correctly fall through. No autoplay-of-next mechanism in code (single active clip via useState) — matches 'No autoplay loop'.",
+    "Backend /api/reels omits empty collections (server.py L1201-1207 uses buckets.setdefault + list comp keeping only non-empty) — matches spec. NCAA fallback contract holds: youtube_id null => playable false (verified in all 40 returned clips).",
+    "LeagueSwitcher is mounted 4x (one per Games pane), so any testID=`league-<code>` selector matches 4 elements. Tests must filter by is_visible() to hit the REELS-pane instance — an alternative would be to unmount hidden panes, but current display:none approach preserves state and is a reasonable trade-off."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reels_surface.py (new — 11 pytest cases for /api/reels + /api/reels/search + regressions)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 pytest cases pass)",
+    "frontend": "100% (all 8 acceptance flows verified: nav to Reels, top modes, search input, league rail, clip cards, credit, modal playback (YouTube inline + OPEN VIDEO fallback), crest -> Team, search honest-empty + scope toggle, WHL/NCAA league switching)"
+  },
+  "seed_data_creation": "None — live Highlightly data. Onboarded 1 follow (team MIN) to exit onboarding.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "REELS is fully functional. Backend suite at /app/backend/tests/test_reels_surface.py is idempotent and safe to rerun (uses .env base URL, only GETs, no seed writes). Onboard sequence: /onboarding?reset=1 -> welcome-go -> region-usa -> interest-nhl -> interests-next -> onboard-search 'Minnesota' -> result-team-* -> onboard-skip x3. To reach Reels: nav-games -> games-seg-reels. To interact with the visible LeagueSwitcher inside REELS, `query_selector_all('[data-testid=\"league-<code>\"]')` returns 4 — filter by is_visible() to hit the REELS pane. Playback modal exposes reels-close and (when game_id resolved) reels-viewgame. Crest chips on cards use testID `crest-<ABBR>` and navigate to /team/<ABBR>?league=<code> (or /team/<ABBR> for NHL).",
+  "rca_of_issue": "N/A — no issues found."
+}

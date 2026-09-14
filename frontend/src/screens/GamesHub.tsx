@@ -6,6 +6,7 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { TabScreen } from "@/src/components/ui";
 import TonightScreen from "@/src/screens/TonightScreen";
 import RecapScreen from "@/src/screens/RecapScreen";
+import ReelsHub from "@/src/screens/ReelsHub";
 import StatsScreen from "@/src/screens/StatsScreen";
 
 // GAMES — a global destination that groups the game-centric programs. The segmented
@@ -13,10 +14,11 @@ import StatsScreen from "@/src/screens/StatsScreen";
 // bottom bar stays global. This is the deliberate top=context / bottom=global split
 // the Navigation Fork is testing. RECAP / NEXT / STATS keep their full functionality;
 // they're framed here as content destinations rather than global nav.
-type View = "next" | "recap" | "stats";
+type View = "next" | "recap" | "reels" | "stats";
 const SEGMENTS: { key: View; label: string }[] = [
   { key: "next", label: "NEXT" },
   { key: "recap", label: "RECAP" },
+  { key: "reels", label: "REELS" },
   { key: "stats", label: "STATS" },
 ];
 
@@ -43,6 +45,7 @@ export default function GamesHub() {
       <View style={{ flex: 1 }}>
         <View style={[styles.pane, { display: view === "next" ? "flex" : "none" }]}><TonightScreen /></View>
         <View style={[styles.pane, { display: view === "recap" ? "flex" : "none" }]}><RecapScreen /></View>
+        <View style={[styles.pane, { display: view === "reels" ? "flex" : "none" }]}><ReelsHub /></View>
         <View style={[styles.pane, { display: view === "stats" ? "flex" : "none" }]}><StatsScreen /></View>
       </View>
     </TabScreen>

@@ -156,6 +156,13 @@ export type HighlightClip = {
 };
 export type MatchHighlights = { league: string; recap: HighlightClip | null; clips: HighlightClip[] };
 
+export type ReelClip = HighlightClip & {
+  league_code?: string; away_abbr?: string | null; home_abbr?: string | null;
+  game_id?: string | null; playable?: boolean; collection?: string;
+};
+export type ReelCollection = { key: string; label: string; clips: ReelClip[] };
+export type ReelsFeed = { league: string; collections: ReelCollection[]; total: number; enabled: boolean };
+
 export type HomeStory = {
   subject: string; league: string; title: string; subtitle: string;
   stat?: { label: string; value: string } | null;
@@ -209,6 +216,9 @@ export const api = {
   leagueHighlights: (league: string, limit = 20) => get<{ league: string; clips: HighlightClip[] }>(`/highlights?league=${league}&limit=${limit}`),
   matchHighlights: (opts: { league: string; home: string; away: string; date?: string }) =>
     get<MatchHighlights>(`/highlights/match?league=${opts.league}&home=${encodeURIComponent(opts.home)}&away=${encodeURIComponent(opts.away)}${opts.date ? `&date=${encodeURIComponent(opts.date)}` : ""}`),
+  reels: (league: string, limit = 40) => get<ReelsFeed>(`/reels?league=${league}&limit=${limit}`),
+  reelsSearch: (q: string, league: string, scope: "league" | "all" = "league", limit = 40) =>
+    get<{ query: string; scope: string; category: string | null; results: ReelClip[] }>(`/reels/search?q=${encodeURIComponent(q)}&league=${league}&scope=${scope}&limit=${limit}`),
   converse: async (opts: { subject: string; league?: string; conversation_id?: string | null; text?: string; directive?: string; clip?: VoiceClip | null }): Promise<ConverseResponse> => {
     const form = new FormData();
     form.append("subject", opts.subject);

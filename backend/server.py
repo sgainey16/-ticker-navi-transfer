@@ -30,6 +30,7 @@ from retrieval import assemble_team_context
 from ticker_hosts import host_voice
 import highlightly
 import eliteprospects
+import entity_index
 import limits
 
 ROOT_DIR = Path(__file__).parent
@@ -1097,6 +1098,168 @@ async def highlights_match(league: str = "nhl", home: str = "", away: str = "", 
         logger.exception("highlights_match %s %s/%s failed", league, away, home)
         pkg = {"recap": None, "clips": []}
     return {"league": league, **pkg}
+
+
+# --------------------------------------------------------------------------- REELS
+# GAMES -> REELS: the wider hockey world's video/highlight discovery surface. Built
+# ONLY from verified Highlightly clips (YouTube/authorized). Collections are DERIVED
+# from each clip's real category (+ title keywords as a light fallback); a collection
+# only appears when verified clips exist for it. Each clip is enriched with resolved
+# team abbrs + a canonical game_id (when matchable) so clips participate in the
+# content-is-navigation system. No fabricated highlights, ever.
+REELS_CAT_MAP = {
+    "goal": "goals", "overtime-shootout-goal": "goals", "shootout-goal": "goals",
+    "save": "saves", "fight": "fights", "hit": "hits", "big-hit": "hits",
+    "interview": "interviews", "press-conference": "interviews",
+}
+REELS_COLLECTIONS = [
+    ("goals", "GOALS"), ("fights", "FIGHTS"), ("hits", "BIG HITS"),
+    ("saves", "SAVES"), ("interviews", "INTERVIEWS"), ("highlights", "GAME HIGHLIGHTS"),
+]
+REELS_TITLE_KWS = [("fight", "fights"), ("brawl", "fights"), ("hat trick", "goals"),
+                   ("big save", "saves"), ("big hit", "hits"), ("huge hit", "hits"),
+                   ("interview", "interviews")]
+
+
+def _reels_collection(clip: dict) -> str:
+    cat = (clip.get("category") or "").lower()
+    if cat in REELS_CAT_MAP:
+        return REELS_CAT_MAP[cat]
+    t = (clip.get("title") or "").lower()
+    for kw, coll in REELS_TITLE_KWS:
+        if kw in t:
+            return coll
+    return "highlights"
+
+
+async def _reels_game_index(league: str) -> dict:
+    """{(away_abbr, home_abbr, YYYY-MM-DD): game_id} from the league's current
+    scoreboard, so recent clips can offer a real 'View Game' link (else omitted)."""
+    idx: dict = {}
+    try:
+        prov = get_provider(league) if league != "nhl" else None
+        slate = await (nhl.scoreboard_now() if league == "nhl" else prov.scoreboard_now())
+    except Exception:
+        return idx
+    groups = slate.get("games") if isinstance(slate, dict) else None
+    cards = []
+    if isinstance(groups, dict):
+        for v in groups.values():
+            if isinstance(v, list):
+                cards.extend(v)
+    elif isinstance(groups, list):
+        cards = groups
+    for c in cards:
+        a = ((c.get("away") or {}).get("abbr") or "").upper()
+        h = ((c.get("home") or {}).get("abbr") or "").upper()
+        day = (c.get("start_utc") or c.get("date") or "")[:10]
+        gid = c.get("id")
+        if a and h and gid:
+            idx[(a, h, day)] = str(gid)
+    return idx
+
+
+def _reels_match_game(gindex: dict, clip: dict) -> str | None:
+    a = (clip.get("away_abbr") or "").upper()
+    h = (clip.get("home_abbr") or "").upper()
+    if not a or not h:
+        return None
+    day = (clip.get("date") or "")[:10]
+    from datetime import datetime, timedelta
+    days = [day]
+    if day:
+        try:
+            d0 = datetime.strptime(day, "%Y-%m-%d")
+            days = [day, (d0 + timedelta(days=1)).strftime("%Y-%m-%d"), (d0 - timedelta(days=1)).strftime("%Y-%m-%d")]
+        except ValueError:
+            days = [day]
+    for d in days:
+        for key in ((a, h, d), (h, a, d)):
+            if key in gindex:
+                return gindex[key]
+    return None
+
+
+async def _reels_enrich(clip: dict, league: str, gindex: dict) -> dict:
+    clip["league_code"] = league
+    clip["away_abbr"] = await entity_index.resolve_team_abbr(clip.get("away") or "", league)
+    clip["home_abbr"] = await entity_index.resolve_team_abbr(clip.get("home") or "", league)
+    clip["game_id"] = _reels_match_game(gindex, clip)
+    clip["playable"] = bool(clip.get("youtube_id"))
+    return clip
+
+
+@api_router.get("/reels")
+async def reels_feed(league: str = "nhl", limit: int = 40):
+    """Verified video collections for a league. Empty collections are omitted."""
+    lg = (league or "nhl").lower()
+    try:
+        clips = await highlightly.league_highlights(lg, limit=limit)
+    except Exception:
+        logger.exception("reels_feed %s failed", lg)
+        clips = []
+    gindex = await _reels_game_index(lg)
+    buckets: dict[str, list] = {}
+    for c in clips:
+        await _reels_enrich(c, lg, gindex)
+        buckets.setdefault(_reels_collection(c), []).append(c)
+    collections = [{"key": k, "label": lab, "clips": buckets[k]} for k, lab in REELS_COLLECTIONS if buckets.get(k)]
+    return {"league": lg, "collections": collections, "total": len(clips), "enabled": highlightly.enabled()}
+
+
+@api_router.get("/reels/search")
+async def reels_search(q: str = "", league: str = "nhl", scope: str = "league", limit: int = 40):
+    """Search ONLY verified/available video. Understands category keywords
+    (goals/fights/hits/saves/interviews), a league token, and free-text team/player.
+    scope='all' searches every available league (the 'All Hockey' escape)."""
+    ql = (q or "").strip().lower()
+    if len(ql) < 2:
+        return {"query": q, "scope": scope, "results": []}
+
+    tokens = [t for t in "".join(c if c.isalnum() or c == " " else " " for c in ql).split() if t]
+    cat_filter = None
+    for t in list(tokens):
+        for kw, coll in [("goal", "goals"), ("goals", "goals"), ("fight", "fights"), ("fights", "fights"),
+                         ("hit", "hits"), ("hits", "hits"), ("save", "saves"), ("saves", "saves"),
+                         ("interview", "interviews"), ("interviews", "interviews")]:
+            if t == kw:
+                cat_filter = coll
+                tokens.remove(t)
+                break
+        if cat_filter:
+            break
+
+    all_leagues = list(highlightly.HL_LEAGUES.keys())
+    league_tokens = [t for t in tokens if t in all_leagues]
+    if league_tokens:
+        leagues = league_tokens
+        tokens = [t for t in tokens if t not in all_leagues]
+    else:
+        leagues = all_leagues if scope == "all" else [(league or "nhl").lower()]
+
+    results: list[dict] = []
+    for lg in leagues:
+        try:
+            clips = await highlightly.league_highlights(lg, limit=40)
+        except Exception:
+            continue
+        gindex = await _reels_game_index(lg)
+        for c in clips:
+            coll = _reels_collection(c)
+            if cat_filter and coll != cat_filter:
+                continue
+            hay = f"{c.get('title') or ''} {c.get('home') or ''} {c.get('away') or ''}".lower()
+            if tokens and not all(tok in hay for tok in tokens):
+                continue
+            await _reels_enrich(c, lg, gindex)
+            c["collection"] = coll
+            results.append(c)
+            if len(results) >= limit:
+                break
+        if len(results) >= limit:
+            break
+    return {"query": q, "scope": scope, "category": cat_filter, "results": results}
+
 
 
 @api_router.get("/health/keys")

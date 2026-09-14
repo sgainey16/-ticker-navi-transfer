@@ -157,6 +157,29 @@ async def warm() -> None:
         logger.exception("entity index warm failed")
 
 
+async def resolve_team_abbr(name: str, league_code: str) -> str | None:
+    """Resolve a team NAME (as it appears in a highlight clip) to its canonical abbr
+    within a league, using the same accent-insensitive nickname/substring matching as
+    search. Lets Reels clips become doorways to the right Team Page (content-is-nav)."""
+    n = _norm(name)
+    if not n:
+        return None
+    lc = (league_code or "").lower()
+    toks = n.split()
+    nick = toks[-1] if toks else ""
+    try:
+        ents = await _entities()
+    except Exception:
+        return None
+    for e in ents:
+        if e.get("type") != "team" or e.get("league_code") != lc:
+            continue
+        terms = e["_terms"]
+        if n in terms or (nick and nick in terms.split()):
+            return e.get("team_abbr")
+    return None
+
+
 async def search_entities(q: str, limit: int = 16) -> list[dict]:
     q = (q or "").strip()
     if len(q) < 2:
