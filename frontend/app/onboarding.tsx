@@ -100,7 +100,7 @@ export default function Onboarding() {
       } finally {
         if (runId.current === id) setSearching(false);
       }
-    }, 250);
+    }, 120);
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [query]);
 

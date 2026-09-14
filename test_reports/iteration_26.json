@@ -1,0 +1,32 @@
+{
+  "summary": "Navigation Fork P0 search bug is FIXED. Verified the new entity-based universal search end-to-end: 17/17 backend pytest cases pass (top-result correctness for montreal/habs/canadiens/wild/dallas/stars/kaprizov/kamloops/blazers/whl/golden gophers/minnesota gophers, minnesota surfacing Wild, WHL league hub, warm perf <1.5s) plus regression for /api/leagues, /api/nhl/standings, /api/nhl/team/MIN. Frontend main-search screen renders Montréal Canadiens (NHL), Kamloops Blazers (WHL), Minnesota Golden Gophers (NCAA), and a WHL 'League hub' card; each result routes to /team/MTL, /team/KAM?league=whl, /league/whl respectively. Onboarding search step now returns 'Montréal Canadiens' for 'Montreal' — the previous 'Not connected yet' empty state no longer appears, and the result can be added via result-team-MTL. Search responses are near-instant (single warm calls consistently <1.5s; frontend feels snappy at 120ms debounce).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation", "issue": "Console warns: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Emitted repeatedly across screens on RN web. Not blocking, but should be migrated to boxShadow per RN 0.76+ guidance."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_entity_search.py",
+    "/app/test_reports/pytest/pytest_entity_search.xml"
+  ],
+  "action_items": [
+    "(Optional) Migrate remaining shadow* style props to boxShadow to silence RN web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "entity_index.py is clean: accent-fold via NFKD, alias maps for NHL/NCAA short names, league entities emitted with league-hub id=code, LEAGUE_RANK breaks ties so senior league (NHL) wins ambiguous city queries like 'minnesota' — matches spec. 30-min in-memory cache + provider-level team_entities caching keeps the hot path zero-network for known entities.",
+    "registry.search_all now delegates to entity_index.search_entities and swallows exceptions returning [] — good defensive default, but a hard provider outage would silently produce empty results. Consider surfacing a warning header when the entity index is empty so ops can spot a build failure.",
+    "search.tsx routes league type to /league/{code} correctly and uses stable team_abbr/player_id for team/player routing. 120ms debounce + runId guard against out-of-order responses is correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_entity_search.py (new — 17 pytest cases)"
+  ],
+  "success_rate": { "backend": "100% (17/17)", "frontend": "100% (7/7 UI checks + onboarding flow)" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Entity index is warm-cached for 30 min. To force a fresh build hit /api/search with any query after a backend restart. NCAA team list is a static seed (Highlightly is empty in offseason); MINN is the abbr used for Minnesota Golden Gophers. Frontend main search is at /search; onboarding at /onboarding?reset=1 -> welcome-go -> region-* -> interest-* + interests-next -> onboard-search + result-team-*."
+}

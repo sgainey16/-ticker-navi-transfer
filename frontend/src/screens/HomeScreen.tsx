@@ -125,7 +125,7 @@ export default function Home() {
               ) : null}
             </View>
           ) : (
-            <Pressable style={styles.buildCard} onPress={() => router.push("/onboarding?reset=1")}>
+            <Pressable style={styles.buildCard} onPress={() => router.replace("/onboarding?reset=1")}>
               <Ionicons name="albums-outline" size={20} color={colors.blue} />
               <Text style={styles.buildText}>Build your Draft Board to personalize The Ticker.</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />

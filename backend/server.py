@@ -1599,6 +1599,14 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def _warm_entity_index():
+    """Pre-build the universal search index so the first search is instant too."""
+    import asyncio as _asyncio
+    from entity_index import warm
+    _asyncio.create_task(warm())
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()

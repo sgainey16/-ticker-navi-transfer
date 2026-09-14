@@ -290,3 +290,23 @@ class NCAAProvider(HockeyProvider):
             except Exception:
                 logger.exception("NCAA EP player search failed")
         return out[:limit]
+
+    async def team_entities(self) -> list[dict]:
+        """Normalized team list for the universal entity index (in-memory search).
+
+        Always includes a static SEED of well-known NCAA programs (from ALIASES) so
+        schools like the Minnesota Golden Gophers resolve year-round — the live
+        Highlightly standings feed is empty in the offseason. Live rows (when the
+        season is on) merge in and win on name by canonical code.
+        """
+        # Static seed: reverse the curated ALIASES (normalized full name -> code).
+        seed: dict[str, dict] = {}
+        for full_name, code in ALIASES.items():
+            seed[code] = {"abbr": code, "name": full_name.title(), "city": "", "nickname": "", "logo": None}
+        try:
+            idx = await self._index()
+            for row in idx.get("by_code", {}).values():
+                seed[row["code"]] = {"abbr": row["code"], "name": row["name"], "city": "", "nickname": "", "logo": None}
+        except Exception:
+            logger.exception("NCAA index failed (using seed only)")
+        return list(seed.values())

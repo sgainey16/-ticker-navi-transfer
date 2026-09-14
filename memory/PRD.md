@@ -556,3 +556,16 @@ Phase 1 delivered:
 - PROFILE (src/screens/ProfileScreen.tsx): identity summary, MY DRAFT BOARD (teams/players tap-through), interests (region+leagues), Betting IQ 18+ gated placeholder, Host voices + Start-over settings.
 - Verified via screenshot on public preview: full onboarding flow + all 5 tabs render and are clickable (Minnesota Wild draft board shows). Lint clean.
 - NOT yet done (later phases): content-is-navigation audit, real globe hierarchy, contextual breadcrumbs, directional movement. Awaiting user phone review before Phase 2.
+
+## NAVIGATION FORK — Phase 1.1: SEARCH FIX (P0) [DONE, verified iteration_26]
+User phone test found search slow + "Montreal" -> "Not connected yet". Root causes: (1) NHL search matched raw accented "Montréal" with no accent-folding + no nickname aliases; (2) every keystroke fanned out to all 5 providers, each opening a fresh HTTP client + 1-2 EXTERNAL calls (NHL player svc + 3x HockeyTech searchplayers + NCAA EP) sequentially.
+Fix — universal entity-based search:
+- NEW backend/entity_index.py: in-memory, accent-insensitive (_norm strips diacritics), alias-aware index of TEAMS (all leagues) + LEAGUE entities. Scoring: exact abbr/alias 100 > startswith 70 > substring 50 > multi-token subset 40. LEAGUE_RANK tiebreak so NHL outranks junior/college on ambiguous city queries (minnesota -> Wild first). Curated NHL_ALIASES (habs/bolts/preds/caps/pens/leafs/avs/canes/sens/isles...) + NCAA_ALIASES (golden gophers etc). Cached 30min; per-provider team lists cached ~1h; warmed on startup (server @app.on_event startup -> entity_index.warm()).
+- Added uniform async team_entities() to NHL/HockeyTech/NCAA providers (normalized {abbr,name,city,nickname,logo}). NCAA seeds well-known programs from its ALIASES map so schools (Minnesota Golden Gophers) resolve YEAR-ROUND (live Highlightly NCAA feed is empty in June offseason).
+- providers/nhl.py: new fast player_search() (single NHL search-service call) used on the hot path.
+- registry.search_all() now delegates to entity_index.search_entities() (teams+leagues in-memory + one NHL player call). Near-instant for known entities.
+- Frontend: SearchResult type gained "league"; app/search.tsx routes league -> /league/{code}, renders a league badge, "League hub" subtitle; debounce 250->120ms (onboarding + search). 
+- Location model kept extensible (region stored on follows; future Country->Province->City granularity possible without new onboarding screens now).
+- Floating-control safe zone: onboarding-reset navigations changed push->replace (unmounts shell + Talk mic so it can't overlap onboarding Skip); shell Talk mic shrunk 60->54 and raised to insets.bottom+74 above the bottom nav.
+- Verified iteration_26: backend 17/17 (tests/test_entity_search.py) — montreal/habs/canadiens->MTL, wild/minnesota->Wild, dallas/stars->Dallas, kaprizov->player, kamloops/blazers->KAM whl, whl->league hub, golden gophers/minnesota gophers->MINN ncaa; warm <1.5s; /api/leagues+/api/nhl/* regression intact. Frontend: /search + onboarding all route correctly, no "Not connected yet" for Montreal.
+- Phase 2 (Content-Is-Navigation) still ON HOLD per user; stop for review.

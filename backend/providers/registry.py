@@ -36,27 +36,12 @@ def list_providers() -> list[HockeyProvider]:
 
 
 async def search_all(q: str, limit: int = 16) -> list[dict]:
-    """Aggregate verified search results across every provider that supports it.
-
-    A future league becomes searchable here automatically once registered — the
-    onboarding doorway then spans the whole connected hockey world, with zero
-    fabricated results (providers return only what they can verify).
+    """Universal Ticker entity search — teams + leagues resolve IN-MEMORY (accent
+    + alias aware) via the entity index, plus one fast NHL player lookup. Near-instant
+    for known entities; a future league is searchable the moment it's registered.
     """
-    out: list[dict] = []
-    for p in list_providers():
-        if not p.capabilities.get("search"):
-            continue
-        try:
-            out.extend(await p.search(q, limit=limit))
-        except Exception:
-            pass
-    # De-dupe by (type,id) so overlapping providers never yield duplicate keys.
-    seen: set = set()
-    deduped: list[dict] = []
-    for r in out:
-        k = (r.get("type"), str(r.get("id")))
-        if k in seen:
-            continue
-        seen.add(k)
-        deduped.append(r)
-    return deduped[:limit]
+    from entity_index import search_entities
+    try:
+        return await search_entities(q, limit=limit)
+    except Exception:
+        return []

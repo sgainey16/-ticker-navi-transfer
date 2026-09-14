@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
   mic: {
-    position: "absolute", right: 18, width: 60, height: 60, borderRadius: 30,
+    position: "absolute", right: 16, width: 54, height: 54, borderRadius: 27,
     backgroundColor: colors.blue, alignItems: "center", justifyContent: "center",
     shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },

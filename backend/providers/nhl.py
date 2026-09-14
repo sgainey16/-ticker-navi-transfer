@@ -741,6 +741,35 @@ async def search(q: str, limit: int = 12) -> list[dict]:
     return (teams_out + players_out)[:limit]
 
 
+async def player_search(q: str, limit: int = 8) -> list[dict]:
+    """Fast, single-call NHL player lookup via the official search service. Used by
+    the universal entity index so the per-keystroke hot path makes at most ONE
+    network call (teams/leagues resolve in-memory)."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    out: list[dict] = []
+    try:
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}, follow_redirects=True, timeout=8) as client:
+            r = await client.get(PLAYER_SEARCH, params={"culture": "en-us", "limit": limit, "q": q, "active": "true"})
+            for p in (r.json() or []):
+                pid = str(p.get("playerId"))
+                abbr = p.get("teamAbbrev") or p.get("lastTeamAbbrev") or ""
+                season = p.get("lastSeasonId") or "20252026"
+                pos = p.get("positionCode") or ""
+                headshot = f"https://assets.nhle.com/mugs/nhl/{season}/{abbr}/{pid}.png" if abbr else None
+                sub = "NHL" + (f" · {pos}" if pos else "") + (f" · {abbr}" if abbr else "")
+                out.append({
+                    "type": "player", "id": pid, "player_id": pid, "team_abbr": abbr,
+                    "name": p.get("name"), "pos": pos, "subtitle": sub,
+                    "headshot": headshot, "logo": (f"https://assets.nhle.com/logos/nhl/svg/{abbr}_light.svg" if abbr else None),
+                    "league": "NHL", "league_code": "nhl",
+                })
+    except Exception:
+        logger.exception("nhl player_search failed")
+    return out
+
+
 
 # ---------------------------------------------------------------------------
 # Provider adapter — the NHL implementation of the universal HockeyProvider.
@@ -791,3 +820,10 @@ class NHLProvider(HockeyProvider):
 
     async def search(self, q: str, limit: int = 12):
         return await search(q, limit=limit)
+
+    async def team_entities(self) -> list[dict]:
+        """Normalized team list for the universal entity index (in-memory search)."""
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}, follow_redirects=True, timeout=15) as client:
+            idx = await _team_index(client)
+        return [{"abbr": t["abbr"], "name": t["name"], "city": t.get("place") or "",
+                 "nickname": t.get("common") or "", "logo": t.get("logo")} for t in idx]

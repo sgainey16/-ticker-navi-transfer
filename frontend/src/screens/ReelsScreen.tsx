@@ -81,7 +81,7 @@ export default function MyHockey() {
           ) : null}
 
           {!personalized ? (
-            <Pressable style={styles.build} onPress={() => router.push("/onboarding?reset=1")}>
+            <Pressable style={styles.build} onPress={() => router.replace("/onboarding?reset=1")}>
               <Ionicons name="albums-outline" size={18} color={colors.blue} />
               <Text style={styles.buildText}>Build your Draft Board to make this yours.</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />

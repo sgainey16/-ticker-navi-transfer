@@ -30,13 +30,15 @@ export default function SearchScreen() {
       try { const r = await api.search(q); if (runId.current === id) setResults(r.results); }
       catch { if (runId.current === id) setResults([]); }
       finally { if (runId.current === id) setLoading(false); }
-    }, 250);
+    }, 120);
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [q]);
 
   const open = (r: SearchResult) => {
     const lg = (r.league_code || "nhl").toLowerCase();
-    if (r.type === "team") {
+    if (r.type === "league") {
+      router.push(`/league/${lg}`);
+    } else if (r.type === "team") {
       const tid = r.team_abbr || r.id;
       router.push(`/team/${tid}${lg !== "nhl" ? `?league=${lg}` : ""}`);
     } else {
@@ -81,10 +83,12 @@ export default function SearchScreen() {
           <Pressable key={`${r.type}-${r.id}`} style={styles.row} onPress={() => open(r)} testID={`search-result-${r.id}`}>
             {r.type === "team"
               ? <NhlLogo abbr={r.team_abbr || r.id} url={r.logo} size={30} />
+              : r.type === "league"
+              ? <View style={styles.leagueBadge}><Text style={styles.leagueBadgeText}>{(r.league_code || r.id).toUpperCase()}</Text></View>
               : (r.headshot ? <Image source={r.headshot} style={styles.shot} contentFit="cover" /> : <View style={styles.shot} />)}
             <View style={{ flex: 1 }}>
               <Text style={styles.rName} numberOfLines={1}>{r.name}</Text>
-              <Text style={styles.rSub} numberOfLines={1}>{r.subtitle || r.league}</Text>
+              <Text style={styles.rSub} numberOfLines={1}>{r.type === "league" ? "League hub" : (r.subtitle || r.league)}</Text>
             </View>
             <Text style={styles.rLg}>{(r.league_code || r.league || "").toUpperCase()}</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
@@ -103,6 +107,8 @@ const styles = StyleSheet.create({
   hint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, marginTop: spacing.md, textAlign: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   shot: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceHi },
+  leagueBadge: { width: 44, height: 30, borderRadius: radius.sm, backgroundColor: colors.blueDim, alignItems: "center", justifyContent: "center" },
+  leagueBadgeText: { color: colors.blue, fontFamily: fonts.display, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   rName: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "700" },
   rSub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 1 },
   rLg: { color: colors.blue, fontFamily: fonts.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1 },

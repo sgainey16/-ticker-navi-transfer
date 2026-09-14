@@ -186,6 +186,13 @@ class HockeyTechProvider(HockeyProvider):
                 logger.exception("%s player search failed", LG)
         return (teams_out + players_out)[:limit]
 
+    async def team_entities(self) -> list[dict]:
+        """Normalized team list for the universal entity index (in-memory search)."""
+        async with httpx.AsyncClient(headers={"User-Agent": "TheTicker/1.0"}) as client:
+            idx = await self._team_index(client)
+        return [{"abbr": t["abbr"], "name": t["name"], "city": t.get("city") or "",
+                 "nickname": t.get("nickname") or "", "logo": t.get("logo")} for t in idx]
+
     # --- surfaces not wired in this proof cut (kept honest / minimal) ------
     async def game_by_id(self, game_id: str) -> Game:
         raise ValueError("WHL game page not wired yet")

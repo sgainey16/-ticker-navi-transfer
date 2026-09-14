@@ -135,7 +135,7 @@ export type NhlLeader = { id: string; name: string; team_abbr: string; pos?: str
 export type NhlLeaders = { skaters: Record<string, NhlLeader[]>; goalies: Record<string, NhlLeader[]> };
 
 export type SearchResult = {
-  type: "team" | "player";
+  type: "team" | "player" | "league";
   id: string;
   name: string;
   subtitle?: string;

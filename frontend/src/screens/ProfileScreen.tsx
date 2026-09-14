@@ -40,7 +40,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Draft Board */}
-        <Section title="MY DRAFT BOARD" action={<Pressable onPress={() => { Haptics.selectionAsync(); router.push("/onboarding?reset=1"); }}><Text style={styles.edit}>EDIT</Text></Pressable>}>
+        <Section title="MY DRAFT BOARD" action={<Pressable onPress={() => { Haptics.selectionAsync(); router.replace("/onboarding?reset=1"); }}><Text style={styles.edit}>EDIT</Text></Pressable>}>
           {teams.length || players.length ? (
             <View style={styles.card}>
               {teams.map((t) => (
@@ -61,7 +61,7 @@ export default function ProfileScreen() {
               ))}
             </View>
           ) : (
-            <Pressable style={styles.buildCard} onPress={() => { Haptics.selectionAsync(); router.push("/onboarding?reset=1"); }}>
+            <Pressable style={styles.buildCard} onPress={() => { Haptics.selectionAsync(); router.replace("/onboarding?reset=1"); }}>
               <Ionicons name="albums-outline" size={20} color={colors.blue} />
               <Text style={styles.buildText}>Build your Draft Board — pick the teams & players you follow.</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
               <Text style={styles.setName}>Host voices</Text>
               <Ionicons name="chevron-forward" size={15} color={colors.textFaint} />
             </Pressable>
-            <Pressable style={styles.setRow} onPress={() => { Haptics.selectionAsync(); router.push("/onboarding?reset=1"); }} testID="profile-reset">
+            <Pressable style={styles.setRow} onPress={() => { Haptics.selectionAsync(); router.replace("/onboarding?reset=1"); }} testID="profile-reset">
               <Ionicons name="refresh-outline" size={18} color={colors.textDim} />
               <Text style={styles.setName}>Start over (redo onboarding)</Text>
               <Ionicons name="chevron-forward" size={15} color={colors.textFaint} />
