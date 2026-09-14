@@ -542,3 +542,17 @@ Added TeamNavRail (in app/team/[id].tsx, NHL branch only): compact horizontal, s
 
 ## Jun 2026 — TEAM NAV rail visibility fix (phone review 6b).
 User reported "don't see navigation" though rail was present on preview (measured y≈461, on first screen). Root cause: pill style with dim gray inactive labels read as a caption, not tabs. Fix: restyled TeamNavRail to underline-tab pattern — surface bg + bottom hairline divider; all 5 items bright white (colors.text); active = blue text + 2px blue underline. Now unmistakably a tab bar. Behavior/placement/sticky unchanged. Likely also a stale Expo Go bundle on device — expo restarted.
+
+## NAVIGATION FORK — Phase 1: Fast onboarding + permanent bottom nav [BUILT, awaiting phone review]
+Master brief: this fork prototypes The Ticker's full navigation model (3 layers: A=permanent/global, B=globe/hierarchical, C=content-is-navigation) before it returns to the main app. NHL/Minnesota = test case; model kept global. Build order (user-set): 1 onboarding+permanent nav, 2 content-is-nav, 3 globe/explore hierarchy, 4 contextual+breadcrumbs, 5 left/right/up/down. Rule: bottom=global "where I want to go", top=contextual "where I am". Nothing propagated to main app. Labels/structure NOT locked — prototype for phone review.
+
+Phase 1 delivered:
+- FAST GEO-FIRST ONBOARDING (app/onboarding.tsx): welcome -> STEP1 Region (Canada/US/Europe/Elsewhere, auto-advances) -> STEP2 Interests (leagues multi-select from /api/leagues, skippable) -> picks (existing Reggie/Marc team/player search) -> Enter. region+leagues persisted additively in follows store (follows.tsx Follows type + parse extended; nothing else changed).
+- PERMANENT BOTTOM NAV (src/components/BottomNav.tsx, NavKey = home|myhockey|games|explore|profile): MY TICKER · MY HOCKEY · GAMES · EXPLORE(globe) · PROFILE. Same component on the tab shell AND every detail route (replaced ui.tsx OutRail; Screen now renders <BottomNav/> in route-mode -> goToTab+dismiss). goToTab keys updated to the 5.
+- TOP BRAND BAR (src/components/TopBar.tsx): slim brand + search (replaced TopTabBar in app/index.tsx; TopTabBar now unused/on disk).
+- SHELL (app/index.tsx): 5 bottom tabs; home=HomeScreen, myhockey=ReelsScreen(revived), games=GamesHub(new), explore=ExploreScreen(new), profile=ProfileScreen(new). Floating mic repositioned above the bottom bar.
+- GAMES HUB (src/screens/GamesHub.tsx): top contextual segments NEXT/RECAP/STATS rendering TonightScreen/RecapScreen/StatsScreen -> preserves RECAP/NEXT/STATS functionality (nothing removed), and demonstrates top=context / bottom=global.
+- EXPLORE (src/screens/ExploreScreen.tsx): Phase-1 globe doorway — leagues grouped by parent (NHL/CHL/NCAA) -> /league/[code], plus search. Phase 3 makes it the real World->Region->League->Division->Team->Player hierarchy.
+- PROFILE (src/screens/ProfileScreen.tsx): identity summary, MY DRAFT BOARD (teams/players tap-through), interests (region+leagues), Betting IQ 18+ gated placeholder, Host voices + Start-over settings.
+- Verified via screenshot on public preview: full onboarding flow + all 5 tabs render and are clickable (Minnesota Wild draft board shows). Lint clean.
+- NOT yet done (later phases): content-is-navigation audit, real globe hierarchy, contextual breadcrumbs, directional movement. Awaiting user phone review before Phase 2.

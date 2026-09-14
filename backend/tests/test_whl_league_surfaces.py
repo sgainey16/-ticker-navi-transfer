@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / "frontend" / ".env")
-BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://league-mobile-app.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://team-nav-rail.preview.emergentagent.com").rstrip("/")
 
 TIMEOUT = 60
 

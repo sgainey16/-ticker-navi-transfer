@@ -4,7 +4,7 @@ import { storage } from "@/src/utils/storage";
 export type Tier = 1 | 2 | 3;
 export type TeamFollow = { abbr: string; name?: string; tier?: Tier; fav?: boolean; league?: string; logo?: string | null };
 export type PlayerFollow = { player_id: string; team_abbr: string; name?: string; pos?: string; tier?: Tier; fav?: boolean; league?: string };
-export type Follows = { teams: TeamFollow[]; players: PlayerFollow[] };
+export type Follows = { teams: TeamFollow[]; players: PlayerFollow[]; region?: string; leagues?: string[] };
 
 const KEY = "ticker.follows";
 const ONBOARDED = "ticker.onboarded";
@@ -14,7 +14,12 @@ function parse(raw: string): Follows {
   if (!raw) return EMPTY;
   try {
     const v = JSON.parse(raw);
-    return { teams: Array.isArray(v.teams) ? v.teams : [], players: Array.isArray(v.players) ? v.players : [] };
+    return {
+      teams: Array.isArray(v.teams) ? v.teams : [],
+      players: Array.isArray(v.players) ? v.players : [],
+      region: typeof v.region === "string" ? v.region : undefined,
+      leagues: Array.isArray(v.leagues) ? v.leagues : undefined,
+    };
   } catch {
     return EMPTY;
   }

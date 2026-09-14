@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, Redirect } from "expo-router";
@@ -8,20 +8,25 @@ import * as Haptics from "expo-haptics";
 import { colors } from "@/src/theme";
 import { setTabHandler } from "@/src/lib/tabnav";
 import { useFollows } from "@/src/lib/follows";
-import { TopTabBar } from "@/src/components/TopTabBar";
+import { TopBar } from "@/src/components/TopBar";
+import { BottomNav, NavKey } from "@/src/components/BottomNav";
 import HomeScreen from "@/src/screens/HomeScreen";
-import RecapScreen from "@/src/screens/RecapScreen";
-import TonightScreen from "@/src/screens/TonightScreen";
-import StatsScreen from "@/src/screens/StatsScreen";
+import MyHockeyScreen from "@/src/screens/ReelsScreen";
+import GamesHub from "@/src/screens/GamesHub";
+import ExploreScreen from "@/src/screens/ExploreScreen";
+import ProfileScreen from "@/src/screens/ProfileScreen";
 
-// Universal primary navigation for launch: HOME · RECAP · NEXT · STATS.
-// REELS is capability-gated (added only where verified video exists) and SCORES'
-// standings now live inside STATS — so neither is a universal tab.
-const TABS = [
-  { key: "home", label: "HOME", C: HomeScreen },
-  { key: "recap", label: "RECAP", C: RecapScreen },
-  { key: "tonight", label: "NEXT", C: TonightScreen },
-  { key: "stats", label: "STATS", C: StatsScreen },
+// Layer A — PERMANENT (global) navigation as a bottom bar (thumb access): the
+// "where do I want to go" layer. Contextual "where am I" nav lives at the top of
+// each destination (e.g. GAMES' NEXT/RECAP/STATS segments). Navigation-Fork
+// prototype — labels/structure are NOT locked. RECAP/NEXT/STATS keep full
+// functionality inside GAMES; nothing was removed.
+const TABS: { key: NavKey; C: React.ComponentType }[] = [
+  { key: "home", C: HomeScreen },
+  { key: "myhockey", C: MyHockeyScreen },
+  { key: "games", C: GamesHub },
+  { key: "explore", C: ExploreScreen },
+  { key: "profile", C: ProfileScreen },
 ];
 
 export default function TickerApp() {
@@ -34,11 +39,11 @@ export default function TickerApp() {
 function TabsHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [active, setActive] = useState("home");
+  const [active, setActive] = useState<NavKey>("home");
   const [visited, setVisited] = useState<Set<string>>(new Set(["home"]));
 
   const select = (key: string) => {
-    setActive(key);
+    setActive(key as NavKey);
     setVisited((v) => (v.has(key) ? v : new Set(v).add(key)));
   };
 
@@ -47,11 +52,9 @@ function TabsHost() {
     return () => setTabHandler(null);
   }, []);
 
-  const tabs = useMemo(() => TABS.map(({ key, label }) => ({ key, label })), []);
-
   return (
     <View style={styles.root}>
-      <TopTabBar tabs={tabs} active={active} onSelect={select} />
+      <TopBar />
       <View style={styles.body}>
         {TABS.map(({ key, C }) => {
           if (!visited.has(key)) return null;
@@ -66,11 +69,13 @@ function TabsHost() {
       <Pressable
         testID="floating-mic"
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/talk"); }}
-        style={[styles.mic, { bottom: Math.max(insets.bottom, 16) + 8 }]}
+        style={[styles.mic, { bottom: insets.bottom + 74 }]}
       >
-        <Ionicons name="mic" size={26} color={colors.bg} />
+        <Ionicons name="mic" size={24} color={colors.bg} />
         <View style={styles.micDot} />
       </Pressable>
+
+      <BottomNav active={active} onSelect={select} />
     </View>
   );
 }

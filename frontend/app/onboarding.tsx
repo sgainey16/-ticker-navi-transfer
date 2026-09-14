@@ -31,6 +31,22 @@ const STEPS: Step[] = [
 const HOST_COLOR = { reggie: colors.gold, marc: "#9AA6B8" } as const;
 const HOST_NAME = { reggie: "REGGIE", marc: "MARC" } as const;
 
+// Fast geo-first entry: Where are you? -> What hockey matters? -> Teams/players -> Enter.
+const REGIONS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "canada", label: "Canada", icon: "snow-outline" },
+  { key: "usa", label: "United States", icon: "flag-outline" },
+  { key: "europe", label: "Europe", icon: "earth-outline" },
+  { key: "world", label: "Elsewhere", icon: "planet-outline" },
+];
+const DEFAULT_LEAGUES = [
+  { code: "nhl", name: "NHL" }, { code: "whl", name: "WHL" },
+  { code: "ohl", name: "OHL" }, { code: "qmjhl", name: "QMJHL" }, { code: "ncaa", name: "NCAA" },
+];
+const LEAGUE_TAG: Record<string, string> = {
+  nhl: "The show", whl: "Junior · West", ohl: "Junior · Ontario",
+  qmjhl: "Junior · Québec", ncaa: "College", ahl: "Pro · AHL", echl: "Pro · ECHL",
+};
+
 function lastName(name: string) { const p = name.trim().split(/\s+/); return p[p.length - 1] || name; }
 function initials(name: string) { const p = name.trim().split(/\s+/); return ((p[0]?.[0] || "") + (p[p.length - 1]?.[0] || "")).toUpperCase(); }
 
@@ -40,7 +56,10 @@ export default function Onboarding() {
   const { reset } = useLocalSearchParams<{ reset?: string }>();
   const { completeOnboarding, resetOnboarding } = useFollows();
 
-  const [phase, setPhase] = useState<"welcome" | "chat">("welcome");
+  const [phase, setPhase] = useState<"welcome" | "region" | "interests" | "chat">("welcome");
+  const [region, setRegion] = useState<string | null>(null);
+  const [leagueCodes, setLeagueCodes] = useState<string[]>([]);
+  const [allLeagues, setAllLeagues] = useState<{ code: string; name: string }[]>([]);
   const [si, setSi] = useState(0);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -55,6 +74,13 @@ export default function Onboarding() {
   const isLast = si === STEPS.length - 1;
 
   useEffect(() => { if (reset === "1") resetOnboarding(); }, [reset, resetOnboarding]);
+
+  useEffect(() => { api.leagues().then((r) => setAllLeagues(r.leagues || [])).catch(() => {}); }, []);
+
+  const toggleLeague = (code: string) => {
+    Haptics.selectionAsync();
+    setLeagueCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  };
 
   // Fresh search each question — clears when the host moves on.
   useEffect(() => { setQuery(""); setResults([]); setSearching(false); }, [si]);
@@ -123,6 +149,8 @@ export default function Onboarding() {
     const follows: Follows = {
       teams: teamList.map((t) => ({ abbr: t.abbr, name: t.name, fav: t.fav, league: t.league, logo: t.logo })),
       players: playerList.map((p) => ({ player_id: p.player_id, team_abbr: p.team_abbr, name: p.name, pos: p.pos, fav: p.fav, league: p.league })),
+      region: region || undefined,
+      leagues: leagueCodes.length ? leagueCodes : undefined,
     };
     await completeOnboarding(follows);
     router.replace("/");
@@ -151,8 +179,76 @@ export default function Onboarding() {
         </View>
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
           <View />
-          <Pressable style={styles.cta} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPhase("chat"); }} testID="welcome-go">
+          <Pressable style={styles.cta} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPhase("region"); }} testID="welcome-go">
             <Text style={styles.ctaText}>Let&apos;s go</Text><Ionicons name="arrow-forward" size={16} color={colors.white} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ---------------- REGION (Step 1) ----------------
+  if (phase === "region") {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.brandRow}><TickerMark size={24} /><Text style={styles.brand}>THE TICKER</Text></View>
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.stepHead}>
+          <Text style={styles.stepKicker}>STEP 1 OF 3</Text>
+          <Text style={styles.stepTitle}>Where do you follow hockey from?</Text>
+          <Text style={styles.stepSub}>Points The Ticker at your corner of the hockey world. You can wander anywhere later.</Text>
+        </Animated.View>
+        <View style={styles.regionGrid}>
+          {REGIONS.map((r) => {
+            const on = region === r.key;
+            return (
+              <Pressable key={r.key} style={[styles.regionChip, on && styles.regionChipOn]} onPress={() => { Haptics.selectionAsync(); setRegion(r.key); if (advTimer.current) clearTimeout(advTimer.current); advTimer.current = setTimeout(() => setPhase("interests"), 260); }} testID={`region-${r.key}`}>
+                <Ionicons name={r.icon} size={22} color={on ? colors.white : colors.blue} />
+                <Text style={[styles.regionText, on && { color: colors.white }]}>{r.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={{ flex: 1 }} />
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <View style={{ width: 60 }} />
+          <Pressable style={styles.cta} onPress={() => { Haptics.selectionAsync(); setPhase("interests"); }} testID="region-skip">
+            <Text style={styles.ctaText}>Skip</Text><Ionicons name="arrow-forward" size={16} color={colors.white} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ---------------- INTERESTS (Step 2) ----------------
+  if (phase === "interests") {
+    const list = allLeagues.length ? allLeagues : DEFAULT_LEAGUES;
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.brandRow}><TickerMark size={24} /><Text style={styles.brand}>THE TICKER</Text></View>
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.stepHead}>
+          <Text style={styles.stepKicker}>STEP 2 OF 3</Text>
+          <Text style={styles.stepTitle}>What hockey matters to you?</Text>
+          <Text style={styles.stepSub}>Pick as many as you like — or none. The Ticker learns more as you explore.</Text>
+        </Animated.View>
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.sm }}>
+          {list.map((l) => {
+            const on = leagueCodes.includes(l.code);
+            return (
+              <Pressable key={l.code} style={[styles.leagueRow, on && styles.leagueRowOn]} onPress={() => toggleLeague(l.code)} testID={`interest-${l.code}`}>
+                <View style={[styles.leagueBadge, on && styles.leagueBadgeOn]}><Text style={[styles.leagueBadgeText, on && { color: colors.white }]}>{l.code.toUpperCase()}</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.leagueName}>{l.name}</Text>
+                  <Text style={styles.leagueTag}>{LEAGUE_TAG[l.code] || "Hockey"}</Text>
+                </View>
+                <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={22} color={on ? colors.blue : colors.textFaint} />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Pressable style={styles.backBtn} onPress={() => { Haptics.selectionAsync(); setPhase("region"); }}><Text style={styles.backText}>Back</Text></Pressable>
+          <Pressable style={styles.cta} onPress={() => { Haptics.selectionAsync(); setPhase("chat"); }} testID="interests-next">
+            <Text style={styles.ctaText}>{leagueCodes.length ? "Continue" : "Skip"}</Text><Ionicons name="arrow-forward" size={16} color={colors.white} />
           </Pressable>
         </View>
       </View>
@@ -356,4 +452,22 @@ const styles = StyleSheet.create({
   cta: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.blue, borderRadius: radius.pill, paddingHorizontal: spacing.xl, paddingVertical: 13 },
   ctaDim: { opacity: 0.55 },
   ctaText: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+
+  stepHead: { gap: 5, marginBottom: spacing.lg },
+  stepKicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 2.5 },
+  stepTitle: { color: colors.white, fontFamily: fonts.display, fontSize: 26, fontWeight: "800", letterSpacing: 0.2, lineHeight: 30 },
+  stepSub: { color: colors.textDim, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, marginTop: 2 },
+
+  regionGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  regionChip: { width: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.lg },
+  regionChipOn: { backgroundColor: colors.blue, borderColor: colors.blue },
+  regionText: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
+
+  leagueRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  leagueRowOn: { borderColor: colors.blue, backgroundColor: colors.surfaceHi },
+  leagueBadge: { backgroundColor: colors.blueDim, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 5, minWidth: 60, alignItems: "center" },
+  leagueBadgeOn: { backgroundColor: colors.blue },
+  leagueBadgeText: { color: colors.blue, fontFamily: fonts.display, fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
+  leagueName: { color: colors.white, fontFamily: fonts.display, fontSize: 16, fontWeight: "700" },
+  leagueTag: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 11.5, marginTop: 1 },
 });

@@ -17,7 +17,7 @@ import requests
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL")
 if not BASE_URL:
     # fall back to the frontend/.env public URL used by user
-    BASE_URL = "https://league-mobile-app.preview.emergentagent.com"
+    BASE_URL = "https://team-nav-rail.preview.emergentagent.com"
 BASE_URL = BASE_URL.rstrip("/")
 
 

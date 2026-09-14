@@ -13,7 +13,7 @@ import requests
 
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "").rstrip("/") or \
-    "https://league-mobile-app.preview.emergentagent.com"
+    "https://team-nav-rail.preview.emergentagent.com"
 CONVERSE = f"{BASE_URL}/api/ticker/converse"
 
 TIMEOUT = 90  # Claude + emergentintegrations can be slow
