@@ -1,0 +1,34 @@
+{
+  "summary": "Phase 2 CONTENT-IS-NAVIGATION frontend acceptance run. Onboarding (welcome-go > region-usa > interest-nhl > interests-next > onboard-search Minnesota > result-team-MINN > next > search Kaprizov > result-player-8478864 > skip) lands cleanly on the tabs shell with 1 followed player + 10 finals visible in MY HOCKEY. Acceptance journey PASSES: myhockey-player -> /player/8478864, player-team -> /team/MIN, team-next -> /game/2026010004, Game Page opponent column tap -> /team/CHI, and player<->team round-trip verified twice (Kaprizov->/team/MIN and McDavid 8478402 -> /team/EDM). Search regression 'montreal' still returns Montréal Canadiens. Static code review of the six matchup surfaces confirmed each renders a shared crest -> Team target: NhlSlate uses inline testID crest-<abbr> nested Pressables; GameRail via TappableCrest; GameDepth mini-scoreboard inline crest-<abbr>; ReelsScreen MyHockey final via TappableCrest; RecapScreen final-card via TappableCrest; TonightScreen lite-matchup via TappableCrest. ONE CLEAR MISS on the Game Page: /app/frontend/app/game/[id].tsx `<TeamCol>` is a Pressable that routes to /team/<abbr> correctly, but it does NOT carry testID=`crest-<ABBR>` as the Phase 2 spec requires ('tap the OPPONENT crest (testID crest-<ABBR>, the away/home team column)'). The tap surface itself works (visual click at 'CHI' column area navigated to /team/CHI), but automated crest-<abbr> selectors on the Game Page find 0 elements. Deprecated packages detected: none. RN Web deprecation warnings persist (shadow*, props.pointerEvents) — non-blocking, carried over from iter 26/27.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Game Page team columns", "issue": "TeamCol Pressable is missing testID='crest-<ABBR>'. Phase 2 acceptance criteria explicitly reference this testID on the Game Page ('on Game Page tap the OPPONENT crest (testID crest-<ABBR>, the away/home team column)'). Routing works via the outer Pressable, but the identifier is absent so automated flows and any external instrumentation that looks for crest-<abbr> on the Game Page will miss.", "testID": "crest-<ABBR> (MISSING)", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation", "issue": "'shadow* style props are deprecated. Use boxShadow.' warning still emitted on RN web (multiple screens). Non-blocking, carry-over from iter 26/27."},
+      {"component": "props.pointerEvents deprecation", "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning. Reference: /app/frontend/app/index.tsx tab pane wrapper. Carry-over from iter 27."}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add testID={`crest-${abbr}`} to the away/home Pressable columns in /app/frontend/app/game/[id].tsx (the two TeamCol Pressables on lines ~106 and ~113, or add testID inside TeamCol itself). Spec-required for Phase 2 acceptance and future automation.",
+    "(Optional carry-over) Migrate remaining shadow* style props to boxShadow and swap props.pointerEvents on the TabsHost pane wrapper to style.pointerEvents to silence RN web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "TappableCrest is a clean shared primitive: Pressable with hitSlop=8, disabled when abbr is null, testID=`crest-${abbr}`, appends ?league=<code> for non-NHL. Nested Pressable pattern relies on RN responder to give the inner press priority — code inspection confirms every matchup card places the inner Pressable BEFORE the parent's onPress bubbles, which matches Phase 2 'parent card tap must NOT swallow the individual crest taps'.",
+    "NhlSlate.tsx uses inline Pressable with testID=`crest-${abbr}` rather than TappableCrest for the sides; behavior is equivalent but this duplicates the routing logic (`router.push(`/team/${abbr}${league&&league!=='nhl'?`?league=${league}`:''}`)`). Consider consolidating to TappableCrest for a single source of truth.",
+    "GameDepth.tsx (lines 77 and 89) also uses inline Pressable + testID=`crest-${abbr}` rather than TappableCrest. Same routing logic duplication — minor DRY nit.",
+    "app/game/[id].tsx TeamCol: Pressable + onPress -> router.push(`/team/${abbr}${lq}`) works, but no testID='crest-<abbr>'. This is the one Phase 2 spec deviation surfaced by this test run.",
+    "app/player/[id].tsx line 69: player-team Pressable is correct (testID='player-team'), routes with league query when non-NHL. Player Page also renders next game and Last-5 cards that route to /game/<id>, and 3-stars/skater rows that route to /player/<id> — richly navigational per Phase 2 spirit."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only test)", "frontend": "~90% (acceptance journey PASS end-to-end; 1 spec deviation on Game Page testID; 6/6 matchup crest independence code-verified; 3/3 routing hops runtime-verified; search regression PASS)" },
+  "seed_data_creation": "None — used live public endpoints and onboarded a follow for team MIN + player Kirill Kaprizov (8478864).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Onboarding: /onboarding?reset=1 -> welcome-go -> region-usa -> interest-nhl -> interests-next -> onboard-search 'Minnesota' -> result-team-MINN -> onboard-next -> onboard-search 'Kaprizov' -> result-player-8478864 -> onboard-skip until tabs shell. Follows land in MyHockey producing myhockey-player (1) + myhockey-final (~10) cards. From MyHockey: myhockey-player -> /player/<id>. Kaprizov current id in provider is 8478864 (not 8478402 which is McDavid). Game Page (/app/frontend/app/game/[id].tsx) currently lacks testID='crest-<ABBR>' on TeamCol — tap works but selector doesn't; once fixed the whole automated journey chain is straightforward with data-testid selectors. All other matchup surfaces (NhlSlate/GameRail/GameDepth/Reels final/Recap final-card/Tonight lite-matchup) already expose crest-<abbr>.",
+  "rca_of_issue": "Missing testID on Game Page TeamCol: file /app/frontend/app/game/[id].tsx defines TeamCol as an internal component wrapping NhlLogo + name + score/abbr in a Pressable with onPress -> router.push, but never sets a testID on that Pressable. The Phase 2 review explicitly names 'crest-<ABBR>' on the away/home Game Page column. Fix: either add testID={`crest-${abbr}`} to the outer Pressable inside TeamCol, or set it at the call site (game/[id].tsx lines ~106 and ~113). Routing itself is already correct — this is a discoverability/instrumentation gap, not a functional bug."
+}

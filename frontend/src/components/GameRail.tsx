@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { colors, fonts, spacing, radius } from "@/src/theme";
 import { NhlGameCard } from "@/src/lib/api";
-import { NhlLogo } from "@/src/components/NhlLogo";
+import { TappableCrest } from "@/src/components/TappableCrest";
 
 function fmtTime(utc?: string | null) {
   if (!utc) return "";
@@ -18,10 +18,12 @@ export function GameRail({
   games,
   selectedId,
   onSelect,
+  league,
 }: {
   games: NhlGameCard[];
   selectedId?: string;
   onSelect: (id: string) => void;
+  league?: string;
 }) {
   return (
     <ScrollView
@@ -48,8 +50,8 @@ export function GameRail({
               </Text>
             </View>
 
-            <TeamLine abbr={g.away.abbr} logo={g.away.logo} score={g.away.score} show={isFinal || isLive} />
-            <TeamLine abbr={g.home.abbr} logo={g.home.logo} score={g.home.score} show={isFinal || isLive} />
+            <TeamLine abbr={g.away.abbr} logo={g.away.logo} score={g.away.score} show={isFinal || isLive} league={league} />
+            <TeamLine abbr={g.home.abbr} logo={g.home.logo} score={g.home.score} show={isFinal || isLive} league={league} />
           </Pressable>
         );
       })}
@@ -57,10 +59,10 @@ export function GameRail({
   );
 }
 
-function TeamLine({ abbr, logo, score, show }: { abbr: string; logo?: string | null; score?: number | null; show: boolean }) {
+function TeamLine({ abbr, logo, score, show, league }: { abbr: string; logo?: string | null; score?: number | null; show: boolean; league?: string }) {
   return (
     <View style={styles.teamLine}>
-      <NhlLogo abbr={abbr} url={logo} size={22} />
+      <TappableCrest abbr={abbr} logo={logo} size={22} league={league} />
       <Text style={styles.teamAbbr}>{abbr}</Text>
       <View style={{ flex: 1 }} />
       {show ? <Text style={styles.teamScore}>{score}</Text> : null}

@@ -286,7 +286,7 @@ export default function GameDetail() {
 
 function TeamCol({ abbr, name, logo, score, isFinal, win, onPress }: { abbr: string; name: string; logo?: string | null; score?: number | null; isFinal: boolean; win: boolean; onPress?: () => void }) {
   return (
-    <Pressable style={styles.teamCol} onPress={onPress} disabled={!onPress}>
+    <Pressable style={styles.teamCol} onPress={onPress} disabled={!onPress} testID={`crest-${abbr}`}>
       <NhlLogo abbr={abbr} url={logo} size={52} />
       <Text style={styles.teamName} numberOfLines={2}>{name}</Text>
       {isFinal ? <Text style={[styles.bigScore, { color: win ? colors.white : colors.textDim }]}>{score}</Text> : <Text style={styles.teamAbbr}>{abbr}</Text>}

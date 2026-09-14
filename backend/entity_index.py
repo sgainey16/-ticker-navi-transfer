@@ -64,6 +64,14 @@ LEAGUE_META: dict[str, str] = {
 # like "minnesota" surface the Wild ahead of junior/college programs.
 LEAGUE_RANK: dict[str, int] = {"nhl": 0, "whl": 1, "ohl": 1, "qmjhl": 1, "ncaa": 2}
 
+# TWO DISCOVERY WORLDS (architecture capture for the Explore/Globe + onboarding phase).
+# World 1 = JUNIOR/ELITE/PRO (structured upper ecosystem: NHL/PWHL/CHL/NCAA/junior/
+# European pro/international). World 2 = YOUTH/LOCAL (minor/girls/AAA-AA-A/associations/
+# academies/high-school/tournaments/age-group/community). Classification is by ECOSYSTEM,
+# not player age. A user may follow BOTH. Every registered league today is "elite"; youth
+# entities (associations/local teams) will carry world="youth" when that world is wired.
+LEAGUE_WORLD: dict[str, str] = {"nhl": "elite", "whl": "elite", "ohl": "elite", "qmjhl": "elite", "ncaa": "elite"}
+
 _CACHE: dict = {"ts": 0.0, "entities": []}
 _TTL = 1800  # 30 min; per-provider team lists are themselves cached ~1h
 _LOCK = asyncio.Lock()
@@ -89,6 +97,7 @@ async def _provider_team_entities(p) -> list[dict]:
         out.append({
             "type": "team", "id": abbr, "team_abbr": abbr, "name": t.get("name") or abbr,
             "subtitle": lg, "logo": t.get("logo"), "league": lg, "league_code": code,
+            "world": LEAGUE_WORLD.get(code, "elite"),
             "_terms": terms, "_abbr": abbr.lower(), "_exact": exact,
         })
     return out
@@ -109,6 +118,7 @@ async def _build() -> list[dict]:
         ents.append({
             "type": "league", "id": code, "league_code": code, "name": nm,
             "subtitle": "League", "logo": None, "league": code.upper(),
+            "world": LEAGUE_WORLD.get(code, "elite"),
             "_terms": _norm(f"{code} {nm}"), "_abbr": code, "_exact": {code},
         })
     return ents

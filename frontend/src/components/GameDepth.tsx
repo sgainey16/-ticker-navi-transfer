@@ -74,10 +74,10 @@ export function GameDepth({ summary, onHearRecap, deep }: { summary?: NhlGameCar
 
       {/* mini scoreboard */}
       <View style={styles.board}>
-        <View style={styles.side}>
+        <Pressable style={styles.side} onPress={() => summary.away.abbr && router.push(`/team/${summary.away.abbr}`)} testID={`crest-${summary.away.abbr}`}>
           <NhlLogo abbr={summary.away.abbr} url={summary.away.logo} size={30} />
           <Text style={styles.abbr}>{summary.away.abbr}</Text>
-        </View>
+        </Pressable>
         <View style={styles.mid}>
           {isFinal ? (
             <Text style={styles.score}>{summary.away.score} – {summary.home.score}</Text>
@@ -86,10 +86,10 @@ export function GameDepth({ summary, onHearRecap, deep }: { summary?: NhlGameCar
           )}
           <Text style={styles.status}>{isFinal ? "FINAL" : (detail?.start_utc || summary.start_utc ? "UPCOMING" : (summary.state || "").toUpperCase())}</Text>
         </View>
-        <View style={styles.side}>
+        <Pressable style={styles.side} onPress={() => summary.home.abbr && router.push(`/team/${summary.home.abbr}`)} testID={`crest-${summary.home.abbr}`}>
           <NhlLogo abbr={summary.home.abbr} url={summary.home.logo} size={30} />
           <Text style={styles.abbr}>{summary.home.abbr}</Text>
-        </View>
+        </Pressable>
       </View>
 
       {detail?.series?.round_label ? (

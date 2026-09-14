@@ -11,7 +11,7 @@ import { slateLabel } from "@/src/components/NhlSlate";
 import { TickerDesk } from "@/src/components/TickerDesk";
 import { GameRail } from "@/src/components/GameRail";
 import { GameDepth } from "@/src/components/GameDepth";
-import { NhlLogo } from "@/src/components/NhlLogo";
+import { TappableCrest } from "@/src/components/TappableCrest";
 import { useContextLeague } from "@/src/lib/context";
 
 function niceDate(iso?: string | null) {
@@ -89,7 +89,7 @@ export default function Next() {
                   <SectionTitle title={isFuture ? "The Slate Ahead" : "Today's Slate"} accent={colors.blue} />
                   <Text style={styles.kicker}>{isNhl ? slateLabel(games[0]?.game_type) : league.toUpperCase()}</Text>
                 </View>
-                <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} />
+                <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} league={league} />
               </View>
             ) : (
               <View style={styles.empty}>
@@ -126,7 +126,7 @@ function LiteMatchup({ game, league, onOpen }: { game: any; league: string; onOp
       <Text style={styles.liteKicker}>SELECTED GAME · TAP FOR DETAILS</Text>
       <View style={styles.liteBoard}>
         <View style={styles.liteSide}>
-          <NhlLogo abbr={game.away.abbr} url={game.away.logo} size={34} />
+          <TappableCrest abbr={game.away.abbr} logo={game.away.logo} size={34} league={league} />
           <Text style={styles.liteAbbr}>{game.away.abbr}</Text>
         </View>
         <View style={styles.liteMid}>
@@ -134,7 +134,7 @@ function LiteMatchup({ game, league, onOpen }: { game: any; league: string; onOp
           <Text style={styles.liteStatus}>{(game.state || "").toUpperCase() || (upcoming ? "UPCOMING" : "")}</Text>
         </View>
         <View style={styles.liteSide}>
-          <NhlLogo abbr={game.home.abbr} url={game.home.logo} size={34} />
+          <TappableCrest abbr={game.home.abbr} logo={game.home.logo} size={34} league={league} />
           <Text style={styles.liteAbbr}>{game.home.abbr}</Text>
         </View>
       </View>

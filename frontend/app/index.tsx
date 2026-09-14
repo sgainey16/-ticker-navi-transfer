@@ -59,7 +59,7 @@ function TabsHost() {
         {TABS.map(({ key, C }) => {
           if (!visited.has(key)) return null;
           return (
-            <View key={key} style={[StyleSheet.absoluteFill, { display: active === key ? "flex" : "none" }]} pointerEvents={active === key ? "auto" : "none"}>
+            <View key={key} style={[StyleSheet.absoluteFill, { display: active === key ? "flex" : "none", pointerEvents: active === key ? "auto" : "none" }]}>
               <C />
             </View>
           );

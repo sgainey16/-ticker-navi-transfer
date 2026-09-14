@@ -10,7 +10,7 @@ import { api, MyHockeyItem } from "@/src/lib/api";
 import { useApi } from "@/src/lib/useApi";
 import { useFollows } from "@/src/lib/follows";
 import { TabScreen, Loader, ErrorState, SectionTitle } from "@/src/components/ui";
-import { NhlLogo } from "@/src/components/NhlLogo";
+import { TappableCrest } from "@/src/components/TappableCrest";
 
 function niceDate(utc?: string | null) {
   if (!utc) return "";
@@ -108,8 +108,8 @@ function FeedCard({ item, onPress }: { item: MyHockeyItem; onPress: () => void }
           )
         ) : (
           <View style={styles.matchup}>
-            <NhlLogo abbr={item.away?.abbr} url={item.away?.logo} size={26} />
-            <NhlLogo abbr={item.home?.abbr} url={item.home?.logo} size={26} />
+            <TappableCrest abbr={item.away?.abbr} logo={item.away?.logo} size={26} />
+            <TappableCrest abbr={item.home?.abbr} logo={item.home?.logo} size={26} />
           </View>
         )}
       </View>

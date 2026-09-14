@@ -10,7 +10,7 @@ import { TickerDesk } from "@/src/components/TickerDesk";
 import { GameRail } from "@/src/components/GameRail";
 import { GameDepth } from "@/src/components/GameDepth";
 import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
-import { NhlLogo } from "@/src/components/NhlLogo";
+import { TappableCrest } from "@/src/components/TappableCrest";
 import { useContextLeague } from "@/src/lib/context";
 
 export default function Recap() {
@@ -46,11 +46,11 @@ export default function Recap() {
         ) : games.length ? (
           <View style={styles.section}>
             <SectionTitle title="Recent Finals" accent={colors.blue} />
-            <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} />
+            <GameRail games={games} selectedId={selectedId} onSelect={setSelectedId} league={league} />
             {isNhl ? (
               <GameDepth summary={selectedGame} deep onHearRecap={(id) => router.push(`/recap/${id}`)} />
             ) : selectedGame ? (
-              <FinalCard game={selectedGame} onOpen={() => router.push(`/game/${selectedGame.id}?league=${league}`)} />
+              <FinalCard game={selectedGame} onOpen={() => router.push(`/game/${selectedGame.id}?league=${league}`)} league={league} />
             ) : null}
           </View>
         ) : (
@@ -64,14 +64,14 @@ export default function Recap() {
   );
 }
 
-function FinalCard({ game, onOpen }: { game: NhlGameCard; onOpen: () => void }) {
+function FinalCard({ game, onOpen, league }: { game: NhlGameCard; onOpen: () => void; league?: string }) {
   return (
     <Pressable style={styles.final} testID="final-card" onPress={onOpen}>
       <Text style={styles.finalKicker}>SELECTED FINAL · TAP FOR GAME</Text>
       <View style={styles.finalBoard}>
-        <View style={styles.finalSide}><NhlLogo abbr={game.away.abbr} url={game.away.logo} size={32} /><Text style={styles.finalAbbr}>{game.away.abbr}</Text></View>
+        <View style={styles.finalSide}><TappableCrest abbr={game.away.abbr} logo={game.away.logo} size={32} league={league} /><Text style={styles.finalAbbr}>{game.away.abbr}</Text></View>
         <Text style={styles.finalScore}>{game.away.score} – {game.home.score}</Text>
-        <View style={styles.finalSide}><NhlLogo abbr={game.home.abbr} url={game.home.logo} size={32} /><Text style={styles.finalAbbr}>{game.home.abbr}</Text></View>
+        <View style={styles.finalSide}><TappableCrest abbr={game.home.abbr} logo={game.home.logo} size={32} league={league} /><Text style={styles.finalAbbr}>{game.home.abbr}</Text></View>
       </View>
       <Text style={styles.finalNote}>Final{(game as any).date ? ` · ${(game as any).date}` : ""}. Reggie &amp; Marc have the recap up top.</Text>
     </Pressable>

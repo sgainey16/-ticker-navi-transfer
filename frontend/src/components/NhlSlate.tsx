@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { colors, fonts, spacing, radius } from "@/src/theme";
 import { NhlGameCard as NhlGameCardType } from "@/src/lib/api";
 import { NhlLogo } from "@/src/components/NhlLogo";
@@ -16,7 +17,8 @@ export function fmtTime(utc?: string | null) {
 }
 
 // One shared NHL matchup card — logos, matchup, score/time and status.
-export function NhlGameCard({ g, onPress }: { g: NhlGameCardType; onPress?: () => void }) {
+export function NhlGameCard({ g, onPress, league }: { g: NhlGameCardType; onPress?: () => void; league?: string }) {
+  const router = useRouter();
   const isFinal = g.group === "final";
   const isLive = g.group === "live";
   const winnerAway = isFinal && (g.away.score ?? 0) > (g.home.score ?? 0);
@@ -24,13 +26,13 @@ export function NhlGameCard({ g, onPress }: { g: NhlGameCardType; onPress?: () =
 
   return (
     <Pressable style={[styles.card, onPress && styles.cardTappable]} onPress={onPress} disabled={!onPress} testID={`nhl-game-${g.id}`}>
-      <View style={styles.side}>
+      <Pressable style={styles.side} onPress={() => g.away.abbr && router.push(`/team/${g.away.abbr}${league && league !== "nhl" ? `?league=${league}` : ""}`)} testID={`crest-${g.away.abbr}`}>
         <NhlLogo abbr={g.away.abbr} url={g.away.logo} size={30} />
         <View>
           <Text style={[styles.abbr, winnerAway && styles.winner]}>{g.away.abbr}</Text>
           {g.away.record ? <Text style={styles.rec}>{g.away.record}</Text> : null}
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.center}>
         {isFinal || isLive ? (
@@ -43,13 +45,13 @@ export function NhlGameCard({ g, onPress }: { g: NhlGameCardType; onPress?: () =
         </Text>
       </View>
 
-      <View style={[styles.side, styles.sideRight]}>
+      <Pressable style={[styles.side, styles.sideRight]} onPress={() => g.home.abbr && router.push(`/team/${g.home.abbr}${league && league !== "nhl" ? `?league=${league}` : ""}`)} testID={`crest-${g.home.abbr}`}>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={[styles.abbr, winnerHome && styles.winner]}>{g.home.abbr}</Text>
           {g.home.record ? <Text style={styles.rec}>{g.home.record}</Text> : null}
         </View>
         <NhlLogo abbr={g.home.abbr} url={g.home.logo} size={30} />
-      </View>
+      </Pressable>
     </Pressable>
   );
 }
