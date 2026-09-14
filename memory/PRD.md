@@ -569,3 +569,13 @@ Fix — universal entity-based search:
 - Floating-control safe zone: onboarding-reset navigations changed push->replace (unmounts shell + Talk mic so it can't overlap onboarding Skip); shell Talk mic shrunk 60->54 and raised to insets.bottom+74 above the bottom nav.
 - Verified iteration_26: backend 17/17 (tests/test_entity_search.py) — montreal/habs/canadiens->MTL, wild/minnesota->Wild, dallas/stars->Dallas, kaprizov->player, kamloops/blazers->KAM whl, whl->league hub, golden gophers/minnesota gophers->MINN ncaa; warm <1.5s; /api/leagues+/api/nhl/* regression intact. Frontend: /search + onboarding all route correctly, no "Not connected yet" for Montreal.
 - Phase 2 (Content-Is-Navigation) still ON HOLD per user; stop for review.
+
+## NAVIGATION FORK — Phase 1.2: STATS navigation grammar [BUILT, awaiting test]
+User locked the Ticker navigation grammar: bottom = major destination; top = mode within destination; horizontal rail = league/category; then content-IS-navigation (no deeper tab rows). Applied to STATS.
+- GAMES (bottom) -> top segments NEXT | RECAP | STATS (GamesHub, unchanged).
+- STATS pane rebuilt (src/screens/StatsScreen.tsx): MODE row STANDINGS | PLAYER STATS | TEAM STATS (testIDs stats-mode-standings/players/teams, active underline) + LEAGUE rail NHL|WHL|OHL|QMJHL|NCAA (LeagueSwitcher) kept together as a sticky control header, then the Reggie+Marc desk (surface=stats), then mode content:
+  * STANDINGS: "Where My Teams Sit" (followed) + full conference tables (tap row -> team page).
+  * PLAYER STATS: existing leader chips (Points/Goals/Assists/Wins/GAA/SV%) + leaders list (tap -> player page). Empty-honest per league.
+  * TEAM STATS (NEW): category chips built ONLY from verified standings fields present (Points/Wins/Goals For/Goals Against — GA sorted ascending); ranked team list (tap -> team page). PP%/PK%/SV%/shots deferred until a provider supplies them (no fabrication). Categories auto-hide when a league lacks the data.
+- League + mode are independent selectors; content itself remains the navigation (tap team/player/game). Max visible hierarchy = destination + mode + league + content (rule to prevent tabs-in-tabs-forever).
+- Verified via screenshot (NHL): all 3 modes render real data (standings CAR/BUF/TBL; players McDavid 138/Kucherov 130/MacKinnon 127; team stats Goals For COL 121/CAR 113/DAL 112). Backend unchanged (reuses nhl/league leaders+standings). Phase 2 (Content-Is-Navigation audit) still on hold per user.

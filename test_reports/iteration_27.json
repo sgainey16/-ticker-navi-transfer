@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only verification of the STATS destination grammar in GAMES. All flows pass: onboarding (welcome-go > region-usa > interest-nhl > interests-next > onboard-search Minnesota > result-team-MINN > onboard-skip x2) lands on Home. nav-games opens GamesHub with NEXT/RECAP/STATS top segments visible; games-seg-stats reveals the MODE row STANDINGS|PLAYER STATS|TEAM STATS plus the NHL|WHL|OHL|QMJHL|NCAA LeagueSwitcher (3 mounted instances confirmed; targeting .last resolves the STATS pane). Default STANDINGS renders 32 NHL rows including stand-CAR/BUF/TBL/COL/DAL; tap stand-CAR routes to /team/CAR. PLAYER STATS shows all 6 chips (points/goals/assists/wins/gaa/svpct) and 8 leaders (McDavid #1, Kucherov, MacKinnon); leader-8478402 routes to /player/8478402. TEAM STATS shows 4 chips (points/wins/gf/ga) and 32 rows; teamstat-COL routes to /team/COL. League switch to WHL (last league-whl) renders 23 WHL standing rows including stand-KAM; stand-KAM routes to /team/KAM?league=whl (league query param carried). WHL player leaders is empty by design (backend returns empty arrays for WHL leaders) — 'No player leaders published for WHL yet.' shown. Regression: NEXT and RECAP panes render Reggie+Marc desk + game rail; all 5 bottom nav tabs (nav-home/nav-myhockey/nav-games/nav-explore/nav-profile) visible; floating-mic bbox (y=716..770) sits above bottom nav (y=793) — no overlap. Deprecated packages detected: none. RN Web deprecation warnings persist: shadow* style props and props.pointerEvents (already noted in iter 26).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "STATS pane TickerDesk header", "issues": ["After switching STATS league from NHL to WHL, the ticker-desk hero title still displayed 'AROUND THE NHL' in the captured screenshot (fallbackTitle should read 'AROUND THE WHL'). May be a cached/lagged title in TickerDesk when the league prop changes. Non-blocking and outside the frozen mic/PLAY/TALK/STOP scope, but worth verifying that TickerDesk re-derives title on league prop change."]}
+    ],
+    "react_native_issues": [
+      {"component": "props.pointerEvents deprecation", "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning. Reference: /app/frontend/app/index.tsx:62 (pointerEvents={active === key ? 'auto' : 'none'} on View)."},
+      {"component": "shadow* style deprecation", "issue": "'shadow* style props are deprecated. Use boxShadow.' still emitted on RN web (multiple components — floating mic in /app/frontend/app/index.tsx:86-90 uses shadowColor/shadowOpacity/shadowRadius/shadowOffset). Non-blocking; follow-up from iter 26."}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) In /app/frontend/app/index.tsx replace pointerEvents prop with style={{ pointerEvents: ... }} on the pane wrapper to silence the deprecation warning.",
+    "(Optional) Migrate remaining shadow* style props (mic button and any others) to boxShadow.",
+    "(Investigate) TickerDesk header title after league switch: confirm fallbackTitle re-renders to 'AROUND THE WHL/OHL/…' when league prop changes on the STATS pane (screenshot showed 'AROUND THE NHL' after WHL switch)."
+  ],
+  "critical_code_review_comments": [
+    "StatsScreen.tsx cleanly separates STATS grammar: MODE row + LeagueSwitcher rail + content. useApi(fn, [league]) correctly re-fetches leaders/standings on league change. openTeam/openPlayer conditionally append ?league=<code> for non-NHL, matching the /team/{abbr} and /player/{id} routes.",
+    "GamesHub.tsx mounts NEXT+RECAP+STATS simultaneously via absoluteFillObject panes toggled with display flex/none. Three LeagueSwitcher instances are expected — tests must scope by pane. This is a known trade-off and documented in the review context.",
+    "LeagueSwitcher.tsx hides itself when leagues.length <= 1 which is correct; NHL/WHL/OHL/QMJHL/NCAA all render currently.",
+    "index.tsx TabsHost uses visited-set lazy mount + display flex/none for tab switching — good perf pattern; passes onboarding gating cleanly."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only test)", "frontend": "100% (14/14 STATS grammar checks + regression)" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "STATS destination has 3 LeagueSwitcher instances (one per pane in GamesHub); scope to the STATS pane by using page.locator('[data-testid=\"league-<code>\"]').last. WHL standings API can take up to ~2s cold; poll for stand-* rows rather than a fixed sleep. WHL leaders backend returns empty arrays (skaters/goalies) — the empty-state text is expected. NHL abbrs: CAR/BUF/TBL/COL/DAL/etc; WHL abbrs from live API include BDN/SC/SAS/REG/PA/MJ/EDM/RD/MH/LET/CGY/PEN/VIC/VAN/PG/KAM; Kamloops is Western conf, conf_rank 6."
+}
