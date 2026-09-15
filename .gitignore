@@ -83,3 +83,8 @@ android-sdk/
 # Local secrets / environment (never push)
 .env
 **/.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
