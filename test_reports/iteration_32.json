@@ -1,0 +1,38 @@
+{
+  "summary": "EXPLORE Phase 1.1 (International Scale) verified end-to-end — backend + frontend. All 7 acceptance flows PASS. BACKEND (10/10 pytest pass, /app/backend/tests/test_explore_world.py): GET /api/explore/world returns {enabled:true, totals:{countries:34, leagues:176, available:5}, featured, countries, international}. Canada available=4 (whl/ohl/qmjhl + Memorial Cup-labelled bucket), USA available=2 (nhl+ncaa). Available codes match exactly {nhl,whl,ohl,qmjhl,ncaa}. All coming_soon rows have code=null. Real international leagues confirmed as coming_soon: Sweden SHL, Finland Liiga, Germany DEL, Czech Republic Extraliga, Russia KHL. Regression: /api/reels?league=nhl returns collections; /api/search?q=montreal resolves Canadiens; /api/league/nhl/standings ok. FRONTEND (Playwright, mobile 390x844): (1) LANDING after onboarding renders hero 'Take me somewhere in hockey.', totals line '34 countries · 176 leagues · 5 live in Ticker', explore-search, world pills world-elite/all/youth, and country rows with flags (Canada, USA, Sweden, Finland, Czech Republic, Russia, Germany all visible). Density is compact — multiple country rails visible on one screen. (2) LIVE vs SOON: all 5 available chips have correct testIDs (explore-league-nhl/whl/ohl/qmjhl/ncaa); 171 coming_soon chips have testID explore-soon-<id> and 'SOON' tag. Tapping a coming-soon chip shows honest inline note '… confirmed by our provider, coming to Ticker soon.' and does NOT navigate; zero explore-team-* rendered. (3) WANDER WHL: tap explore-league-whl unfolds 23 real WHL crests inline, plus explore-hub-whl and explore-surprise. Tapping first crest routes to /team/BDN?league=whl (real Wheat Kings team page). Back returns to Explore with WHL panel STILL OPEN. (4) NHL drill: explore-league-nhl unfolds NHL crests, tap VAN routes to /team/VAN (NHL uses no query param — correct). Back preserves state. (5) LENSES + YOUTH: world-youth renders honest placeholder — sample path chips (Canada > British Columbia > Kamloops > Association), 'SAMPLE PATH · COMING SOON' label, zero explore-team-*, league rail hidden. world-all shows explore-youth-teaser Pressable that switches to youth. (6) SURPRISE ME: tapping explore-surprise routes to a random real team page (/team/PIT observed). (7) REGRESSION: bottom nav 5 tabs (nav-home/myhockey/games/explore/profile) present; explore-search routes to /search and resolves 'montreal' → Montréal Canadiens. Only pre-existing 'shadow* style props are deprecated' RN-Web warning; no red screen; no fabricated data. Deprecated Expo packages detected: none. React-Native issues detected: none new.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation (carry-over)", "issue": "RN Web emits 'shadow* style props are deprecated. Use boxShadow.' at boot. Pre-existing across screens; not introduced by this iteration."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_explore_world.py",
+    "/app/test_reports/pytest/pytest_explore_world.xml"
+  ],
+  "action_items": [
+    "(Optional carry-over) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py explore_world (L1123-1171): correctly derives from highlightly.all_leagues(), injects NCAA (hlid 218640) when absent, and honestly labels every row via _AVAILABLE_BY_HLID mapping. Coming-soon rows have code=null as required.",
+    "ExploreScreen.tsx (L127-141): chip testIDs correctly branch — 'explore-league-<code>' for available, 'explore-soon-<id>' for coming_soon; tap of coming_soon sets inline note only (no nav, no fake teams).",
+    "State preservation across router.back() confirmed — tab siblings remain mounted; WHL/NHL panels stay open after returning from Team Page.",
+    "world-all correctly renders full country-grouped world PLUS an explore-youth-teaser bridge; world-youth is a pure honest placeholder with zero explore-team-* elements and hidden league rails.",
+    "All interactive elements carry testID; all text wrapped in Text; all styles via StyleSheet.create."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_explore_world.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest — explore/world shape, totals, featured Canada/USA, available codes, intl coming-soon SHL/Liiga/DEL/Extraliga/KHL, reels/search/standings regressions)",
+    "frontend": "100% (7/7 acceptance flows: landing composition + density, live/coming-soon chip states + honest note, WHL drill + real team + back-preserves-open, NHL drill routing, three world lenses + honest youth placeholder + world-all teaser, Surprise Me, 5-tab nav + search doorway resolves Canadiens)"
+  },
+  "seed_data_creation": "None — provider truth only (Highlightly inventory + NHL/WHL standings). Onboarded 1 follow (MINN via 'Minnesota' search) to exit onboarding.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Explore Phase 1.1 (International Scale) fully in place. Backend: GET /api/explore/world returns totals {countries:34, leagues:176, available:5}. Available codes: {nhl,whl,ohl,qmjhl,ncaa}. Frontend testIDs: explore-search, world-elite/all/youth, explore-league-<code> (available), explore-soon-<id> (coming_soon with 'SOON' tag), explore-team-<ABBR>, explore-hub-<code>, explore-surprise, explore-youth-teaser (world-all only). Onboard flow: /onboarding?reset=1 -> welcome-go -> region-canada -> interests-next -> onboard-search 'Minnesota' -> click first result-team-* -> onboard-skip x2 (third skip may be absent). NHL team route: /team/<ABBR> (no query); non-NHL: /team/<ABBR>?league=<code>. Tapping coming_soon chips shows inline note only — this is intentional honest state, NOT a bug.",
+  "rca_of_issue": "N/A — no defects. All 7 acceptance criteria satisfied on both backend and frontend."
+}

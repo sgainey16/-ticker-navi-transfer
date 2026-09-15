@@ -28,16 +28,16 @@ const LEAGUE_META: Record<string, { name: string; full: string; region: string; 
   qmjhl: { name: "QMJHL", full: "Québec Maritimes Junior", region: "Québec · Maritimes", flag: "🇨🇦", tint: "#2A1F3A" },
   ncaa: { name: "NCAA", full: "College Hockey", region: "United States", flag: "🇺🇸", tint: "#3A2E12" },
 };
-const LEAGUE_ORDER = ["nhl", "whl", "ohl", "qmjhl", "ncaa"];
 
 type TeamLite = { abbr: string; name: string; logo?: string | null };
 
 export default function ExploreScreen() {
   const router = useRouter();
   const [, setCtxLeague] = useContextLeague();
-  const q = useApi(() => api.leagues());
+  const q = useApi(() => api.exploreWorld());
   const [world, setWorld] = useState<World>("elite");
   const [open, setOpen] = useState<string | null>(null);
+  const [soon, setSoon] = useState<string | null>(null);
   const [teams, setTeams] = useState<Record<string, TeamLite[]>>({});
   const [tLoading, setTLoading] = useState<string | null>(null);
 
@@ -79,8 +79,70 @@ export default function ExploreScreen() {
   if (q.loading) return <TabScreen><Loader label="Opening the hockey world…" /></TabScreen>;
   if (q.error || !q.data) return <TabScreen><ErrorState message="Couldn't load the hockey world" onRetry={q.reload} /></TabScreen>;
 
-  const available = new Set((q.data.leagues || []).map((l) => l.code));
-  const leagues = LEAGUE_ORDER.filter((c) => available.has(c) && LEAGUE_META[c]);
+  const wd = q.data;
+  const groups = [...wd.featured, ...wd.countries, ...wd.international];
+  const openCountry = open ? groups.find((g) => g.leagues.some((l) => l.code === open))?.country : null;
+
+  const Drill = ({ code }: { code: string }) => (
+    <Animated.View key={code} entering={FadeInDown.duration(260)} layout={Layout} style={styles.drill}>
+      <View style={styles.drillHead}>
+        <Text style={styles.drillTitle}>{(LEAGUE_META[code]?.full) || code.toUpperCase()}</Text>
+        <Pressable style={styles.hubBtn} onPress={() => { Haptics.selectionAsync(); router.push(`/league/${code}`); }} testID={`explore-hub-${code}`}>
+          <Text style={styles.hubBtnText}>LEAGUE HUB</Text><Ionicons name="arrow-forward" size={13} color={colors.blue} />
+        </Pressable>
+      </View>
+      {tLoading === code ? (
+        <View style={styles.drillLoad}><ActivityIndicator color={colors.blue} /></View>
+      ) : (teams[code] && teams[code].length) ? (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.teamRail}>
+            {teams[code].map((t) => (
+              <Pressable key={t.abbr} style={styles.teamTile} onPress={() => goTeam(code, t.abbr)} testID={`explore-team-${t.abbr}`}>
+                <NhlLogo abbr={t.abbr} url={t.logo} size={44} />
+                <Text style={styles.teamAbbr} numberOfLines={1}>{t.abbr}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Pressable style={styles.surprise} onPress={() => surprise(code)} testID="explore-surprise">
+            <Ionicons name="shuffle" size={15} color={colors.white} />
+            <Text style={styles.surpriseText}>Surprise me</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Text style={styles.drillEmpty}>No teams available right now.</Text>
+      )}
+    </Animated.View>
+  );
+
+  const CountryRow = ({ g }: { g: typeof groups[number] }) => (
+    <View style={styles.ctry}>
+      <View style={styles.ctryHead}>
+        <Text style={styles.ctryFlag}>{g.flag}</Text>
+        <Text style={styles.ctryName} numberOfLines={1}>{g.country}</Text>
+        {g.available ? <View style={styles.liveTag}><Text style={styles.liveTagText}>{g.available} LIVE</Text></View> : null}
+        <View style={{ flex: 1 }} />
+        <Text style={styles.ctryCount}>{g.total}</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRail}>
+        {g.leagues.map((l) => {
+          const on = l.code && l.code === open;
+          const avail = l.status === "available";
+          return (
+            <Pressable
+              key={l.id ?? l.name}
+              onPress={() => { Haptics.selectionAsync(); if (avail && l.code) pickLeague(l.code); else setSoon(l.name); }}
+              style={[styles.chip, avail ? styles.chipLive : styles.chipSoon, on && styles.chipOn]}
+              testID={avail && l.code ? `explore-league-${l.code}` : `explore-soon-${l.id}`}
+            >
+              <Text style={[styles.chipName, avail && styles.chipNameLive]} numberOfLines={1}>{l.name}</Text>
+              {avail ? <View style={styles.liveDot} /> : <Text style={styles.soonTag}>SOON</Text>}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {openCountry === g.country && open ? <Drill code={open} /> : null}
+    </View>
+  );
 
   return (
     <TabScreen>
@@ -92,9 +154,10 @@ export default function ExploreScreen() {
             <Text style={styles.kicker}>EXPLORE THE TICKER</Text>
           </View>
           <Text style={styles.title}>Take me somewhere{"\n"}in hockey.</Text>
+          <Text style={styles.worldTotals}>{wd.totals.countries} countries · {wd.totals.leagues} leagues · {wd.totals.available} live in Ticker</Text>
         </View>
 
-        {/* Entrance 1 — SEARCH (reuse universal search) */}
+        {/* Entrance 1 — SEARCH */}
         <Pressable style={styles.search} onPress={() => { Haptics.selectionAsync(); router.push("/search"); }} testID="explore-search">
           <Ionicons name="search" size={18} color={colors.blue} />
           <Text style={styles.searchText}>Search a league, team or player…</Text>
@@ -106,7 +169,7 @@ export default function ExploreScreen() {
           {([["elite", "ELITE / JUNIOR+"], ["all", "ALL HOCKEY"], ["youth", "YOUTH / LOCAL"]] as [World, string][]).map(([w, label]) => {
             const on = world === w;
             return (
-              <Pressable key={w} onPress={() => { Haptics.selectionAsync(); setWorld(w); setOpen(null); }} style={[styles.worldPill, on && styles.worldPillOn]} testID={`world-${w}`}>
+              <Pressable key={w} onPress={() => { Haptics.selectionAsync(); setWorld(w); setOpen(null); setSoon(null); }} style={[styles.worldPill, on && styles.worldPillOn]} testID={`world-${w}`}>
                 <Text style={[styles.worldText, on && styles.worldTextOn]}>{label}</Text>
               </Pressable>
             );
@@ -140,60 +203,17 @@ export default function ExploreScreen() {
         ) : (
           <>
             <View style={styles.section}>
-              <Text style={styles.secLabel}>PICK A LEAGUE</Text>
-              <Text style={styles.secHint}>Tap to open it — teams unfold right here.</Text>
+              <Text style={styles.secLabel}>WANDER THE WORLD</Text>
+              <Text style={styles.secHint}>Tap a live league — teams unfold right here. Swipe each country.</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.leagueRail}>
-              {leagues.map((code) => {
-                const m = LEAGUE_META[code];
-                const on = open === code;
-                return (
-                  <Pressable key={code} onPress={() => pickLeague(code)} style={[styles.lgCard, { backgroundColor: m.tint }, on && styles.lgCardOn]} testID={`explore-league-${code}`}>
-                    <View style={styles.lgTop}><Text style={styles.lgAbbr}>{m.name}</Text><Text style={styles.lgFlag}>{m.flag}</Text></View>
-                    <Text style={styles.lgFull} numberOfLines={2}>{m.full}</Text>
-                    <View style={styles.lgBottom}>
-                      <Ionicons name="location-outline" size={11} color={colors.textDim} />
-                      <Text style={styles.lgRegion} numberOfLines={1}>{m.region}</Text>
-                    </View>
-                    {on ? <View style={styles.lgDot} /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Inline drill-in — the team crests of the chosen league */}
-            {open ? (
-              <Animated.View key={open} entering={FadeInDown.duration(280)} layout={Layout} style={styles.drill}>
-                <View style={styles.drillHead}>
-                  <Text style={styles.drillTitle}>{LEAGUE_META[open].full}</Text>
-                  <Pressable style={styles.hubBtn} onPress={() => { Haptics.selectionAsync(); router.push(`/league/${open}`); }} testID={`explore-hub-${open}`}>
-                    <Text style={styles.hubBtnText}>LEAGUE HUB</Text><Ionicons name="arrow-forward" size={13} color={colors.blue} />
-                  </Pressable>
-                </View>
-                {tLoading === open ? (
-                  <View style={styles.drillLoad}><ActivityIndicator color={colors.blue} /></View>
-                ) : (teams[open] && teams[open].length) ? (
-                  <>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.teamRail}>
-                      {teams[open].map((t) => (
-                        <Pressable key={t.abbr} style={styles.teamTile} onPress={() => goTeam(open, t.abbr)} testID={`explore-team-${t.abbr}`}>
-                          <NhlLogo abbr={t.abbr} url={t.logo} size={46} />
-                          <Text style={styles.teamAbbr} numberOfLines={1}>{t.abbr}</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                    <Pressable style={styles.surprise} onPress={() => surprise(open)} testID="explore-surprise">
-                      <Ionicons name="shuffle" size={15} color={colors.white} />
-                      <Text style={styles.surpriseText}>Surprise me</Text>
-                    </Pressable>
-                  </>
-                ) : (
-                  <Text style={styles.drillEmpty}>No teams available for {LEAGUE_META[open].name} right now.</Text>
-                )}
+            {soon ? (
+              <Animated.View entering={FadeIn} style={styles.soonNote}>
+                <Ionicons name="time-outline" size={14} color={colors.gold} />
+                <Text style={styles.soonNoteText}>{soon} — confirmed by our provider, coming to Ticker soon.</Text>
+                <Pressable onPress={() => setSoon(null)} hitSlop={8}><Ionicons name="close" size={14} color={colors.textFaint} /></Pressable>
               </Animated.View>
             ) : null}
-
-            {/* ALL HOCKEY also nods to the youth world (honest teaser) */}
+            {groups.map((g) => <CountryRow key={g.country} g={g} />)}
             {world === "all" ? (
               <Pressable style={styles.youthTeaser} onPress={() => { Haptics.selectionAsync(); setWorld("youth"); }} testID="explore-youth-teaser">
                 <Ionicons name="people-outline" size={20} color={colors.blue} />
@@ -214,11 +234,31 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: spacing.lg, gap: spacing.lg },
+  content: { paddingTop: spacing.lg, gap: spacing.md },
   head: { paddingHorizontal: spacing.lg, gap: 6 },
   kickerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   kicker: { color: colors.blue, fontFamily: fonts.accent, fontSize: 11, fontWeight: "700", letterSpacing: 2 },
   title: { color: colors.white, fontFamily: fonts.display, fontSize: 30, fontWeight: "800", letterSpacing: 0.2, lineHeight: 34 },
+  worldTotals: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12.5, marginTop: 4 },
+
+  ctry: { gap: spacing.xs },
+  ctryHead: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: spacing.lg },
+  ctryFlag: { fontSize: 17 },
+  ctryName: { color: colors.white, fontFamily: fonts.display, fontSize: 14, fontWeight: "800", letterSpacing: 0.3 },
+  liveTag: { backgroundColor: colors.blueDim, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  liveTagText: { color: colors.blue, fontFamily: fonts.accent, fontSize: 8.5, fontWeight: "800", letterSpacing: 0.5 },
+  ctryCount: { color: colors.textFaint, fontFamily: fonts.display, fontSize: 12, fontWeight: "700" },
+  chipRail: { gap: 8, paddingHorizontal: spacing.lg, paddingVertical: 2 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, height: 34, borderRadius: radius.pill, paddingHorizontal: 12, borderWidth: 1 },
+  chipLive: { backgroundColor: colors.surfaceHi, borderColor: colors.blueDim },
+  chipSoon: { backgroundColor: "transparent", borderColor: colors.border, borderStyle: "dashed" },
+  chipOn: { backgroundColor: colors.blue, borderColor: colors.blue },
+  chipName: { color: colors.textDim, fontFamily: fonts.display, fontSize: 13, fontWeight: "700", letterSpacing: 0.2, maxWidth: 150 },
+  chipNameLive: { color: colors.white },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.blue },
+  soonTag: { color: colors.textFaint, fontFamily: fonts.accent, fontSize: 8, fontWeight: "800", letterSpacing: 0.6 },
+  soonNote: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: spacing.lg, backgroundColor: "rgba(245,179,1,0.08)", borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(245,179,1,0.25)", paddingHorizontal: spacing.md, paddingVertical: 10 },
+  soonNoteText: { flex: 1, color: colors.text, fontFamily: fonts.body, fontSize: 12.5 },
 
   search: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.blueDim, paddingHorizontal: spacing.md, height: 48 },
   searchText: { flex: 1, color: colors.textDim, fontFamily: fonts.body, fontSize: 14 },

@@ -1100,6 +1100,77 @@ async def highlights_match(league: str = "nhl", home: str = "", away: str = "", 
     return {"league": league, **pkg}
 
 
+# --------------------------------------------------------------------------- EXPLORE
+# International scale for the Explore "wander" surface. Provider truth only:
+# AVAILABLE = a league we've mapped well enough to actually enter (real teams/routes).
+# COMING SOON = a real Highlightly league we can name/identify but haven't populated
+# inside Ticker yet — shown by identity ONLY (never fake teams/players/games/ids).
+_COUNTRY_FLAG = {
+    "Canada": "🇨🇦", "USA": "🇺🇸", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Switzerland": "🇨🇭",
+    "Germany": "🇩🇪", "Czech Republic": "🇨🇿", "Czechia": "🇨🇿", "Slovakia": "🇸🇰", "Russia": "🇷🇺",
+    "Norway": "🇳🇴", "Denmark": "🇩🇰", "France": "🇫🇷", "Austria": "🇦🇹", "Italy": "🇮🇹",
+    "Latvia": "🇱🇻", "Belarus": "🇧🇾", "Poland": "🇵🇱", "Slovenia": "🇸🇮", "Hungary": "🇭🇺",
+    "United Kingdom": "🇬🇧", "Kazakhstan": "🇰🇿", "Japan": "🇯🇵", "Australia": "🇦🇺",
+    "Ukraine": "🇺🇦", "Netherlands": "🇳🇱", "Spain": "🇪🇸", "Lithuania": "🇱🇹", "Estonia": "🇪🇪",
+    "Romania": "🇷🇴", "Turkey": "🇹🇷", "New Zealand": "🇳🇿", "Iceland": "🇮🇸", "Serbia": "🇷🇸",
+    "Croatia": "🇭🇷", "China": "🇨🇳", "South Korea": "🇰🇷", "Europe": "🇪🇺", "World": "🌍",
+}
+_FEATURED_COUNTRIES = ["Canada", "USA", "Sweden", "Finland", "Czech Republic", "Russia", "Switzerland", "Germany", "Slovakia"]
+_AVAILABLE_BY_HLID = {49291: "nhl", 4188: "whl", 3337: "ohl", 5039: "qmjhl", 218640: "ncaa"}
+_INTERNATIONAL = {"Europe", "World"}
+
+
+@api_router.get("/explore/world")
+async def explore_world():
+    """Country-grouped hockey world for Explore. Featured hockey nations first,
+    international competitions last. Each league carries an honest status."""
+    inv = await highlightly.all_leagues()
+    # Ensure our 5 mapped leagues always present as AVAILABLE (ncaa uses a special id).
+    seen_ids = {l.get("id") for l in inv}
+    injects = [
+        {"id": 218640, "name": "NCAA", "country": "USA"},
+    ]
+    for j in injects:
+        if j["id"] not in seen_ids:
+            inv = inv + [j]
+
+    by_country: dict[str, list] = {}
+    for l in inv:
+        hlid = l.get("id")
+        code = _AVAILABLE_BY_HLID.get(hlid)
+        country = l.get("country") or "Other"
+        row = {
+            "id": hlid, "name": l.get("name"), "country": country,
+            "status": "available" if code else "coming_soon", "code": code,
+        }
+        by_country.setdefault(country, []).append(row)
+
+    def country_group(name: str):
+        rows = by_country.get(name, [])
+        rows.sort(key=lambda r: (r["status"] != "available", r["name"] or ""))
+        return {"country": name, "flag": _COUNTRY_FLAG.get(name, "🏒"),
+                "available": sum(1 for r in rows if r["status"] == "available"),
+                "total": len(rows), "leagues": rows}
+
+    featured, others, international = [], [], []
+    for name in sorted(by_country.keys()):
+        if name in _INTERNATIONAL:
+            international.append(country_group(name))
+        elif name in _FEATURED_COUNTRIES:
+            continue
+        else:
+            others.append(country_group(name))
+    featured = [country_group(n) for n in _FEATURED_COUNTRIES if n in by_country]
+
+    total_leagues = sum(len(v) for v in by_country.values())
+    total_available = sum(1 for v in by_country.values() for r in v if r["status"] == "available")
+    return {
+        "enabled": highlightly.enabled(),
+        "totals": {"countries": len(by_country), "leagues": total_leagues, "available": total_available},
+        "featured": featured, "countries": others, "international": international,
+    }
+
+
 # --------------------------------------------------------------------------- REELS
 # GAMES -> REELS: the wider hockey world's video/highlight discovery surface. Built
 # ONLY from verified Highlightly clips (YouTube/authorized). Collections are DERIVED

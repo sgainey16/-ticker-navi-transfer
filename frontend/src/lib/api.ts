@@ -163,6 +163,14 @@ export type ReelClip = HighlightClip & {
 export type ReelCollection = { key: string; label: string; clips: ReelClip[] };
 export type ReelsFeed = { league: string; collections: ReelCollection[]; total: number; enabled: boolean };
 
+export type ExploreLeague = { id: number; name: string; country: string; status: "available" | "coming_soon"; code: string | null };
+export type ExploreCountry = { country: string; flag: string; available: number; total: number; leagues: ExploreLeague[] };
+export type ExploreWorld = {
+  enabled: boolean;
+  totals: { countries: number; leagues: number; available: number };
+  featured: ExploreCountry[]; countries: ExploreCountry[]; international: ExploreCountry[];
+};
+
 export type HomeStory = {
   subject: string; league: string; title: string; subtitle: string;
   stat?: { label: string; value: string } | null;
@@ -175,6 +183,7 @@ export const api = {
   nhlHome: () => get<NhlHomeResponse>("/nhl/home"),
   nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
   leagues: () => get<{ leagues: { code: string; name: string; capabilities: Record<string, boolean> }[] }>("/leagues"),
+  exploreWorld: () => get<ExploreWorld>("/explore/world"),
   leagueScoreboard: (code: string) => get<NhlScoreboard>(`/league/${code}/scoreboard`),
   leagueRecaps: (code: string) => get<{ games: NhlFinalCard[] }>(`/league/${code}/recaps`),
   leagueStandings: (code: string) => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>(`/league/${code}/standings`),

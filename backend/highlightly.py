@@ -250,6 +250,43 @@ def _shape(clip: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- public API
+async def all_leagues() -> list[dict]:
+    """Full Highlightly league inventory (paged), cached a day. Source of truth for
+    Explore's international scale. Returns [{id, name, country}] — provider truth only."""
+    if not enabled():
+        return []
+    ckey = "all_leagues"
+    hit = _CACHE.get(ckey)
+    if hit and (time.time() - hit["ts"] < _SEASON_TTL):
+        return hit["data"]
+    out: list[dict] = []
+    try:
+        async with httpx.AsyncClient() as client:
+            off = 0
+            while True:
+                r = await client.get(f"{BASE}/leagues", params={"limit": 100, "offset": off},
+                                     headers={"x-rapidapi-key": _key()}, timeout=25)
+                r.raise_for_status()
+                data = r.json()
+                items = data if isinstance(data, list) else (data.get("data") or data.get("leagues") or [])
+                if not items:
+                    break
+                for l in items:
+                    c = l.get("country")
+                    country = c.get("name") if isinstance(c, dict) else c
+                    out.append({"id": l.get("id"), "name": l.get("name"), "country": country or "Other"})
+                if len(items) < 100:
+                    break
+                off += 100
+                if off > 600:
+                    break
+    except Exception:
+        logger.exception("Highlightly all_leagues failed")
+        return hit["data"] if hit else []
+    _CACHE[ckey] = {"ts": time.time(), "data": out}
+    return out
+
+
 async def league_highlights(league: str, limit: int = 20) -> list[dict]:
     """Recent verified clips for a league, shaped for the Ticker (newest first)."""
     clips = await _recent_highlights(league, limit=40)
