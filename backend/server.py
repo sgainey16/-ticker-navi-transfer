@@ -31,6 +31,7 @@ from ticker_hosts import host_voice
 import highlightly
 import eliteprospects
 import entity_index
+import explore_taxonomy
 import limits
 
 ROOT_DIR = Path(__file__).parent
@@ -1120,12 +1121,10 @@ _AVAILABLE_BY_HLID = {49291: "nhl", 4188: "whl", 3337: "ohl", 5039: "qmjhl", 218
 _INTERNATIONAL = {"Europe", "World"}
 
 
-@api_router.get("/explore/world")
-async def explore_world():
-    """Country-grouped hockey world for Explore. Featured hockey nations first,
-    international competitions last. Each league carries an honest status."""
+async def _explore_by_country() -> dict[str, list]:
+    """Provider-truth inventory grouped by country, each league carrying an honest
+    status/code. Shared by the Explore world + progressive drill-down endpoints."""
     inv = await highlightly.all_leagues()
-    # Ensure our 5 mapped leagues always present as AVAILABLE (ncaa uses a special id).
     seen_ids = {l.get("id") for l in inv}
     injects = [
         {"id": 218640, "name": "NCAA", "country": "USA"},
@@ -1144,6 +1143,14 @@ async def explore_world():
             "status": "available" if code else "coming_soon", "code": code,
         }
         by_country.setdefault(country, []).append(row)
+    return by_country
+
+
+@api_router.get("/explore/world")
+async def explore_world():
+    """Country ENTRANCES for the main Explore surface (progressive drill-down starts
+    here). Featured hockey nations first, international competitions last."""
+    by_country = await _explore_by_country()
 
     def country_group(name: str):
         rows = by_country.get(name, [])
@@ -1169,6 +1176,19 @@ async def explore_world():
         "totals": {"countries": len(by_country), "leagues": total_leagues, "available": total_available},
         "featured": featured, "countries": others, "international": international,
     }
+
+
+@api_router.get("/explore/node")
+async def explore_node(path: str):
+    """Progressive drill-down: return the ONE next layer of choices for a node path.
+    Static trees (Canada/Sweden) can differ per country; everything else falls back
+    to an honest provider-truth 'browse this country's leagues' node. Youth/local and
+    new countries plug in by adding nodes — the client renderer never changes."""
+    by_country = await _explore_by_country()
+    node = explore_taxonomy.resolve(path, by_country, lambda c: _COUNTRY_FLAG.get(c, "🏒"))
+    if node is None:
+        raise HTTPException(status_code=404, detail="Unknown explore path.")
+    return node
 
 
 # --------------------------------------------------------------------------- REELS

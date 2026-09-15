@@ -171,6 +171,18 @@ export type ExploreWorld = {
   featured: ExploreCountry[]; countries: ExploreCountry[]; international: ExploreCountry[];
 };
 
+// Progressive drill-down node (one layer of the hockey-world tree).
+export type ExploreChoice = {
+  label: string; sub: string; status: "available" | "coming_soon";
+  kind: "node" | "league" | "soon";
+  path?: string; code?: string | null; icon?: string;
+};
+export type ExploreNode = {
+  path: string; kind: "chooser" | "leagues";
+  title: string; subtitle: string; flag: string; note?: string | null;
+  choices: ExploreChoice[];
+};
+
 export type HomeStory = {
   subject: string; league: string; title: string; subtitle: string;
   stat?: { label: string; value: string } | null;
@@ -184,6 +196,7 @@ export const api = {
   nhlScoreboard: () => get<NhlScoreboard>("/nhl/scoreboard"),
   leagues: () => get<{ leagues: { code: string; name: string; capabilities: Record<string, boolean> }[] }>("/leagues"),
   exploreWorld: () => get<ExploreWorld>("/explore/world"),
+  exploreNode: (path: string) => get<ExploreNode>(`/explore/node?path=${encodeURIComponent(path)}`),
   leagueScoreboard: (code: string) => get<NhlScoreboard>(`/league/${code}/scoreboard`),
   leagueRecaps: (code: string) => get<{ games: NhlFinalCard[] }>(`/league/${code}/recaps`),
   leagueStandings: (code: string) => get<{ Eastern: NhlStandRow[]; Western: NhlStandRow[] }>(`/league/${code}/standings`),

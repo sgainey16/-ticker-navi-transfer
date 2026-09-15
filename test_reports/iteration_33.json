@@ -1,0 +1,38 @@
+{
+  "summary": "EXPLORE Phase 1.2 (Progressive Hockey World Navigation) verified end-to-end. BACKEND (9/9 pytest pass, /app/backend/tests/test_explore_node.py): (1) GET /api/explore/node?path=country:Canada returns kind=chooser with 3 node choices By Level / By Region / By League, all kind=node with path starting country:Canada/. (2) path=country:Canada/level returns Pro & Major Junior available; Junior A, University, Youth & Local coming_soon. (3) path=country:Canada/level/major-junior returns WHL/OHL/QMJHL all status=available with non-null codes matching label. (4) path=country:Canada/level/pro returns nhl available (code=nhl) and pwhl coming_soon (code=null). (5) path=country:Canada/league returns kind=leagues browse node with >=3 available. (6) path=country:Sweden returns a DIFFERENT chooser tree (Men's Tiers / Women's Hockey / By League; NO By Region). (7) path=country:Finland returns fallback kind=leagues browse with 0 live. (8) path=country:Canada/bogus/deep -> HTTP 404. (9) /api/explore/world regression: totals{countries,leagues,available}, featured, countries, international all intact. FRONTEND (Playwright, mobile 390x844): (1) EXPLORE tab renders hero 'Take me somewhere in hockey.', totals line, HOCKEY NATIONS grid — Canada card shows '3 LIVE / 6 leagues / ENTER', USA card shows '2 LIVE / 11 leagues / ENTER'. (2) Tap explore-country-Canada -> /explore/node?path=country:Canada chooser rendering 3 rows (By Level, By Region, By League) with real icons + real 'Back' bar; tap node-choice-country:Canada/level -> Pro / Major Junior LIVE + Junior A/University/Youth SOON; tap Major Junior -> WHL/OHL/QMJHL LIVE tags; tap node-choice-whl -> /league/whl (League Hub with WHL content). (3) Back button retraces each drill layer exactly: whl -> major-junior -> level -> Canada root, verified across 3 sequential router.back()s. Bottom nav (5 tabs: nav-my-ticker / nav-my-hockey / nav-games / nav-explore / nav-profile) persists on every node screen. (4) Tap explore-country-Sweden -> /explore/node?path=country:Sweden renders a DIFFERENT tree: Men's Tiers (SOON), Women's Hockey (SOON), By League — By Region is correctly absent. (5) Coming_soon leaf tap: node-choice-SHL under Sweden/tier displays an inline honest note '… confirmed by our provider, coming to Ticker soon.' and a dismissable toast; SOON tag visible on every coming_soon row; no crash, no navigation, no fabricated destination. (6) node-search shortcut ('Know where you're going? Search…') is present on every node screen. Only pre-existing 'shadow* style props are deprecated' RN-Web warning; no red screen; no fabricated data.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation (carry-over)", "issue": "RN-Web emits 'shadow* style props are deprecated. Use boxShadow.' at boot. Pre-existing across screens; not introduced by this iteration."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_explore_node.py",
+    "/app/test_reports/pytest/pytest_explore_node.xml"
+  ],
+  "action_items": [
+    "(Optional carry-over) Migrate remaining shadow* style props to boxShadow to silence RN-Web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "explore_taxonomy.py: clean data-driven design — static tree for Canada/Sweden with per-country structure freedom; generic _browse() fallback keeps every country entrance honest without inventing data. AVAILABLE set correctly limited to {nhl,whl,ohl,qmjhl,ncaa}; coming_soon leaves carry code=None as required.",
+    "server.py /api/explore/node (L1181-1191): correctly resolves via explore_taxonomy.resolve() with by_country from provider truth; 404 on unknown paths.",
+    "frontend/app/explore/node.tsx: single generic renderer for every layer; testIDs strong (node-choice-<code|path|label>, node-search); coming_soon leaves never navigate — just set inline note + toast. State management uses useApi keyed by path so navigation between layers refetches cleanly.",
+    "ExploreScreen.tsx: rewritten as an entrance surface (hero + totals + search + world lens + featured hockey nations grid + more countries + international) instead of dumping all 176 leagues. Featured cards route directly into the progressive drill-down.",
+    "All interactive elements carry testID; all text wrapped in Text; all styles via StyleSheet.create."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_explore_node.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 pytest — Canada chooser+level+major-junior+pro+by-league, Sweden different tree, Finland fallback, 404 on bogus path, /explore/world regression)",
+    "frontend": "100% (all 6 acceptance flows: entrance grid + LIVE counts, Canada drill-down whl -> League Hub, Back retraces exactly, bottom nav persistence, Sweden DIFFERENT tree, coming_soon leaf honest state + toast, node-search shortcut)"
+  },
+  "seed_data_creation": "None — provider truth only. Onboarded 1 follow (MIN via 'Wild' search) to exit onboarding.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Explore Phase 1.2 progressive drill-down fully in place. Backend: GET /api/explore/node?path=<country:Canada|country:Canada/level|country:Canada/level/major-junior|country:Canada/level/pro|country:Sweden|...>. Static trees live in /app/backend/explore_taxonomy.py — Canada is complex (Level/Region/League) and Sweden is different (Men's Tiers/Women's/By League). Every other country falls through resolve() to a generic browse node from Highlightly inventory. Available codes: {nhl,whl,ohl,qmjhl,ncaa}. Frontend testIDs on node screens: node-search, node-choice-<code> for available leagues, node-choice-<path> for chooser nodes, node-choice-<label> for coming_soon leaves. Tapping a coming_soon leaf is intentional honest state (inline note + toast), NOT a bug. Reels/Best Ticker Now/Betting IQ intentionally NOT re-tested per request.",
+  "rca_of_issue": "N/A — no defects. All 15 acceptance criteria in the review request satisfied on backend and frontend."
+}
