@@ -1,0 +1,1866 @@
+from fastapi import FastAPI, APIRouter, HTTPException, Form, File, UploadFile, Depends, Request
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import re
+import json
+import base64
+import logging
+import uuid
+from pathlib import Path
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
+from elevenlabs.client import ElevenLabs
+from elevenlabs import VoiceSettings
+
+import masl_data as data
+
+import asyncio
+import hashlib
+from providers import nhl
+from providers.registry import get_provider, list_providers, search_all
+from ticker_recap import build_recap, build_next_preview, build_recap_show, build_home_open, build_my_ticker, build_team_desk, build_game_desk, build_stats_desk
+from ticker_converse import build_team_context, converse_turn, build_bridge_lines, AFFIRM
+from retrieval import assemble_team_context
+from ticker_hosts import host_voice
+import highlightly
+import eliteprospects
+import entity_index
+import explore_taxonomy
+import limits
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+eleven = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
+stt = OpenAISpeechToText(EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+_tts_cache: dict = {}
+TTS_CACHE_DIR = ROOT_DIR / ".tts_cache"
+TTS_CACHE_DIR.mkdir(exist_ok=True)
+
+app = FastAPI(title="MASL — Powered by Ticker")
+api_router = APIRouter(prefix="/api")
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("masl")
+
+
+# ---------------------------------------------------------------------------
+# Host system prompt (knowledge layer + character bibles)
+# ---------------------------------------------------------------------------
+
+HOST_SYSTEM_PROMPT = """You are the on-air booth for THE TICKER, a hockey studio show. There are TWO hosts and
+you voice BOTH of them. They have worked together for years — real chemistry, not two
+interchangeable narrators.
+
+REGGIE BANKS — "The Instigator".
+- Former NHL player. Fast, confident, charismatic, funny. Hockey-first.
+- Leads with emotion, instinct and a player's perspective. Playful chirps — never cruel, never forced.
+- Short, natural sentences. Energy first, then the point.
+
+MARC COLLINS — "The Guardian".
+- Veteran analyst. Calm, measured, deeply human, prepared, trustworthy.
+- Uses evidence and context, dry humour. Respectful disagreement. Protects perspective.
+- 1-2 sentences. Grounds Reggie with a specific, relevant point.
+
+CHEMISTRY: they can disagree, react differently, make callbacks, and laugh. Marc challenges
+Reggie without killing the energy.
+
+HUMAN-FIRST RULE: PEOPLE FIRST, DATA SECOND. Talk about players, coaches, teams, moments,
+streaks and context by NAME. Statistics support the story; they never dominate it.
+Person -> Moment -> Number, never Number -> Number -> Number.
+
+HARD GROUNDING RULES:
+- This is HOCKEY. Never use soccer terminology.
+- Do NOT invent scores, statistics, injuries, trades, milestones, roster moves or game events.
+  If you don't have a verified fact, speak to it in character (e.g. "let me pull that up") rather
+  than making a number up. Never state a specific stat you weren't given.
+- ALWAYS answer as BOTH hosts. Respond with STRICT JSON ONLY, no markdown, no code fences:
+  {"reggie": "<Reggie's line>", "marc": "<Marc's line>"}
+"""
+
+
+def build_system_prompt():
+    return HOST_SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+class TalkRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str
+
+
+class TalkTurn(BaseModel):
+    role: str
+    text: str = ""
+    rayo: str = ""
+    casey: str = ""
+    ts: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ---------------------------------------------------------------------------
+# Content endpoints (served from curated dataset)
+# ---------------------------------------------------------------------------
+
+@api_router.get("/")
+async def root():
+    return {"app": "MASL — Powered by Ticker", "season": "2025-26", "status": "ok"}
+
+
+@api_router.get("/home")
+async def get_home():
+    return data.home_feed()
+
+
+@api_router.get("/ticker")
+async def get_ticker():
+    return {"items": data.TICKER}
+
+
+@api_router.get("/teams")
+async def get_teams():
+    return {"teams": data.TEAMS}
+
+
+@api_router.get("/teams/{team_id}")
+async def get_team(team_id: str):
+    team = data.TEAMS_BY_ID.get(team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    roster = data.players_for_team(team_id)
+    recaps = [g for g in data.GAMES if team_id in (g["home_id"], g["away_id"])]
+    return {"team": team, "roster": roster, "recaps": recaps}
+
+
+@api_router.get("/players/{player_id}")
+async def get_player(player_id: str):
+    player = data.PLAYERS_BY_ID.get(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return {"player": player, "team": data.TEAMS_BY_ID.get(player["team_id"])}
+
+
+@api_router.get("/standings")
+async def get_standings():
+    return data.standings()
+
+
+@api_router.get("/leaders")
+async def get_leaders():
+    return data.LEADERS
+
+
+@api_router.get("/availability")
+async def get_availability():
+    return {"report": data.AVAILABILITY}
+
+
+@api_router.get("/games")
+async def get_games():
+    return {"games": data.GAMES}
+
+
+@api_router.get("/games/{game_id}")
+async def get_game(game_id: str):
+    game = data.GAMES_BY_ID.get(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return {
+        "game": game,
+        "home": data.TEAMS_BY_ID.get(game["home_id"]),
+        "away": data.TEAMS_BY_ID.get(game["away_id"]),
+    }
+
+
+@api_router.get("/coldopen")
+async def get_cold_open():
+    co = dict(data.COLD_OPEN)
+    m = co["matchup"]
+    co["home"] = data.TEAMS_BY_ID.get(m["home"])
+    co["away"] = data.TEAMS_BY_ID.get(m["away"])
+    return co
+
+
+@api_router.get("/segments/{page}")
+async def get_segment(page: str):
+    beats = data.SEGMENTS.get(page)
+    if beats is None:
+        raise HTTPException(status_code=404, detail="Unknown segment")
+    return {"page": page, "beats": beats}
+
+
+@api_router.get("/stars")
+async def get_stars():
+    return {"stars": data.stars()}
+
+
+# ---------------------------------------------------------------------------
+# TALK — Rayo & Casey chat
+# ---------------------------------------------------------------------------
+
+def _parse_hosts(raw: str):
+    """Extract {"rayo": .., "casey": ..} from an LLM reply as robustly as possible."""
+    text = (raw or "").strip()
+    text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
+    try:
+        obj = json.loads(text)
+        return (str(obj.get("reggie", obj.get("rayo", ""))).strip(),
+                str(obj.get("marc", obj.get("casey", ""))).strip())
+    except Exception:
+        pass
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if match:
+        try:
+            obj = json.loads(match.group(0))
+            return (str(obj.get("reggie", obj.get("rayo", ""))).strip(),
+                    str(obj.get("marc", obj.get("casey", ""))).strip())
+        except Exception:
+            pass
+    # Last resort: whole thing is Rayo talking.
+    return text, ""
+
+
+@api_router.get("/talk/{session_id}")
+async def get_talk_history(session_id: str):
+    doc = await db.talk_sessions.find_one({"session_id": session_id})
+    if not doc:
+        return {"session_id": session_id, "turns": []}
+    return {"session_id": session_id, "turns": doc.get("turns", [])}
+
+
+@api_router.post("/talk", dependencies=[Depends(limits.rate_limit("talk", 20))])
+async def talk(req: TalkRequest):
+    session_id = req.session_id or str(uuid.uuid4())
+    user_text = (req.message or "").strip()
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Empty message")
+    if len(user_text) > limits.MAX_TALK_TEXT:
+        raise HTTPException(status_code=422, detail="Message too long.")
+
+    doc = await db.talk_sessions.find_one({"session_id": session_id})
+    prior = doc.get("turns", []) if doc else []
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=session_id,
+        system_message=build_system_prompt(),
+    ).with_model("anthropic", "claude-sonnet-4-6")
+
+    async with limits.slot(limits.LLM_SEM):
+        # Replay recent history so the booth keeps context across turns.
+        for t in prior[-8:]:
+            if t.get("role") == "user":
+                try:
+                    await limits.run_provider(
+                        chat.send_message(UserMessage(text=t.get("text", ""))),
+                        limits.LLM_TIMEOUT, "Broadcast booth")
+                except Exception:
+                    pass
+
+        try:
+            reply = await limits.run_provider(
+                chat.send_message(UserMessage(text=user_text)),
+                limits.LLM_TIMEOUT, "Broadcast booth")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("LLM error")
+            raise HTTPException(status_code=502, detail="Broadcast booth unavailable.")
+
+    rayo, casey = _parse_hosts(reply if isinstance(reply, str) else str(reply))
+
+    user_turn = TalkTurn(role="user", text=user_text).model_dump()
+    host_turn = TalkTurn(role="hosts", rayo=rayo, casey=casey).model_dump()
+
+    await db.talk_sessions.update_one(
+        {"session_id": session_id},
+        {"$push": {"turns": {"$each": [user_turn, host_turn]}},
+         "$setOnInsert": {"session_id": session_id,
+                          "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    return {"session_id": session_id, "rayo": rayo, "casey": casey}
+
+
+# ---------------------------------------------------------------------------
+# VOICES — ElevenLabs Voice Design + TTS (Cold Open host voices)
+# ---------------------------------------------------------------------------
+
+class DesignRequest(BaseModel):
+    host: str  # "rayo" | "casey"
+
+
+class SelectRequest(BaseModel):
+    host: str
+    generated_voice_id: str
+
+
+class TtsRequest(BaseModel):
+    text: str
+    voice_id: str
+    speed: float | None = None
+
+
+@api_router.get("/voices/briefs")
+async def voices_briefs():
+    return {k: {"name": v["name"], "description": v["description"], "sample": v["sample"]} for k, v in data.VOICE_BRIEFS.items()}
+
+
+@api_router.post("/voices/design", dependencies=[Depends(limits.rate_limit("voices_design", 5))])
+async def voices_design(req: DesignRequest):
+    if not eleven:
+        raise HTTPException(status_code=503, detail="Voice engine not configured")
+    brief = data.VOICE_BRIEFS.get(req.host)
+    if not brief:
+        raise HTTPException(status_code=404, detail="Unknown host")
+
+    def _design():
+        return eleven.text_to_voice.design(
+            voice_description=brief["description"],
+            text=brief["sample"],
+            model_id="eleven_multilingual_ttv_v2",
+        )
+
+    try:
+        async with limits.slot(limits.DESIGN_SEM):
+            res = await limits.run_provider(
+                asyncio.to_thread(_design), limits.DESIGN_TIMEOUT, "Voice design")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Voice design error")
+        raise HTTPException(status_code=502, detail="Voice design failed.")
+    previews = [
+        {
+            "generated_voice_id": p.generated_voice_id,
+            "audio": f"data:audio/mpeg;base64,{p.audio_base_64}",
+            "duration": getattr(p, "duration_secs", None),
+        }
+        for p in res.previews
+    ]
+    return {"host": req.host, "previews": previews}
+
+
+@api_router.post("/voices/select", dependencies=[Depends(limits.rate_limit("voices_select", 5))])
+async def voices_select(req: SelectRequest):
+    if not eleven:
+        raise HTTPException(status_code=503, detail="Voice engine not configured")
+    brief = data.VOICE_BRIEFS.get(req.host)
+    if not brief:
+        raise HTTPException(status_code=404, detail="Unknown host")
+
+    def _create():
+        return eleven.text_to_voice.create(
+            voice_name=f"{brief['name']} {req.generated_voice_id[:6]}",
+            voice_description=brief["description"],
+            generated_voice_id=req.generated_voice_id,
+        )
+
+    try:
+        async with limits.slot(limits.DESIGN_SEM):
+            voice = await limits.run_provider(
+                asyncio.to_thread(_create), limits.DESIGN_TIMEOUT, "Voice save")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Voice select error")
+        raise HTTPException(status_code=502, detail="Voice save failed.")
+    await db.settings.update_one({"_id": "voices"}, {"$set": {req.host: voice.voice_id}}, upsert=True)
+    return {"host": req.host, "voice_id": voice.voice_id}
+
+
+class SetVoiceRequest(BaseModel):
+    host: str
+    voice_id: str
+
+
+@api_router.get("/voices/selected")
+async def voices_selected():
+    doc = await db.settings.find_one({"_id": "voices"}) or {}
+    # Ticker hosts: Reggie -> energy slot ("rayo"), Marc -> analyst slot ("casey").
+    reggie = host_voice("reggie") or doc.get("rayo")
+    marc = host_voice("marc") or doc.get("casey")
+    return {"rayo": reggie, "casey": marc, "reggie": reggie, "marc": marc}
+
+
+@api_router.post("/voices/set")
+async def voices_set(req: SetVoiceRequest):
+    if req.host not in ("rayo", "casey"):
+        raise HTTPException(status_code=400, detail="Unknown host")
+    await db.settings.update_one({"_id": "voices"}, {"$set": {req.host: req.voice_id}}, upsert=True)
+    return {"ok": True, "host": req.host, "voice_id": req.voice_id}
+
+
+@api_router.post("/tts", dependencies=[Depends(limits.rate_limit("tts", 90))])
+async def tts(req: TtsRequest):
+    if not eleven:
+        raise HTTPException(status_code=503, detail="Voice engine not configured")
+    text = (req.text or "").strip()
+    if not text or not req.voice_id:
+        raise HTTPException(status_code=400, detail="text and voice_id required")
+    if len(text) > limits.MAX_TTS_TEXT:
+        raise HTTPException(status_code=422, detail="Text too long for synthesis.")
+    speed = req.speed if req.speed else 1.0
+    speed = max(0.7, min(1.2, speed))
+    key = hashlib.md5(f"{req.voice_id}:{speed}:{text}".encode()).hexdigest()
+    if key in _tts_cache:
+        return {"audio": _tts_cache[key]}
+    fpath = TTS_CACHE_DIR / f"{key}.mp3"
+    if fpath.exists():
+        uri = f"data:audio/mpeg;base64,{base64.b64encode(fpath.read_bytes()).decode()}"
+        _tts_cache[key] = uri
+        return {"audio": uri}
+
+    def _convert() -> bytes:
+        stream = eleven.text_to_speech.convert(
+            text=text,
+            voice_id=req.voice_id,
+            model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(speed=speed),
+        )
+        return b"".join(stream)
+
+    try:
+        # Run the blocking ElevenLabs SDK call OFF the event loop so it never
+        # freezes other API requests (the Ticker-1 blocking-TTS lesson).
+        async with limits.slot(limits.TTS_SEM):
+            audio_bytes = await limits.run_provider(
+                asyncio.to_thread(_convert), limits.TTS_TIMEOUT, "TTS")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("TTS error")
+        raise HTTPException(status_code=502, detail="TTS failed.")
+    try:
+        fpath.write_bytes(audio_bytes)
+    except Exception:
+        pass
+    uri = f"data:audio/mpeg;base64,{base64.b64encode(audio_bytes).decode()}"
+    if len(_tts_cache) < 200:
+        _tts_cache[key] = uri
+    return {"audio": uri}
+
+
+async def _recap_beats(game, refresh: bool = False):
+    """Grounded Reggie+Marc beats for a canonical game, cached in Mongo."""
+    doc = None if refresh else await db.recaps.find_one({"_id": game.id})
+    if doc and doc.get("beats"):
+        return doc["beats"]
+    beats = await build_recap(game, EMERGENT_LLM_KEY)
+    await db.recaps.update_one(
+        {"_id": game.id},
+        {"$set": {"beats": beats,
+                  "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return beats
+
+
+async def _next_segment_beats(slate: dict):
+    """Prepared/cached NEXT preview beats, keyed by slate date + game count.
+
+    Cached in Mongo so ordinary browsing/re-entry never re-hits the LLM.
+    """
+    key = f"next:{slate.get('league_name','NHL')}:{slate.get('date')}:{len(slate.get('games', []) or [])}"
+    doc = await db.segments.find_one({"_id": key})
+    if doc and doc.get("beats"):
+        return doc["beats"]
+    beats = await build_next_preview(slate, EMERGENT_LLM_KEY)
+    await db.segments.update_one(
+        {"_id": key},
+        {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return beats
+
+
+class FollowItem(BaseModel):
+    abbr: Optional[str] = None
+    player_id: Optional[str] = None
+    team_abbr: Optional[str] = None
+    league: Optional[str] = None
+    tier: Optional[int] = None
+
+
+class HomeFollows(BaseModel):
+    teams: List[FollowItem] = []
+    players: List[FollowItem] = []
+
+
+ROUND_LABEL = {1: "1ST ROUND (can't-miss)", 2: "2ND ROUND", 3: "3RD ROUND"}
+
+
+def _round_key(x) -> int:
+    return x.tier if x.tier in (1, 2, 3) else 9
+
+
+def _card_line(c: dict) -> str:
+    a = c.get("away", {}) or {}
+    h = c.get("home", {}) or {}
+    if a.get("score") is not None and h.get("score") is not None:
+        return f"{a.get('abbr')} {a.get('score')}, {h.get('abbr')} {h.get('score')}"
+    return f"{a.get('abbr')} @ {h.get('abbr')} ({c.get('date') or ''})"
+
+
+async def _home_personal_facts(follows: HomeFollows) -> tuple[str, bool]:
+    teams = sorted(follows.teams, key=_round_key)[:4]
+    players = sorted(follows.players, key=_round_key)[:3]
+    has = bool(teams or players)
+    lines: list[str] = []
+    if has:
+        lines.append("The viewer's Draft Board (priority order):")
+    for t in teams:
+        if not t.abbr:
+            continue
+        try:
+            d = await get_provider(t.league or "nhl").team_page(t.abbr)
+            label = ROUND_LABEL.get(t.tier, "FOLLOWING")
+            seg = f"{label}: {d['team']['name']} ({d['record']['wins']}-{d['record']['losses']}-{d['record']['ot']})"
+            recent = d.get("recent") or []
+            if recent:
+                seg += f"; latest {_card_line(recent[0])}"
+            nxt = d.get("next")
+            if nxt:
+                seg += f"; next {nxt.get('away', {}).get('abbr')} @ {nxt.get('home', {}).get('abbr')} on {nxt.get('date')}"
+            lines.append(seg)
+        except Exception:
+            logger.exception("home facts team %s failed", t.abbr)
+    for p in players:
+        if not p.player_id:
+            continue
+        try:
+            d = await get_provider(p.league or "nhl").player_page(p.player_id)
+            pl = d["player"]
+            label = ROUND_LABEL.get(p.tier, "FOLLOWING")
+            seg = f"{label}: {pl['name']} ({pl.get('pos')}, {pl.get('team_abbr')})"
+            sk = d.get("skater")
+            gl = d.get("goalie")
+            if sk and sk.get("points") is not None:
+                seg += f"; season {sk.get('goals')}G {sk.get('assists')}A {sk.get('points')}P"
+            elif gl and gl.get("svpct") is not None:
+                seg += f"; season {gl.get('svpct')} SV%, {gl.get('gaa')} GAA"
+            last5 = d.get("last5") or []
+            if last5:
+                g0 = last5[0]
+                if "points" in g0:
+                    seg += f"; last game vs {g0.get('opp')}: {g0.get('goals')}G {g0.get('assists')}A"
+            lines.append(seg)
+        except Exception:
+            logger.exception("home facts player %s failed", p.player_id)
+    try:
+        slate = await nhl.scoreboard_now()
+        g = slate.get("games", []) or []
+        if slate.get("is_future"):
+            lines.append(f"League: no NHL today ({slate.get('today')}); next slate {slate.get('date')} has {len(g)} games.")
+        else:
+            lines.append(f"League: {len(g)} games today ({slate.get('date')}).")
+    except Exception:
+        logger.exception("home facts slate failed")
+    return "\n".join(lines), has
+
+
+def _final_headline(a: dict, h: dict) -> tuple[str, dict, dict]:
+    """People/result-led headline from a VERIFIED final score only. No fabrication."""
+    asc, hsc = a.get("score"), h.get("score")
+    win, lose = (a, h) if (asc or 0) >= (hsc or 0) else (h, a)
+    ws, ls = (win.get("score") or 0), (lose.get("score") or 0)
+    wn = win.get("name") or win.get("abbr")
+    ln = lose.get("name") or lose.get("abbr")
+    margin = ws - ls
+    if ls == 0:
+        verb = f"shut out {ln}"
+    elif margin == 1:
+        verb = f"edged {ln}"
+    elif margin >= 4:
+        verb = f"routed {ln}"
+    else:
+        verb = f"beat {ln}"
+    return f"{wn} {verb}, {ws}\u2013{ls}", win, lose
+
+
+async def _my_hockey_feed(follows: HomeFollows) -> dict:
+    fteams = {t.abbr for t in follows.teams if t.abbr}
+    fplayer_teams = {p.team_abbr for p in follows.players if p.team_abbr}
+    followed_abbrs = fteams | fplayer_teams
+    has = bool(follows.teams or follows.players)
+
+    mine: list[dict] = []
+    league: list[dict] = []
+
+    # 1) followed players' latest verified game line (people-first). Bounded.
+    players = sorted(follows.players, key=_round_key)[:4]
+    for p in players:
+        if not p.player_id:
+            continue
+        try:
+            d = await get_provider(p.league or "nhl").player_page(p.player_id)
+            pl = d["player"]
+            last5 = d.get("last5") or []
+            if not last5:
+                continue
+            g0 = last5[0]
+            opp = g0.get("opp")
+            if d.get("goalie"):
+                sv = (g0.get("shots_against") or 0) - (g0.get("goals_against") or 0)
+                headline = f"{pl['name']}: {sv}/{g0.get('shots_against')} saves vs {opp}"
+            else:
+                gg, aa = g0.get("goals") or 0, g0.get("assists") or 0
+                if gg == 0 and aa == 0:
+                    continue
+                bits = []
+                if gg: bits.append(f"{gg}G")
+                if aa: bits.append(f"{aa}A")
+                headline = f"{pl['name']}: {' '.join(bits)} vs {opp}"
+            mine.append({
+                "type": "player", "player_id": pl["id"], "game_id": g0.get("game_id"),
+                "team_abbr": pl.get("team_abbr"), "team_logo": pl.get("team_logo"),
+                "headshot": pl.get("headshot"), "headline": headline,
+                "sub": f"{pl.get('pos')} \u00b7 {pl.get('team_abbr')}", "followed": True, "video": None,
+            })
+        except Exception:
+            logger.exception("my_hockey player %s failed", p.player_id)
+
+    # 2) recent finals -> result stories. Followed teams first.
+    try:
+        finals = await nhl.recent_finals_now(limit=14)
+    except Exception:
+        finals = []
+    for c in finals:
+        a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+        if a.get("score") is None or h.get("score") is None:
+            continue
+        headline, _w, _l = _final_headline(a, h)
+        item = {
+            "type": "final", "game_id": c.get("id"), "headline": headline,
+            "away": {"abbr": a.get("abbr"), "logo": a.get("logo"), "score": a.get("score")},
+            "home": {"abbr": h.get("abbr"), "logo": h.get("logo"), "score": h.get("score")},
+            "video": None,
+        }
+        if a.get("abbr") in followed_abbrs or h.get("abbr") in followed_abbrs:
+            item["followed"] = True
+            mine.append(item)
+        else:
+            item["followed"] = False
+            league.append(item)
+
+    # 3) upcoming games involving follows -> preview cards.
+    try:
+        slate = await nhl.scoreboard_now()
+        for g in slate.get("games", []) or []:
+            if g.get("group") != "upcoming":
+                continue
+            a, h = g.get("away", {}) or {}, g.get("home", {}) or {}
+            if a.get("abbr") in followed_abbrs or h.get("abbr") in followed_abbrs:
+                hn = h.get("name") or h.get("abbr")
+                an = a.get("name") or a.get("abbr")
+                mine.append({
+                    "type": "upcoming", "game_id": g.get("id"),
+                    "headline": f"{hn} host {an}",
+                    "away": {"abbr": a.get("abbr"), "logo": a.get("logo")},
+                    "home": {"abbr": h.get("abbr"), "logo": h.get("logo")},
+                    "date": g.get("start_utc"), "followed": True, "video": None,
+                })
+    except Exception:
+        logger.exception("my_hockey slate failed")
+
+    items = mine + league[:10] if has else league[:14]
+    return {"items": items, "personalized": has}
+
+
+async def _home_show_stories(follows: HomeFollows) -> list[dict]:
+    """Personalized rundown: followed teams (NHL + junior) first, then strongest
+    league stories. Each story carries verified facts + a Highlightly clip if one
+    exists. Never fabricated — thinner when data is thin."""
+    stories: list[dict] = []
+    seen: set[str] = set()
+    for t in sorted(follows.teams, key=_round_key):
+        if not t.abbr or t.abbr in seen or len(stories) >= 5:
+            continue
+        lg = (t.league or "nhl").lower()
+        try:
+            tp = await get_provider(lg).team_page(t.abbr)
+        except Exception:
+            continue
+        seen.add(t.abbr)
+        team, rec, goals = tp.get("team", {}), tp.get("record", {}), tp.get("goals", {})
+        name = team.get("name") or t.abbr
+        gp = rec.get("gp")
+        if gp is None:
+            gp = (rec.get("wins") or 0) + (rec.get("losses") or 0) + (rec.get("ot") or 0)
+        recf = f"{rec.get('wins',0)}-{rec.get('losses',0)}" + (f"-{rec.get('ot')}" if rec.get("ot") is not None else "")
+        form = f"{recf} to start" if gp and gp < 10 else recf
+        last = (tp.get("recent") or [None])[0]
+        nxt = tp.get("next")
+        try:
+            clip = await highlightly.find_team_clip(lg, name)
+        except Exception:
+            clip = None
+        facts = f"{name} ({lg.upper()}): {form}, #{rec.get('div_rank')} in the {team.get('division','')}."
+        if goals.get("gf") is not None:
+            facts += f" {goals.get('gf')} GF / {goals.get('ga')} GA."
+        if last:
+            facts += f" Last: {last['away']['abbr']} {last['away'].get('score')} @ {last['home']['abbr']} {last['home'].get('score')}."
+        if nxt:
+            facts += f" Next: {nxt['away']['abbr']} @ {nxt['home']['abbr']} {nxt.get('date','')}."
+        top = (tp.get("scorers") or [None])[0]
+        if top:
+            facts += f" Leading scorer {top['name']} ({top.get('points')} pts)."
+        stories.append({
+            "subject": t.abbr, "league": lg, "title": name.upper(),
+            "subtitle": f"{form} · #{rec.get('div_rank')} {team.get('division','')}",
+            "stat": {"label": "GF / GA", "value": f"{goals.get('gf','–')} / {goals.get('ga','–')}"},
+            "highlight": clip, "facts": facts,
+        })
+    # EDITORIAL RULE: personalized is not a cage. Even with follows, ONE genuinely
+    # major league story can break in (gated to notable games that actually have a
+    # verified highlight), inserted AFTER your follows lead the show.
+    if stories:
+        covered = {s.get("subject") for s in stories}
+        try:
+            finals = await nhl.recent_finals_now(limit=6)
+        except Exception:
+            finals = []
+        for c in finals:
+            a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+            if a.get("score") is None:
+                continue
+            headline, win, _ = _final_headline(a, h)
+            if a.get("abbr") in covered or h.get("abbr") in covered:
+                continue
+            try:
+                clip = await highlightly.find_team_clip("nhl", win.get("name") or win.get("abbr"))
+            except Exception:
+                clip = None
+            if not clip:                     # only break in for a genuinely notable game
+                continue
+            stories.insert(min(2, len(stories)), {
+                "subject": c.get("id"), "league": "nhl", "title": headline.upper(),
+                "subtitle": "BREAKING · AROUND THE NHL", "breaking": True,
+                "stat": {"label": "FINAL", "value": f"{a.get('abbr')} {a.get('score')} – {h.get('score')} {h.get('abbr')}"},
+                "highlight": clip, "facts": f"Around the NHL — {headline}.", "game_link": c.get("id"),
+            })
+            break
+        stories = stories[:5]
+
+    if len(stories) < 2:
+        try:
+            finals = await nhl.recent_finals_now(limit=4)
+        except Exception:
+            finals = []
+        for c in finals:
+            if len(stories) >= 4:
+                break
+            a, h = c.get("away", {}) or {}, c.get("home", {}) or {}
+            if a.get("score") is None:
+                continue
+            headline, win, _ = _final_headline(a, h)
+            try:
+                clip = await highlightly.find_team_clip("nhl", win.get("name") or win.get("abbr"))
+            except Exception:
+                clip = None
+            stories.append({
+                "subject": c.get("id"), "league": "nhl", "title": headline.upper(),
+                "subtitle": "AROUND THE NHL",
+                "stat": {"label": "FINAL", "value": f"{a.get('abbr')} {a.get('score')} – {h.get('score')} {h.get('abbr')}"},
+                "highlight": clip, "facts": f"Final: {headline}.", "game_link": c.get("id"),
+            })
+    return stories
+
+
+async def _home_show_beats(stories: list[dict]) -> list[dict]:
+    """ONE Claude call scripts the whole rundown (cached upstream by caller)."""
+    lines = [f"[{i}] {s['facts']}" for i, s in enumerate(stories)]
+    prompt = (
+        "You are scripting THE TICKER — a personalized hockey studio show. Below is the RUNDOWN of "
+        "stories in order (verified facts only). For EACH story, write Reggie's line then Marc's line — "
+        "punchy broadcast energy, people-first, natural handoffs, NEVER invent facts beyond what's given. "
+        "Return STRICT JSON ONLY: an array like "
+        '[{"i":0,"reggie":"...","marc":"..."}, ...] with one object per story index.\n\nRUNDOWN:\n'
+        + "\n".join(lines)
+    )
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"homeshow-{uuid.uuid4().hex[:8]}",
+                   system_message=build_system_prompt()).with_model("anthropic", "claude-sonnet-4-6")
+    by_i: dict = {}
+    try:
+        raw = await chat.send_message(UserMessage(text=prompt))
+        txt = re.sub(r"^```(?:json)?|```$", "", str(raw).strip(), flags=re.MULTILINE).strip()
+        m = re.search(r"\[.*\]", txt, flags=re.DOTALL)
+        arr = json.loads(m.group(0) if m else txt)
+        by_i = {int(o.get("i", k)): o for k, o in enumerate(arr)}
+    except Exception:
+        logger.exception("home show script failed; using templated beats")
+    out = []
+    for i, s in enumerate(stories):
+        o = by_i.get(i) or {}
+        out.append({"reggie": (o.get("reggie") or f"{s['title'].title()} — let's get into it.").strip(),
+                    "marc": (o.get("marc") or s["facts"]).strip()})
+    return out
+
+
+@api_router.post("/ticker/home_show")
+async def ticker_home_show(follows: HomeFollows):
+    """Personalized auto-advancing Home show rundown. Nothing plays on open — the
+    client starts it on a single deliberate PLAY, then auto-advances story to story."""
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    try:
+        stories = await _home_show_stories(follows)
+        if not stories:
+            return {"stories": [], "voices": voices, "personalized": False}
+        sig = hashlib.sha1(("|".join(f"{s['subject']}:{s['subtitle']}:{(s.get('highlight') or {}).get('youtube_id')}" for s in stories)).encode()).hexdigest()[:16]
+        key = f"homeshow:{sig}"
+        doc = await db.segments.find_one({"_id": key})
+        beats = doc["beats"] if (doc and doc.get("beats")) else await _home_show_beats(stories)
+        if not (doc and doc.get("beats")):
+            await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        for i, s in enumerate(stories):
+            b = beats[i] if i < len(beats) else {"reggie": "", "marc": ""}
+            s["beats"] = [{"host": "reggie", "text": b.get("reggie", "")}, {"host": "marc", "text": b.get("marc", "")}]
+        return {"stories": stories, "voices": voices, "personalized": bool(follows.teams or follows.players)}
+    except Exception:
+        logger.exception("ticker_home_show failed")
+        return {"stories": [], "voices": voices, "personalized": False}
+
+
+
+@api_router.post("/ticker/my_hockey")
+async def ticker_my_hockey(follows: HomeFollows):
+    """My Hockey feed: verified, people-led items assembled from Draft Board priorities.
+
+    No LLM/TTS, no fabricated highlights. `video` is null today; the same card can
+    graduate to a playable moment when a legitimate video source is connected.
+    """
+    try:
+        return await _my_hockey_feed(follows)
+    except Exception:
+        logger.exception("ticker_my_hockey failed")
+        return {"items": [], "personalized": bool(follows.teams or follows.players)}
+
+
+@api_router.post("/ticker/home_segment")
+async def ticker_home_segment(follows: HomeFollows):
+    """Personalized My Ticker desk segment, programmed from the user's Draft Board.
+
+    Verified facts only. Cached in Mongo by a signature of the follows so ordinary
+    re-entry never re-hits the LLM; TTS is produced only on deliberate play.
+    """
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    try:
+        facts, has = await _home_personal_facts(follows)
+        sig = hashlib.sha1(facts.encode()).hexdigest()[:16]
+        key = f"myticker:{sig}"
+        doc = await db.segments.find_one({"_id": key})
+        if doc and doc.get("beats"):
+            beats = doc["beats"]
+        else:
+            beats = await build_my_ticker(facts, has, EMERGENT_LLM_KEY)
+            await db.segments.update_one(
+                {"_id": key},
+                {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+        return {"surface": "home", "segment_type": "opening", "subject": "myticker",
+                "title": "YOUR HOCKEY STARTS HERE", "state": "ready" if beats else "unavailable",
+                "beats": beats, "voices": voices}
+    except Exception:
+        logger.exception("ticker_home_segment failed")
+        return {"surface": "home", "segment_type": "opening", "subject": "myticker",
+                "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+
+@api_router.get("/ticker/segment")
+async def ticker_segment(surface: str, subject: str | None = None, league: str = "nhl"):
+    """Shared Reggie + Marc sports-desk SHOW layer (any registered league).
+
+    One reusable endpoint that returns a PREPARED/CACHED contextual segment for a
+    surface (+ optional subject). Presence is constant across the app; the segment
+    (its programming) changes with context. Never generated on passive browsing —
+    callers fetch once per surface/subject, and TTS is produced only on deliberate play.
+    """
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+
+    # GAME-level context: grounded desk for that exact matchup (league-aware).
+    if surface == "game" and subject:
+        try:
+            prov = get_provider(league)
+            game = await prov.game_by_id(subject)
+            lname = getattr(prov, "name", "NHL")
+            if league == "nhl":
+                beats = await _recap_beats(game)          # existing rich NHL path
+            else:
+                key = f"gamedesk:{league}:{subject}:{game.status}"
+                doc = await db.segments.find_one({"_id": key})
+                if doc and doc.get("beats"):
+                    beats = doc["beats"]
+                else:
+                    beats = await build_game_desk(game, EMERGENT_LLM_KEY, league_name=lname)
+                    await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            return {"surface": surface, "segment_type": "game", "subject": subject,
+                    "title": f"{game.away.abbr} @ {game.home.abbr} · GAME DESK",
+                    "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment game failed")
+            return {"surface": surface, "segment_type": "game", "subject": subject,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # TEAM-level context: grounded desk about that team (league-aware).
+    if surface == "team" and subject:
+        try:
+            prov = get_provider(league)
+            lname = getattr(prov, "name", "NHL")
+            tp = await prov.team_page(subject)
+            tname = tp.get("team", {}).get("name") or subject
+            rec = tp.get("record", {})
+            key = f"teamdesk:{league}:{subject}:{rec.get('wins')}-{rec.get('losses')}-{rec.get('ot')}:{(tp.get('next') or {}).get('id')}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_team_desk(tp, EMERGENT_LLM_KEY, league_name=lname)
+                await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            return {"surface": "team", "segment_type": "opening", "subject": subject,
+                    "title": f"{tname.upper()} · ON THE DESK",
+                    "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment team failed")
+            return {"surface": "team", "segment_type": "opening", "subject": subject,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level NEXT context: prepared upcoming-slate preview (league-aware).
+    if surface == "next":
+        try:
+            slate = await get_provider(league).scoreboard_now()
+            beats = await _next_segment_beats(slate)
+            lname = slate.get("league_name", "NHL")
+            title = f"NEXT ON THE TICKER" if slate.get("is_future") else f"TONIGHT ON THE TICKER"
+            return {"surface": "next", "segment_type": "preview", "subject": league,
+                    "title": title, "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment next failed")
+            return {"surface": "next", "segment_type": "preview", "subject": league,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level RECAP context: prepared postgame show over recent finals.
+    if surface == "recap":
+        try:
+            prov = get_provider(league)
+            finals = await prov.recent_finals_now(limit=8)
+            lname = getattr(prov, "name", "NHL")
+            key = f"recap:{league}:{(finals[0].get('id') if finals else 'none')}:{len(finals)}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_recap_show(finals, EMERGENT_LLM_KEY, league_name=lname)
+                await db.segments.update_one(
+                    {"_id": key},
+                    {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            return {"surface": "recap", "segment_type": "recap", "subject": league,
+                    "title": "THE TICKER RECAP", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment recap failed")
+            return {"surface": "recap", "segment_type": "recap", "subject": league,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level STATS context: desk over verified standings + stat leaders.
+    if surface == "stats":
+        try:
+            prov = get_provider(league)
+            lname = getattr(prov, "name", "NHL")
+            standings = await prov.standings_now()
+            leaders = await prov.leaders_now(limit=5)
+            east = standings.get("Eastern") or []
+            top_pts = (leaders.get("skaters") or {}).get("points") or []
+            sig = f"{(east[0].get('abbr') if east else '')}:{(east[0].get('points') if east else '')}:{(top_pts[0].get('id') if top_pts else '')}:{(top_pts[0].get('value') if top_pts else '')}"
+            key = f"statsdesk:{league}:{sig}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_stats_desk(standings, leaders, EMERGENT_LLM_KEY, league_name=lname)
+                await db.segments.update_one({"_id": key}, {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            return {"surface": "stats", "segment_type": "reaction", "subject": league,
+                    "title": f"AROUND THE {league.upper()}", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment stats failed")
+            return {"surface": "stats", "segment_type": "reaction", "subject": league,
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    # LEAGUE-level HOME context: the Ticker opening show (honest, NHL-only for now).
+    if surface == "home":
+        try:
+            slate = await nhl.scoreboard_now()
+            hero_game = None
+            try:
+                hero_game = (await nhl.latest_game()).model_dump()
+            except Exception:
+                hero_game = None
+            hid = hero_game.get("id") if hero_game else "none"
+            key = f"home:{hid}:{len(slate.get('games', []) or [])}:{slate.get('date')}"
+            doc = await db.segments.find_one({"_id": key})
+            if doc and doc.get("beats"):
+                beats = doc["beats"]
+            else:
+                beats = await build_home_open(hero_game, slate, EMERGENT_LLM_KEY)
+                await db.segments.update_one(
+                    {"_id": key},
+                    {"$set": {"beats": beats, "created_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            return {"surface": "home", "segment_type": "opening", "subject": "league",
+                    "title": "YOUR HOCKEY STARTS HERE", "state": "ready" if beats else "unavailable",
+                    "beats": beats, "voices": voices}
+        except Exception:
+            logger.exception("ticker_segment home failed")
+            return {"surface": "home", "segment_type": "opening", "subject": "league",
+                    "title": None, "state": "unavailable", "beats": [], "voices": voices}
+
+    raise HTTPException(status_code=404, detail=f"No desk segment for surface '{surface}'")
+
+
+@api_router.get("/recap/{game_id}")
+async def get_recap(game_id: str, refresh: bool = False):
+    """Real NHL game -> Reggie + Marc recap (text). Milestone-1 proof.
+
+    game_id may be a real NHL id or 'latest' (auto-picks the most recent final).
+    The recap is cached in Mongo per game so we don't re-hit the LLM each view.
+    """
+    try:
+        game = await nhl.game_by_id(game_id)
+    except Exception as e:
+        logger.exception("NHL fetch failed")
+        raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
+
+    beats = await _recap_beats(game, refresh=refresh)
+    return {
+        "game": game.model_dump(),
+        "beats": beats,
+        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+    }
+
+
+@api_router.get("/leagues")
+async def leagues():
+    """Registered leagues + the universal modules each provider can fill.
+
+    This is the plug point: a second league appears here automatically once its
+    adapter is registered, and every screen reads it through the same contract.
+    Video capability is contributed additively by the Highlightly layer.
+    """
+    out = []
+    for p in list_providers():
+        d = p.describe()
+        d["capabilities"] = {**d.get("capabilities", {}),
+                             "video": bool(d.get("capabilities", {}).get("media")) or highlightly.covers(p.code)}
+        out.append(d)
+    return {"leagues": out}
+
+
+@api_router.get("/highlights")
+async def highlights_feed(league: str = "nhl", limit: int = 20):
+    """Recent verified video highlights for a league (Highlightly). Empty when
+    unsupported or none available — the client renders nothing, never a placeholder."""
+    try:
+        clips = await highlightly.league_highlights(league, limit=limit)
+    except Exception:
+        logger.exception("highlights_feed %s failed", league)
+        clips = []
+    return {"league": league, "clips": clips}
+
+
+@api_router.get("/highlights/match")
+async def highlights_match(league: str = "nhl", home: str = "", away: str = "", date: str = ""):
+    """Verified video package for one canonical game, matched by teams + date.
+    Returns {recap, clips}; gracefully thin when nothing exists."""
+    try:
+        pkg = await highlightly.match_highlights(league, home, away, date or None)
+    except Exception:
+        logger.exception("highlights_match %s %s/%s failed", league, away, home)
+        pkg = {"recap": None, "clips": []}
+    return {"league": league, **pkg}
+
+
+# --------------------------------------------------------------------------- EXPLORE
+# International scale for the Explore "wander" surface. Provider truth only:
+# AVAILABLE = a league we've mapped well enough to actually enter (real teams/routes).
+# COMING SOON = a real Highlightly league we can name/identify but haven't populated
+# inside Ticker yet — shown by identity ONLY (never fake teams/players/games/ids).
+_COUNTRY_FLAG = {
+    "Canada": "🇨🇦", "USA": "🇺🇸", "Sweden": "🇸🇪", "Finland": "🇫🇮", "Switzerland": "🇨🇭",
+    "Germany": "🇩🇪", "Czech Republic": "🇨🇿", "Czechia": "🇨🇿", "Slovakia": "🇸🇰", "Russia": "🇷🇺",
+    "Norway": "🇳🇴", "Denmark": "🇩🇰", "France": "🇫🇷", "Austria": "🇦🇹", "Italy": "🇮🇹",
+    "Latvia": "🇱🇻", "Belarus": "🇧🇾", "Poland": "🇵🇱", "Slovenia": "🇸🇮", "Hungary": "🇭🇺",
+    "United Kingdom": "🇬🇧", "Kazakhstan": "🇰🇿", "Japan": "🇯🇵", "Australia": "🇦🇺",
+    "Ukraine": "🇺🇦", "Netherlands": "🇳🇱", "Spain": "🇪🇸", "Lithuania": "🇱🇹", "Estonia": "🇪🇪",
+    "Romania": "🇷🇴", "Turkey": "🇹🇷", "New Zealand": "🇳🇿", "Iceland": "🇮🇸", "Serbia": "🇷🇸",
+    "Croatia": "🇭🇷", "China": "🇨🇳", "South Korea": "🇰🇷", "Europe": "🇪🇺", "World": "🌍",
+}
+_FEATURED_COUNTRIES = ["Canada", "USA", "Sweden", "Finland", "Czech Republic", "Russia", "Switzerland", "Germany", "Slovakia"]
+_AVAILABLE_BY_HLID = {49291: "nhl", 4188: "whl", 3337: "ohl", 5039: "qmjhl", 218640: "ncaa"}
+_INTERNATIONAL = {"Europe", "World"}
+
+
+async def _explore_by_country() -> dict[str, list]:
+    """Provider-truth inventory grouped by country, each league carrying an honest
+    status/code. Shared by the Explore world + progressive drill-down endpoints."""
+    inv = await highlightly.all_leagues()
+    seen_ids = {l.get("id") for l in inv}
+    injects = [
+        {"id": 218640, "name": "NCAA", "country": "USA"},
+    ]
+    for j in injects:
+        if j["id"] not in seen_ids:
+            inv = inv + [j]
+
+    by_country: dict[str, list] = {}
+    for l in inv:
+        hlid = l.get("id")
+        code = _AVAILABLE_BY_HLID.get(hlid)
+        country = l.get("country") or "Other"
+        row = {
+            "id": hlid, "name": l.get("name"), "country": country,
+            "status": "available" if code else "coming_soon", "code": code,
+        }
+        by_country.setdefault(country, []).append(row)
+    return by_country
+
+
+@api_router.get("/explore/world")
+async def explore_world():
+    """Country ENTRANCES for the main Explore surface (progressive drill-down starts
+    here). Featured hockey nations first, international competitions last."""
+    by_country = await _explore_by_country()
+
+    def country_group(name: str):
+        rows = by_country.get(name, [])
+        rows.sort(key=lambda r: (r["status"] != "available", r["name"] or ""))
+        return {"country": name, "flag": _COUNTRY_FLAG.get(name, "🏒"),
+                "available": sum(1 for r in rows if r["status"] == "available"),
+                "total": len(rows), "leagues": rows}
+
+    featured, others, international = [], [], []
+    for name in sorted(by_country.keys()):
+        if name in _INTERNATIONAL:
+            international.append(country_group(name))
+        elif name in _FEATURED_COUNTRIES:
+            continue
+        else:
+            others.append(country_group(name))
+    featured = [country_group(n) for n in _FEATURED_COUNTRIES if n in by_country]
+
+    total_leagues = sum(len(v) for v in by_country.values())
+    total_available = sum(1 for v in by_country.values() for r in v if r["status"] == "available")
+    return {
+        "enabled": highlightly.enabled(),
+        "totals": {"countries": len(by_country), "leagues": total_leagues, "available": total_available},
+        "featured": featured, "countries": others, "international": international,
+    }
+
+
+@api_router.get("/explore/node")
+async def explore_node(path: str):
+    """Progressive drill-down: return the ONE next layer of choices for a node path.
+    Static trees (Canada/Sweden) can differ per country; everything else falls back
+    to an honest provider-truth 'browse this country's leagues' node. Youth/local and
+    new countries plug in by adding nodes — the client renderer never changes."""
+    by_country = await _explore_by_country()
+    node = explore_taxonomy.resolve(path, by_country, lambda c: _COUNTRY_FLAG.get(c, "🏒"))
+    if node is None:
+        raise HTTPException(status_code=404, detail="Unknown explore path.")
+    return node
+
+
+# --------------------------------------------------------------------------- REELS
+# GAMES -> REELS: the wider hockey world's video/highlight discovery surface. Built
+# ONLY from verified Highlightly clips (YouTube/authorized). Collections are DERIVED
+# from each clip's real category (+ title keywords as a light fallback); a collection
+# only appears when verified clips exist for it. Each clip is enriched with resolved
+# team abbrs + a canonical game_id (when matchable) so clips participate in the
+# content-is-navigation system. No fabricated highlights, ever.
+REELS_CAT_MAP = {
+    "goal": "goals", "overtime-shootout-goal": "goals", "shootout-goal": "goals",
+    "save": "saves", "fight": "fights", "hit": "hits", "big-hit": "hits",
+    "interview": "interviews", "press-conference": "interviews",
+}
+REELS_COLLECTIONS = [
+    ("goals", "GOALS"), ("fights", "FIGHTS"), ("hits", "BIG HITS"),
+    ("saves", "SAVES"), ("interviews", "INTERVIEWS"), ("highlights", "GAME HIGHLIGHTS"),
+]
+REELS_TITLE_KWS = [("fight", "fights"), ("brawl", "fights"), ("hat trick", "goals"),
+                   ("big save", "saves"), ("big hit", "hits"), ("huge hit", "hits"),
+                   ("interview", "interviews")]
+
+
+def _reels_collection(clip: dict) -> str:
+    cat = (clip.get("category") or "").lower()
+    if cat in REELS_CAT_MAP:
+        return REELS_CAT_MAP[cat]
+    t = (clip.get("title") or "").lower()
+    for kw, coll in REELS_TITLE_KWS:
+        if kw in t:
+            return coll
+    return "highlights"
+
+
+async def _reels_game_index(league: str) -> dict:
+    """{(away_abbr, home_abbr, YYYY-MM-DD): game_id} from the league's current
+    scoreboard, so recent clips can offer a real 'View Game' link (else omitted)."""
+    idx: dict = {}
+    try:
+        prov = get_provider(league) if league != "nhl" else None
+        slate = await (nhl.scoreboard_now() if league == "nhl" else prov.scoreboard_now())
+    except Exception:
+        return idx
+    groups = slate.get("games") if isinstance(slate, dict) else None
+    cards = []
+    if isinstance(groups, dict):
+        for v in groups.values():
+            if isinstance(v, list):
+                cards.extend(v)
+    elif isinstance(groups, list):
+        cards = groups
+    for c in cards:
+        a = ((c.get("away") or {}).get("abbr") or "").upper()
+        h = ((c.get("home") or {}).get("abbr") or "").upper()
+        day = (c.get("start_utc") or c.get("date") or "")[:10]
+        gid = c.get("id")
+        if a and h and gid:
+            idx[(a, h, day)] = str(gid)
+    return idx
+
+
+def _reels_match_game(gindex: dict, clip: dict) -> str | None:
+    a = (clip.get("away_abbr") or "").upper()
+    h = (clip.get("home_abbr") or "").upper()
+    if not a or not h:
+        return None
+    day = (clip.get("date") or "")[:10]
+    from datetime import datetime, timedelta
+    days = [day]
+    if day:
+        try:
+            d0 = datetime.strptime(day, "%Y-%m-%d")
+            days = [day, (d0 + timedelta(days=1)).strftime("%Y-%m-%d"), (d0 - timedelta(days=1)).strftime("%Y-%m-%d")]
+        except ValueError:
+            days = [day]
+    for d in days:
+        for key in ((a, h, d), (h, a, d)):
+            if key in gindex:
+                return gindex[key]
+    return None
+
+
+async def _reels_enrich(clip: dict, league: str, gindex: dict) -> dict:
+    clip["league_code"] = league
+    clip["away_abbr"] = await entity_index.resolve_team_abbr(clip.get("away") or "", league)
+    clip["home_abbr"] = await entity_index.resolve_team_abbr(clip.get("home") or "", league)
+    clip["game_id"] = _reels_match_game(gindex, clip)
+    clip["playable"] = bool(clip.get("youtube_id"))
+    return clip
+
+
+@api_router.get("/reels")
+async def reels_feed(league: str = "nhl", limit: int = 40):
+    """Verified video collections for a league. Empty collections are omitted."""
+    lg = (league or "nhl").lower()
+    try:
+        clips = await highlightly.league_highlights(lg, limit=limit)
+    except Exception:
+        logger.exception("reels_feed %s failed", lg)
+        clips = []
+    gindex = await _reels_game_index(lg)
+    buckets: dict[str, list] = {}
+    for c in clips:
+        await _reels_enrich(c, lg, gindex)
+        buckets.setdefault(_reels_collection(c), []).append(c)
+    collections = [{"key": k, "label": lab, "clips": buckets[k]} for k, lab in REELS_COLLECTIONS if buckets.get(k)]
+    return {"league": lg, "collections": collections, "total": len(clips), "enabled": highlightly.enabled()}
+
+
+@api_router.get("/reels/search")
+async def reels_search(q: str = "", league: str = "nhl", scope: str = "league", limit: int = 40):
+    """Search ONLY verified/available video. Understands category keywords
+    (goals/fights/hits/saves/interviews), a league token, and free-text team/player.
+    scope='all' searches every available league (the 'All Hockey' escape)."""
+    ql = (q or "").strip().lower()
+    if len(ql) < 2:
+        return {"query": q, "scope": scope, "results": []}
+
+    tokens = [t for t in "".join(c if c.isalnum() or c == " " else " " for c in ql).split() if t]
+    cat_filter = None
+    for t in list(tokens):
+        for kw, coll in [("goal", "goals"), ("goals", "goals"), ("fight", "fights"), ("fights", "fights"),
+                         ("hit", "hits"), ("hits", "hits"), ("save", "saves"), ("saves", "saves"),
+                         ("interview", "interviews"), ("interviews", "interviews")]:
+            if t == kw:
+                cat_filter = coll
+                tokens.remove(t)
+                break
+        if cat_filter:
+            break
+
+    all_leagues = list(highlightly.HL_LEAGUES.keys())
+    league_tokens = [t for t in tokens if t in all_leagues]
+    if league_tokens:
+        leagues = league_tokens
+        tokens = [t for t in tokens if t not in all_leagues]
+    else:
+        leagues = all_leagues if scope == "all" else [(league or "nhl").lower()]
+
+    results: list[dict] = []
+    for lg in leagues:
+        try:
+            clips = await highlightly.league_highlights(lg, limit=40)
+        except Exception:
+            continue
+        gindex = await _reels_game_index(lg)
+        for c in clips:
+            coll = _reels_collection(c)
+            if cat_filter and coll != cat_filter:
+                continue
+            hay = f"{c.get('title') or ''} {c.get('home') or ''} {c.get('away') or ''}".lower()
+            if tokens and not all(tok in hay for tok in tokens):
+                continue
+            await _reels_enrich(c, lg, gindex)
+            c["collection"] = coll
+            results.append(c)
+            if len(results) >= limit:
+                break
+        if len(results) >= limit:
+            break
+    return {"query": q, "scope": scope, "category": cat_filter, "results": results}
+
+
+
+@api_router.get("/health/keys")
+async def health_keys():
+    """Live status of every external provider key.
+
+    Keys carry NO expiry date (not in the key, not in responses) — expiry is tied to
+    each provider's subscription. So we treat a 401/403 as 'expired/revoked' and a 200
+    as 'live'. Run this anytime to catch the moment a key stops working, plus any
+    daily quota the provider reports.
+    """
+    import httpx as _httpx
+    ep = os.environ.get("ELITEPROSPECTS_API_KEY", "").strip()
+    hl = os.environ.get("HIGHLIGHTLY_API_KEY", "").strip()
+    el = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    out: dict = {}
+
+    async with _httpx.AsyncClient(timeout=12) as c:
+        # Highlightly
+        if hl:
+            try:
+                r = await c.get("https://sports.highlightly.net/hockey/leagues",
+                                params={"limit": 1}, headers={"x-rapidapi-key": hl})
+                out["highlightly"] = {
+                    "present": True, "live": r.status_code == 200, "http": r.status_code,
+                    "plan_daily_limit": r.headers.get("x-ratelimit-requests-limit"),
+                    "remaining_today": r.headers.get("x-ratelimit-requests-remaining"),
+                    "note": "Pro plan · daily quota resets each day · no fixed expiry date",
+                }
+            except Exception as e:
+                out["highlightly"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["highlightly"] = {"present": False}
+
+        # Elite Prospects
+        if ep:
+            try:
+                r = await c.get("https://api.eliteprospects.com/v1/leagues",
+                                params={"apiKey": ep, "limit": 1})
+                out["eliteprospects"] = {
+                    "present": True, "live": r.status_code == 200, "http": r.status_code,
+                    "note": "Annual subscription key · no quota/expiry exposed by API · 401 => renew",
+                }
+            except Exception as e:
+                out["eliteprospects"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["eliteprospects"] = {"present": False}
+
+        # ElevenLabs (scoped TTS keys are common: they can speak but not read quota/voices)
+        if el:
+            try:
+                r = await c.get("https://api.elevenlabs.io/v1/user/subscription",
+                                headers={"xi-api-key": el})
+                info = {"present": True, "http": r.status_code}
+                if r.status_code == 200:
+                    j = r.json()
+                    info.update({"live": True, "tier": j.get("tier"),
+                                 "chars_used": j.get("character_count"),
+                                 "chars_limit": j.get("character_limit"),
+                                 "resets_unix": j.get("next_character_count_reset_unix")})
+                else:
+                    body = {}
+                    try:
+                        body = r.json().get("detail", {}) if isinstance(r.json(), dict) else {}
+                    except Exception:
+                        body = {}
+                    restricted = r.status_code == 401 and body.get("status") == "missing_permissions"
+                    info["live"] = restricted            # scoped key = still valid for TTS
+                    info["note"] = ("TTS-only scoped key · valid for the desk voices · lacks quota-read scope"
+                                    if restricted else "key rejected (invalid/revoked) — renew")
+                out["elevenlabs"] = info
+            except Exception as e:
+                out["elevenlabs"] = {"present": True, "live": False, "error": str(e)}
+        else:
+            out["elevenlabs"] = {"present": False}
+
+    # Emergent universal LLM key — managed, balance-based (no date expiry)
+    out["emergent_llm"] = {"present": bool(os.environ.get("EMERGENT_LLM_KEY", "").strip()),
+                           "note": "Emergent-managed · balance-based, not date-expiring · top up under Profile > Manage plan"}
+    try:
+        out["eliteprospects_usage"] = await eliteprospects.usage()
+    except Exception:
+        pass
+    return out
+
+
+@api_router.get("/ep/usage")
+async def ep_usage():
+    """Elite Prospects development-allowance meter: calls used this month vs 1,000,
+    plus how many player records we've cached (each cached player = calls we won't respend)."""
+    return await eliteprospects.usage()
+
+
+@api_router.get("/ep/player")
+async def ep_player(name: str, pos: str = ""):
+    """On-demand, cached Elite Prospects profile by name (bio/draft/career/styles)."""
+    prof = await eliteprospects.player_by_name(name, pos or None)
+    if not prof:
+        raise HTTPException(status_code=404, detail="no Elite Prospects match")
+    return {"ep": prof}
+
+
+@api_router.get("/search")
+async def search(q: str = ""):
+    """Universal onboarding search across every connected provider (verified only).
+
+    Returns [] for queries we don't cover yet — the client shows an honest
+    'not connected yet' state and never fabricates results.
+    """
+    try:
+        results = await search_all(q, limit=16)
+    except Exception:
+        logger.exception("search failed")
+        results = []
+    return {"query": q, "results": results}
+
+
+@api_router.get("/league/{code}/scoreboard")
+async def league_scoreboard(code: str):
+    """League-aware upcoming slate (NEXT). Any registered provider."""
+    try:
+        return await get_provider(code).scoreboard_now()
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"No provider for league '{code}'")
+    except Exception:
+        logger.exception("league_scoreboard %s failed", code)
+        return {"date": None, "games": []}
+
+
+@api_router.get("/league/{code}/standings")
+async def league_standings(code: str):
+    try:
+        return await get_provider(code).standings_now()
+    except Exception:
+        logger.exception("league_standings %s failed", code)
+        return {"Eastern": [], "Western": []}
+
+
+@api_router.get("/league/{code}/leaders")
+async def league_leaders(code: str):
+    try:
+        return await get_provider(code).leaders_now(limit=8)
+    except Exception:
+        logger.exception("league_leaders %s failed", code)
+        return {"skaters": {}, "goalies": {}}
+
+
+@api_router.get("/league/{code}/recaps")
+async def league_recaps(code: str):
+    try:
+        games = await get_provider(code).recent_finals_now()
+    except Exception:
+        logger.exception("league_recaps %s failed", code)
+        games = []
+    return {"games": games}
+
+
+@api_router.get("/league/{code}/team/{tri}")
+async def league_team(code: str, tri: str):
+    try:
+        return await get_provider(code).team_page(tri)
+    except Exception as e:
+        logger.exception("league_team failed")
+        raise HTTPException(status_code=502, detail=f"Team data unavailable: {e}")
+
+
+@api_router.get("/league/{code}/game/{gid}")
+async def league_game(code: str, gid: str):
+    try:
+        game = await get_provider(code).game_by_id(gid)
+        return {"game": game.model_dump()}
+    except Exception as e:
+        logger.exception("league_game failed")
+        raise HTTPException(status_code=502, detail=f"Game data unavailable: {e}")
+
+
+@api_router.get("/league/{code}/player/{pid}")
+async def league_player(code: str, pid: str, name: str = "", pos: str = ""):
+    """Cross-league Player Page. HockeyTech doesn't expose player stats, so junior
+    player depth is EP-backed (bio/draft/career/styles) — league-agnostic, cached."""
+    data = None
+    try:
+        data = await get_provider(code).player_page(pid)
+    except Exception:
+        data = None
+    if not data:
+        data = {"player": {"id": pid, "name": name or "Player", "pos": pos or None,
+                           "team_abbr": None, "team_logo": None, "headshot": None},
+                "skater": None, "goalie": None, "last5": [], "next": None, "highlights": []}
+    try:
+        pl = data.get("player") or {}
+        ep = await eliteprospects.player_by_name(pl.get("name") or name, pl.get("pos") or pos)
+        if ep:
+            data["ep"] = ep
+            if not pl.get("pos") and ep.get("position"):
+                pl["pos"] = ep["position"]
+    except Exception:
+        logger.exception("league_player EP enrich failed (non-fatal)")
+    return data
+
+
+@api_router.get("/nhl/home")
+async def nhl_home():
+    """THE TICKER Home feed — real NHL data only.
+
+    hero  : the most recent completed game + a short grounded Reggie/Marc take.
+    slate : the current-day NHL slate (live / upcoming / final), simplified.
+    Any module with no real data is returned empty so the client can hide it.
+    """
+    prov = get_provider("nhl")
+    hero = None
+    try:
+        game = await prov.latest_game()
+        beats = await _recap_beats(game)
+        reggie = next((b for b in beats if b.get("host") == "reggie"), None)
+        marc = next((b for b in beats if b.get("host") == "marc"), None)
+        hero = {"game": game.model_dump(),
+                "context": [b for b in (reggie, marc) if b]}
+    except Exception:
+        logger.exception("nhl_home hero failed")
+        hero = None
+
+    try:
+        slate = await prov.scoreboard_now()
+    except Exception:
+        logger.exception("nhl_home slate failed")
+        slate = {"date": None, "games": []}
+
+    return {
+        "hero": hero,
+        "slate": slate,
+        "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")},
+    }
+
+
+@api_router.get("/nhl/scoreboard")
+async def nhl_scoreboard():
+    """Current-day NHL slate (NEXT / Home slate)."""
+    try:
+        return await get_provider("nhl").scoreboard_now()
+    except Exception:
+        logger.exception("nhl_scoreboard failed")
+        return {"date": None, "games": []}
+
+
+@api_router.get("/nhl/standings")
+async def nhl_standings():
+    """Real NHL standings by conference (Stats)."""
+    try:
+        return await get_provider("nhl").standings_now()
+    except Exception:
+        logger.exception("nhl_standings failed")
+        return {"Eastern": [], "Western": []}
+
+
+@api_router.get("/nhl/game/{game_id}")
+async def nhl_game(game_id: str):
+    """Real NHL game facts for the Game Page (no LLM; facts only).
+
+    game_id may be a real NHL id or 'latest'. PLAY THE CALL on the client opens
+    /recap/{id} which runs the grounded Reggie+Marc engine separately.
+    """
+    try:
+        game = await get_provider("nhl").game_by_id(game_id)
+    except Exception as e:
+        logger.exception("nhl_game fetch failed")
+        raise HTTPException(status_code=502, detail=f"Hockey data unavailable: {e}")
+    return {"game": game.model_dump()}
+
+
+@api_router.get("/nhl/leaders")
+async def nhl_leaders():
+    try:
+        return await get_provider("nhl").leaders_now(limit=8)
+    except Exception as e:
+        logger.exception("nhl_leaders failed")
+        raise HTTPException(status_code=502, detail=f"Leaders unavailable: {e}")
+
+
+@api_router.get("/nhl/player/{pid}")
+async def nhl_player(pid: str):
+    """Verified NHL player snapshot for the Player Page (+ Elite Prospects background)."""
+    try:
+        d = await get_provider("nhl").player_page(pid)
+    except Exception as e:
+        logger.exception("nhl_player failed")
+        raise HTTPException(status_code=502, detail=f"Player data unavailable: {e}")
+    try:
+        pl = d.get("player") or {}
+        ep = await eliteprospects.player_by_name(pl.get("name"), pl.get("pos"))
+        if ep:
+            d["ep"] = ep
+    except Exception:
+        logger.exception("nhl_player EP enrich failed (non-fatal)")
+    return d
+
+
+@api_router.get("/nhl/team/{tri}")
+async def nhl_team(tri: str):
+    """Verified NHL team snapshot for the Team Page."""
+    try:
+        return await get_provider("nhl").team_page(tri)
+    except Exception as e:
+        logger.exception("nhl_team failed")
+        raise HTTPException(status_code=502, detail=f"Team data unavailable: {e}")
+
+
+@api_router.get("/nhl/recaps")
+async def nhl_recaps():
+    """Recent completed NHL games for the Recap screen (real data only)."""
+    try:
+        games = await get_provider("nhl").recent_finals_now()
+    except Exception:
+        logger.exception("nhl_recaps failed")
+        games = []
+    return {"games": games}
+
+
+# ---------------------------------------------------------------------------
+# LIVE CONVERSATION — the fan joins the desk (Team-page proof, NHL + WHL).
+# Voice in (Whisper) -> grounded Reggie + Marc reply (Claude) -> whitelisted,
+# tappable suggestions + voice-"yes" Follow action. Voice out reuses /api/tts.
+# ---------------------------------------------------------------------------
+@api_router.get("/ticker/bridges")
+async def ticker_bridges(subject: str, league: str = "nhl"):
+    """Grounded, varied 'hold' lines the desk can speak while retrieving — built
+    only from verified team facts (never fabricated). The client pre-synthesizes
+    a few so retrieval time is filled naturally instead of dead air."""
+    prov = get_provider(league)
+    try:
+        tp = await assemble_team_context(prov, league, subject)
+    except Exception:
+        raise HTTPException(status_code=404, detail="team not found")
+    return {"lines": build_bridge_lines(tp),
+            "voices": {"reggie": host_voice("reggie"), "marc": host_voice("marc")}}
+
+
+@api_router.post("/ticker/converse", dependencies=[Depends(limits.rate_limit("converse", 20))])
+async def ticker_converse(
+    request: Request,
+    subject: str = Form(...),
+    league: str = Form("nhl"),
+    conversation_id: Optional[str] = Form(None),
+    text: Optional[str] = Form(None),
+    directive: Optional[str] = Form(None),
+    audio: Optional[UploadFile] = File(None),
+):
+    # Reject oversized payloads up front (before reading the upload into memory).
+    try:
+        clen = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        clen = 0
+    if clen and clen > limits.MAX_AUDIO_BYTES + (1 * 1024 * 1024):
+        raise HTTPException(status_code=413, detail="Upload too large.")
+    if text and len(text) > limits.MAX_CONVERSE_TEXT:
+        raise HTTPException(status_code=422, detail="Message too long.")
+
+    prov = get_provider(league)
+    lname = getattr(prov, "name", "NHL")
+    try:
+        tp = await assemble_team_context(prov, league, subject)
+    except Exception:
+        raise HTTPException(status_code=404, detail="team not found")
+    fact_sheet, links = build_team_context(tp, lname, league)
+    try:
+        bg = await eliteprospects.scorer_backgrounds(tp)   # EP makes the hosts smarter
+        if bg:
+            fact_sheet = f"{fact_sheet}\n\n{bg}"
+    except Exception:
+        logger.exception("EP scorer_backgrounds failed (non-fatal)")
+
+    voices = {"reggie": host_voice("reggie"), "marc": host_voice("marc")}
+    is_directive = bool(directive) and not (text or "").strip() and audio is None
+
+    # ---- voice in -> transcript (Whisper) ----
+    user_text = (text or "").strip()
+    if audio is not None:
+        if not stt:
+            raise HTTPException(status_code=503, detail="speech-to-text not available")
+        # Bounded read — abort before pulling an oversized clip fully into memory.
+        raw = b""
+        while True:
+            chunk = await audio.read(1024 * 1024)
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > limits.MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="Audio clip too large.")
+        logger.info("[converse] audio received: filename=%s content_type=%s bytes=%d subject=%s league=%s",
+                    audio.filename, audio.content_type, len(raw or b""), subject, league)
+        if not raw:
+            raise HTTPException(status_code=400, detail="empty audio")
+        suffix = (Path(audio.filename or "clip.webm").suffix or ".webm").lower()
+        if suffix not in (".m4a", ".mp4", ".webm", ".wav", ".mp3", ".mpeg", ".mpga", ".ogg"):
+            suffix = ".webm"
+        import tempfile
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(raw)
+                tmp_path = f.name
+            # litellm/OpenAI needs a file object (or bytes/PathLike) — NOT a str path.
+            with open(tmp_path, "rb") as fh:
+                async with limits.slot(limits.STT_SEM):
+                    result = await limits.run_provider(
+                        stt.transcribe(fh, response_format="text"),
+                        limits.STT_TIMEOUT, "Transcription")
+            if isinstance(result, str):
+                user_text = result.strip()
+            elif isinstance(result, dict):
+                user_text = str(result.get("text", "")).strip()
+            else:
+                user_text = str(getattr(result, "text", "") or "").strip()
+            logger.info("[converse] transcript: %r", user_text[:200])
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("[converse] transcription failed (suffix=%s bytes=%d)", suffix, len(raw or b""))
+            raise HTTPException(status_code=502, detail="could not transcribe audio")
+        finally:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
+    if not is_directive and not user_text:
+        raise HTTPException(status_code=400, detail="no speech detected")
+
+    cid = conversation_id or uuid.uuid4().hex
+    doc = await db.conversations.find_one({"_id": cid}) or {"history": [], "last_follow": None}
+    history = doc.get("history", [])
+
+    if is_directive:
+        # Internal show-continuation — NOT a fan utterance.
+        async with limits.slot(limits.LLM_SEM):
+            out = await limits.run_provider(
+                converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, directive, directive=True),
+                limits.LLM_TIMEOUT, "Booth")
+        for t in out["turns"]:
+            history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
+        last_follow = None
+        for s in out["suggestions"]:
+            if s["kind"] in ("follow_team", "follow_player"):
+                last_follow = {"kind": s["kind"], "entity": s["entity"], "label": s["label"]}
+                break
+        await db.conversations.update_one(
+            {"_id": cid},
+            {"$set": {"history": history[-20:], "last_follow": last_follow,
+                      "updated": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        return {"conversation_id": cid, "user_text": "", "beats": out["turns"],
+                "suggestions": out["suggestions"], "action": None, "voices": voices}
+
+    # A verbal "yes" to a pending Follow offer becomes a real Follow action.
+    action = None
+    if doc.get("last_follow") and AFFIRM.search(user_text):
+        lf = doc["last_follow"]
+        action = {"type": "follow", "kind": lf["kind"], "entity": lf["entity"], "label": lf.get("label")}
+
+    history.append({"role": "user", "text": user_text})
+    async with limits.slot(limits.LLM_SEM):
+        out = await limits.run_provider(
+            converse_turn(EMERGENT_LLM_KEY, cid, fact_sheet, links, history, user_text),
+            limits.LLM_TIMEOUT, "Booth")
+    for t in out["turns"]:
+        history.append({"role": "assistant", "host": t["host"], "text": t["text"]})
+
+    # Remember a fresh Follow offer so the next verbal "yes" can resolve it.
+    last_follow = None
+    for s in out["suggestions"]:
+        if s["kind"] in ("follow_team", "follow_player"):
+            last_follow = {"kind": s["kind"], "entity": s["entity"], "label": s["label"]}
+            break
+
+    await db.conversations.update_one(
+        {"_id": cid},
+        {"$set": {"history": history[-20:], "last_follow": last_follow,
+                  "updated": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    return {
+        "conversation_id": cid,
+        "user_text": user_text,
+        "beats": out["turns"],
+        "suggestions": out["suggestions"],
+        "action": action,
+        "voices": voices,
+    }
+
+
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def _warm_entity_index():
+    """Pre-build the universal search index so the first search is instant too."""
+    import asyncio as _asyncio
+    from entity_index import warm
+    _asyncio.create_task(warm())
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
