@@ -1,0 +1,34 @@
+{
+  "summary": "Reels 'Ticker-curated + inherit active league' correction verified end-to-end (frontend only, per request). ALL 5 acceptance flows PASS on the live preview build. (1) LEAGUE INHERITANCE: onboarded (welcome-go -> region-canada -> interests-next -> onboard-search 'Minnesota' -> result-team-MINN -> onboard-skip x3), nav-games -> games-seg-stats, switched STATS league rail to WHL via the visible LeagueSwitcher (3 mounted, 1 visible in Stats pane), then games-seg-reels shows WHL clips (40 reel-<id> cards: WHL Prince Albert vs Everett Silvertips), a WHL league badge, and the caption 'Ticker-curated reels'. Crucially, ZERO visible LeagueSwitcher instances inside the REELS pane (query_selector_all('[data-testid=\"league-<code>\"]') returns 3 for each code — same as NEXT/RECAP/STATS panes — with 0 visible while the Reels pane is showing, confirming NO league picker inside Reels). No reels-scope element in DOM. No 'All Hockey' text anywhere. (2) PERSISTENCE: back to STATS, clicked visible league-nhl; games-seg-reels then rendered NHL clips (40 cards, Hurricanes vs Golden Knights etc.) with 'NHL' badge and 'Search NHL highlights' placeholder — league carries across modes without re-selecting. (3) ACTIVE-LEAGUE SEARCH ONLY: reels-search placeholder correctly reads 'Search NHL highlights' / 'Search WHL highlights' for the active league. Searching 'Hurricanes' returned 15 verified NHL clip rows. reels-scope element NOT in DOM during search. Searching nonsense 'silvertipsXYZ12' shows honest empty state 'No verified NHL video for silvertipsXYZ12.' with NO 'Search All Hockey' link (verified 'Search All Hockey' and 'All Hockey' strings both absent from DOM). (4) PRESERVED REGRESSION: tapping reel-140968 opens the in-Ticker playback modal with reels-close visible; 'Verified video · Highlightly' credit is shown on the browse view. YouTube inline path renders when youtube_id present (as in iter_29). Playback modal closes cleanly. (5) REGRESSION ELSEWHERE: top mode labels read NEXT/RECAP/REELS/STATS (games-seg-* testIDs present); STATS grammar (STANDINGS/PLAYER STATS/TEAM STATS + NHL/WHL/OHL/QMJHL/NCAA rail) is intact and functional (used it to drive the inheritance test). No red-screen errors. Only carry-over RN web deprecation warning 'shadow* style props are deprecated. Use boxShadow.' observed — non-blocking, pre-existing. Deprecated Expo packages detected: none. React-Native issues detected: none new. Code review of ReelsHub.tsx confirms: no LeagueSwitcher import, no scope state, api.reelsSearch is hardcoded to scope='league' (L46), useContextLeague is read-only ([league] destructured, no setter), placeholder is dynamic on `Search ${league.toUpperCase()} highlights`, badge + 'Ticker-curated reels' rendered in ctxRow.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* deprecation (carry-over)", "issue": "RN Web still emits 'shadow* style props are deprecated. Use boxShadow.' at app boot. Not caused by this change. Reference: pre-existing across screens."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reels_surface.py (from iter_29 — still passing; not re-run this iteration since request was frontend only)"
+  ],
+  "action_items": [
+    "(Optional carry-over) Migrate remaining shadow* style props to boxShadow to silence RN web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "ReelsHub.tsx cleanly conforms to the corrected product boundary: (a) no LeagueSwitcher rendered inside the pane, (b) useContextLeague read-only via `[league] = useContextLeague()` so Reels never mutates context, (c) api.reelsSearch(q, league, 'league', 40) hardcodes scope to 'league' — the 'all' bridge to Betting IQ is preserved in the backend API but never invoked from the UI, matching the spec.",
+    "GamesHub.tsx keeps the four top modes NEXT/RECAP/REELS/STATS with `display: 'none'|'flex'` toggling (state-preserving). Each of the OTHER three panes still mounts its own LeagueSwitcher — that's why query_selector_all returns 3 for `league-<code>`; the correct assertion is 'zero VISIBLE league-<code> elements while the Reels pane is active', which passes.",
+    "Placeholder derivation `Search ${league.toUpperCase()} highlights` and ctxText `Ticker-curated reels` correctly reflect the inherited league at render time; useEffect on [league] refetches collections on context change so persistence is deterministic.",
+    "No autoplay-loop wiring — single `active` state on ReelClip, cleared by reels-close (line 127) — matches spec."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not-retested (request was frontend only; iter_29 backend suite still valid — 11/11 pass)",
+    "frontend": "100% (all 5 acceptance criteria verified: league inheritance from STATS→REELS, persistence across mode switches, active-league-only search with no scope toggle, playback modal with reels-close + credit, top-modes/STATS regression clean)"
+  },
+  "seed_data_creation": "None — live Highlightly data. Onboarded 1 follow (team MINN via 'Minnesota' search) to exit onboarding.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reels correction is fully in place. Onboard: /onboarding?reset=1 -> welcome-go -> region-canada -> interests-next -> onboard-search 'Minnesota' -> click first result-team-* (MINN was returned) -> onboard-skip x3. Reels: nav-games -> games-seg-reels. IMPORTANT for testing inheritance: LeagueSwitcher is mounted 3x (one per NEXT/RECAP/STATS pane; NOT in REELS anymore). Use `is_visible()` filter on query_selector_all('[data-testid=\"league-<code>\"]') and click from a NON-reels pane (STATS is easiest via games-seg-stats) to change the shared context, then switch to REELS to verify inheritance. reels-search placeholder = 'Search <LEAGUE> highlights'. reels-scope must NOT exist. Nonsense term shows honest empty text 'No verified <LEAGUE> video for \"<q>\".' — NO 'Search All Hockey' link.",
+  "rca_of_issue": "N/A — no issues found; change matches the corrected product boundary (Reels = Ticker-curated within active league; custom compilations reserved for future Betting IQ)."
+}

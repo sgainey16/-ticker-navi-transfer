@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Modal, Linking, ActivityIndicator, TextInput } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Modal, Linking, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -9,16 +9,17 @@ import { colors, fonts, spacing, radius } from "@/src/theme";
 import { api, ReelClip, ReelCollection } from "@/src/lib/api";
 import { useContextLeague } from "@/src/lib/context";
 import { TabScreen, Loader } from "@/src/components/ui";
-import { LeagueSwitcher } from "@/src/components/LeagueSwitcher";
 
-// GAMES -> REELS: verified video discovery. Grammar preserved: league/category rail
-// -> collections -> content. Every clip is verified (Highlightly); nothing fabricated.
-// Clips participate in content-is-navigation (crest -> Team, View Game -> Game).
+// GAMES -> REELS: TICKER-CURATED verified video within the league you're viewing.
+// Reels INHERITS the active league (shared context across NEXT/RECAP/REELS/STATS) —
+// no league picker here. A basic search stays scoped to the active league only.
+// This is a curated experience, NOT a build-your-own-package tool: user-directed
+// custom video intelligence is reserved for Betting IQ (not built). The compilation
+// engine underneath (category/keyword/team/date) is preserved for that future.
 export default function ReelsHub() {
   const router = useRouter();
-  const [league, setLeague] = useContextLeague();
+  const [league] = useContextLeague();
   const [q, setQ] = useState("");
-  const [scopeAll, setScopeAll] = useState(false);
   const [collections, setCollections] = useState<ReelCollection[] | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function ReelsHub() {
   const [searching, setSearching] = useState(false);
   const [active, setActive] = useState<ReelClip | null>(null);
 
-  // Browse feed for the selected league
+  // Browse feed for the ACTIVE (inherited) league
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -37,18 +38,18 @@ export default function ReelsHub() {
     return () => { alive = false; };
   }, [league]);
 
-  // Debounced highlight search
+  // Debounced highlight search — ACTIVE LEAGUE ONLY (no cross-league picker here)
   useEffect(() => {
     if (q.trim().length < 2) { setResults(null); setSearching(false); return; }
     setSearching(true);
     const t = setTimeout(() => {
-      api.reelsSearch(q.trim(), league, scopeAll ? "all" : "league", 40)
+      api.reelsSearch(q.trim(), league, "league", 40)
         .then((r) => setResults(r.results))
         .catch(() => setResults([]))
         .finally(() => setSearching(false));
     }, 220);
     return () => clearTimeout(t);
-  }, [q, league, scopeAll]);
+  }, [q, league]);
 
   const play = (c: ReelClip) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActive(c); };
   const goTeam = (abbr?: string | null) => { if (!abbr) return; Haptics.selectionAsync(); router.push(`/team/${abbr}${league !== "nhl" ? `?league=${league}` : ""}`); };
@@ -59,7 +60,7 @@ export default function ReelsHub() {
   return (
     <TabScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" stickyHeaderIndices={[0]}>
-        {/* SEARCH HIGHLIGHTS + league rail */}
+        {/* SEARCH HIGHLIGHTS (active league) + inherited-league label */}
         <View style={styles.controls}>
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color={colors.textDim} />
@@ -67,21 +68,17 @@ export default function ReelsHub() {
               testID="reels-search"
               value={q}
               onChangeText={setQ}
-              placeholder="Search highlights — Kaprizov, WHL fights, Canadiens goals"
+              placeholder={`Search ${league.toUpperCase()} highlights`}
               placeholderTextColor={colors.textFaint}
               style={styles.searchInput}
               returnKeyType="search"
             />
             {q ? <Pressable onPress={() => setQ("")} hitSlop={10}><Ionicons name="close-circle" size={18} color={colors.textFaint} /></Pressable> : null}
           </View>
-          {searchActive ? (
-            <Pressable style={styles.scopeToggle} onPress={() => { Haptics.selectionAsync(); setScopeAll((s) => !s); }} testID="reels-scope">
-              <Ionicons name={scopeAll ? "earth" : "flag"} size={13} color={colors.blue} />
-              <Text style={styles.scopeText}>{scopeAll ? "Searching ALL HOCKEY" : `Searching ${league.toUpperCase()} · tap for All Hockey`}</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.leagueRail}><LeagueSwitcher league={league} onChange={setLeague} /></View>
-          )}
+          <View style={styles.ctxRow}>
+            <View style={styles.lgBadge}><Text style={styles.lgBadgeText}>{league.toUpperCase()}</Text></View>
+            <Text style={styles.ctxText}>{searchActive ? `Searching ${league.toUpperCase()} video` : "Ticker-curated reels"}</Text>
+          </View>
         </View>
 
         {/* SEARCH RESULTS */}
@@ -95,8 +92,7 @@ export default function ReelsHub() {
             ) : (
               <View style={styles.empty}>
                 <Ionicons name="videocam-off-outline" size={26} color={colors.textFaint} />
-                <Text style={styles.emptyText}>No verified video for “{q.trim()}”{scopeAll ? "" : ` in ${league.toUpperCase()}`}.</Text>
-                {!scopeAll ? <Pressable onPress={() => setScopeAll(true)}><Text style={styles.emptyLink}>Search All Hockey</Text></Pressable> : null}
+                <Text style={styles.emptyText}>No verified {league.toUpperCase()} video for “{q.trim()}”.</Text>
               </View>
             )
           )
@@ -196,9 +192,10 @@ const styles = StyleSheet.create({
   controls: { backgroundColor: colors.bg, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, height: 44 },
   searchInput: { flex: 1, color: colors.white, fontFamily: fonts.body, fontSize: 14, paddingVertical: 0 },
-  scopeToggle: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 },
-  scopeText: { color: colors.blue, fontFamily: fonts.display, fontSize: 11.5, fontWeight: "700", letterSpacing: 0.3 },
-  leagueRail: {},
+  ctxRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 },
+  lgBadge: { backgroundColor: colors.blueDim, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 3 },
+  lgBadgeText: { color: colors.blue, fontFamily: fonts.display, fontSize: 11, fontWeight: "800", letterSpacing: 0.8 },
+  ctxText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
 
   section: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   railLabel: { color: colors.white, fontFamily: fonts.display, fontSize: 15, fontWeight: "800", letterSpacing: 1 },
@@ -226,7 +223,6 @@ const styles = StyleSheet.create({
 
   empty: { alignItems: "center", gap: 8, paddingVertical: spacing.xxxl, paddingHorizontal: spacing.lg },
   emptyText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13.5, textAlign: "center" },
-  emptyLink: { color: colors.blue, fontFamily: fonts.display, fontSize: 13, fontWeight: "800", letterSpacing: 0.5, marginTop: 4 },
 
   modal: { flex: 1, backgroundColor: "rgba(2,3,6,0.96)", justifyContent: "center", padding: spacing.md, gap: spacing.md },
   modalHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
